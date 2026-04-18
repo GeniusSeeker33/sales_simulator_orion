@@ -1,43 +1,60 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { accounts as initialAccounts } from "../data/accounts";
+import {
+  loadAccounts,
+  saveAccounts,
+  resetAccounts,
+  normalizeAccount,
+} from "../lib/accountStore";
 
 export default function Accounts() {
   const location = useLocation();
   const navigate = useNavigate();
   const requestedDealerName = location.state?.dealerName;
 
-  const [accounts, setAccounts] = useState(initialAccounts);
-
-  const initialSelectedId = useMemo(() => {
-    if (!requestedDealerName) return initialAccounts[0]?.id ?? null;
-
-    const match = initialAccounts.find(
-      (account) => account.dealerName === requestedDealerName
-    );
-
-    return match?.id ?? initialAccounts[0]?.id ?? null;
-  }, [requestedDealerName]);
-
-  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [accounts, setAccounts] = useState(() => loadAccounts());
   const [isEditing, setIsEditing] = useState(false);
   const [draftPlan, setDraftPlan] = useState(null);
 
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === selectedId) ?? accounts[0],
-    [accounts, selectedId]
-  );
+  const initialSelectedId = useMemo(() => {
+    if (!requestedDealerName) return accounts[0]?.id ?? null;
+
+    const match = accounts.find(
+      (account) => account.dealerName === requestedDealerName
+    );
+
+    return match?.id ?? accounts[0]?.id ?? null;
+  }, [requestedDealerName, accounts]);
+
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+
+  useEffect(() => {
+    setSelectedId(initialSelectedId);
+  }, [initialSelectedId]);
+
+  useEffect(() => {
+    saveAccounts(accounts);
+  }, [accounts]);
+
+  const selectedAccount = useMemo(() => {
+    return accounts.find((account) => account.id === selectedId) ?? accounts[0] ?? null;
+  }, [accounts, selectedId]);
 
   function openEditor() {
+    if (!selectedAccount) return;
+
     setDraftPlan({
-      categoryToExpand: selectedAccount.categoryToExpand,
-      skuFocus: selectedAccount.skuFocus.join(", "),
-      plannedOrderFrequency: selectedAccount.plannedOrderFrequency,
-      barrier: selectedAccount.barrier,
-      aeActionRequired: selectedAccount.aeActionRequired,
-      howWeGetThere: selectedAccount.howWeGetThere,
+      categoryToExpand: selectedAccount.categoryToExpand ?? "",
+      skuFocus: Array.isArray(selectedAccount.skuFocus)
+        ? selectedAccount.skuFocus.join(", ")
+        : "",
+      plannedOrderFrequency: selectedAccount.plannedOrderFrequency ?? "",
+      barrier: selectedAccount.barrier ?? "",
+      aeActionRequired: selectedAccount.aeActionRequired ?? "",
+      howWeGetThere: selectedAccount.howWeGetThere ?? "",
     });
+
     setIsEditing(true);
   }
 
@@ -54,28 +71,53 @@ export default function Accounts() {
   }
 
   function savePlan() {
-    if (!draftPlan) return;
+    if (!draftPlan || !selectedAccount) return;
 
     const updatedAccounts = accounts.map((account) => {
-      if (account.id !== selectedId) return account;
+      if (account.id !== selectedAccount.id) return account;
 
-      return {
+      const updatedAccount = {
         ...account,
-        categoryToExpand: draftPlan.categoryToExpand,
+        categoryToExpand: draftPlan.categoryToExpand.trim(),
         skuFocus: draftPlan.skuFocus
           .split(",")
           .map((item) => item.trim())
           .filter(Boolean),
-        plannedOrderFrequency: draftPlan.plannedOrderFrequency,
-        barrier: draftPlan.barrier,
-        aeActionRequired: draftPlan.aeActionRequired,
-        howWeGetThere: draftPlan.howWeGetThere,
+        plannedOrderFrequency: draftPlan.plannedOrderFrequency.trim(),
+        barrier: draftPlan.barrier.trim(),
+        aeActionRequired: draftPlan.aeActionRequired.trim(),
+        howWeGetThere: draftPlan.howWeGetThere.trim(),
+        updatedAt: new Date().toISOString(),
       };
+
+      return normalizeAccount(updatedAccount);
     });
 
     setAccounts(updatedAccounts);
     setIsEditing(false);
     setDraftPlan(null);
+  }
+
+  function handleResetAccounts() {
+    const resetData = resetAccounts();
+    setAccounts(resetData);
+    setIsEditing(false);
+    setDraftPlan(null);
+  }
+
+  if (!selectedAccount) {
+    return (
+      <Layout title="Accounts">
+        <section className="accounts-layout">
+          <div className="card">
+            <h2>No accounts found</h2>
+            <p className="section-subtext">
+              There are no account records available yet.
+            </p>
+          </div>
+        </section>
+      </Layout>
+    );
   }
 
   return (
@@ -88,6 +130,12 @@ export default function Accounts() {
               <p className="section-subtext">
                 Revenue targets, growth gaps, and next actions by account.
               </p>
+            </div>
+
+            <div className="button-row">
+              <button className="btn-secondary" onClick={handleResetAccounts}>
+                Reset Demo Data
+              </button>
             </div>
           </div>
 
@@ -141,6 +189,7 @@ export default function Accounts() {
                   {selectedAccount.primaryBuyingCategories.join(", ")}
                 </p>
               </div>
+
               <span className={`status-pill status-${selectedAccount.statusTone}`}>
                 {selectedAccount.statusLabel}
               </span>
@@ -169,6 +218,7 @@ export default function Accounts() {
               <span>Progress to Target</span>
               <span>{selectedAccount.progressPercent}%</span>
             </div>
+
             <div className="progress-bar">
               <div
                 className="progress-fill"
@@ -193,18 +243,22 @@ export default function Accounts() {
                   <span>Category to Expand</span>
                   <strong>{selectedAccount.categoryToExpand}</strong>
                 </div>
+
                 <div className="feedback-row">
                   <span>SKU Focus</span>
                   <strong>{selectedAccount.skuFocus.join(", ")}</strong>
                 </div>
+
                 <div className="feedback-row">
                   <span>Planned Order Frequency</span>
                   <strong>{selectedAccount.plannedOrderFrequency}</strong>
                 </div>
+
                 <div className="feedback-row">
                   <span>Barrier</span>
                   <strong>{selectedAccount.barrier}</strong>
                 </div>
+
                 <div className="feedback-row">
                   <span>AE Action Required</span>
                   <strong>{selectedAccount.aeActionRequired}</strong>
@@ -222,6 +276,7 @@ export default function Accounts() {
                         state: {
                           scenarioType: "Growth Mission",
                           dealerName: selectedAccount.dealerName,
+                          dealerId: selectedAccount.id,
                         },
                       })
                     }
@@ -252,9 +307,7 @@ export default function Accounts() {
                   <input
                     type="text"
                     value={draftPlan.skuFocus}
-                    onChange={(e) =>
-                      handleDraftChange("skuFocus", e.target.value)
-                    }
+                    onChange={(e) => handleDraftChange("skuFocus", e.target.value)}
                   />
                 </label>
 
@@ -274,9 +327,7 @@ export default function Accounts() {
                   <input
                     type="text"
                     value={draftPlan.barrier}
-                    onChange={(e) =>
-                      handleDraftChange("barrier", e.target.value)
-                    }
+                    onChange={(e) => handleDraftChange("barrier", e.target.value)}
                   />
                 </label>
 
