@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { accounts as seedAccounts } from "../data/accounts";
-
-const ACCOUNTS_STORAGE_KEY = "sales-simulator-orion-accounts-v1";
-const TRAINING_STORAGE_KEY = "sales-simulator-orion-training-results-v1";
+import { loadAccounts } from "../lib/accountStore";
+import {
+  loadTrainingResults,
+  addTrainingResult,
+} from "../lib/trainingStore";
 
 const scenarioMap = {
   "Growth Mission": {
@@ -75,7 +76,7 @@ export default function Training() {
     return trainingHistory.filter((entry) => entry.dealerId === dealer.id);
   }, [trainingHistory, dealer]);
 
-  const latestScore = dealerHistory[0]?.totalScore ?? null;
+  const latestScore = dealerHistory[0]?.totalScore ?? dealerHistory[0]?.score ?? null;
 
   function updateField(field, value) {
     setForm((prev) => ({
@@ -120,7 +121,7 @@ export default function Training() {
       },
     };
 
-    saveTrainingResult(result);
+    addTrainingResult(result);
     setSavedResult(result);
     setSubmitted(true);
   }
@@ -139,7 +140,7 @@ export default function Training() {
 
   if (!dealer) {
     return (
-      <Layout title="Training">
+      <Layout title="Training Simulator">
         <section className="dashboard-grid">
           <div className="card">
             <h2>No dealer context found</h2>
@@ -284,9 +285,11 @@ export default function Training() {
 
                 <button
                   className="btn-secondary"
-                  onClick={() => navigate("/accounts", {
-                    state: { dealerName: dealer.dealerName },
-                  })}
+                  onClick={() =>
+                    navigate("/accounts", {
+                      state: { dealerName: dealer.dealerName },
+                    })
+                  }
                 >
                   Back to Accounts
                 </button>
@@ -337,16 +340,18 @@ export default function Training() {
 
               <button
                 className="btn-secondary"
-                onClick={() => navigate("/accounts", {
-                  state: { dealerName: dealer.dealerName },
-                })}
+                onClick={() =>
+                  navigate("/accounts", {
+                    state: { dealerName: dealer.dealerName },
+                  })
+                }
               >
                 Back to Account
               </button>
 
               <button
                 className="btn-secondary"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/dashboard")}
               >
                 Go to Dashboard
               </button>
@@ -381,7 +386,7 @@ export default function Training() {
                   <span>
                     {entry.scenarioType} • {formatDate(entry.completedAt)}
                   </span>
-                  <strong>{entry.totalScore}/100</strong>
+                  <strong>{entry.totalScore ?? entry.score ?? 0}/100</strong>
                 </div>
               ))}
             </div>
@@ -394,71 +399,6 @@ export default function Training() {
       </section>
     </Layout>
   );
-}
-
-function loadAccounts() {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-
-    if (!raw) {
-      return seedAccounts.map((account) => normalizeAccount(account));
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      return seedAccounts.map((account) => normalizeAccount(account));
-    }
-
-    return parsed.map((account) => normalizeAccount(account));
-  } catch (error) {
-    console.error("Failed to load accounts for training:", error);
-    return seedAccounts.map((account) => normalizeAccount(account));
-  }
-}
-
-function loadTrainingResults() {
-  try {
-    const raw = localStorage.getItem(TRAINING_STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to load training results:", error);
-    return [];
-  }
-}
-
-function saveTrainingResult(result) {
-  try {
-    const existing = loadTrainingResults();
-    const updated = [result, ...existing];
-    localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(updated));
-  } catch (error) {
-    console.error("Failed to save training result:", error);
-  }
-}
-
-function normalizeAccount(account) {
-  const lastMonthSales = Number(account.lastMonthSales ?? 0);
-  const currentMonthTarget = Number(account.currentMonthTarget ?? 0);
-  const growthGap = Math.max(currentMonthTarget - lastMonthSales, 0);
-
-  const progressPercent =
-    currentMonthTarget > 0
-      ? Math.min(Math.round((lastMonthSales / currentMonthTarget) * 100), 100)
-      : 0;
-
-  return {
-    ...account,
-    growthGap,
-    progressPercent,
-    skuFocus: Array.isArray(account.skuFocus) ? account.skuFocus : [],
-    primaryBuyingCategories: Array.isArray(account.primaryBuyingCategories)
-      ? account.primaryBuyingCategories
-      : [],
-  };
 }
 
 function scoreTraining(form) {

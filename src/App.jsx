@@ -6,27 +6,20 @@ import Activity from "./pages/Activity";
 import Leaderboard from "./pages/Leaderboard";
 import Levels from "./pages/Levels";
 import RepMetrics from "./pages/RepMetrics";
+import ManagerView from "./pages/ManagerView";
 
 export default function App() {
   return (
     <Routes>
-      {/* Default Route */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-      {/* Core Pages */}
       <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/accounts" element={<Accounts />} />
       <Route path="/training" element={<Training />} />
-
-      {/* Performance + Gamification */}
-      <Route path="/levels" element={<Levels />} />
-      <Route path="/leaderboard" element={<Leaderboard />} />
+      <Route path="/accounts" element={<Accounts />} />
       <Route path="/activity" element={<Activity />} />
-
-      {/* NEW: Compensation Input Engine */}
+      <Route path="/leaderboard" element={<Leaderboard />} />
+      <Route path="/levels" element={<Levels />} />
       <Route path="/rep-metrics" element={<RepMetrics />} />
-
-      {/* Fallback (optional but recommended) */}
+      <Route path="/manager-view" element={<ManagerView />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

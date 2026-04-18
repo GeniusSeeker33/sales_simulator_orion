@@ -1,13 +1,15 @@
 import { NavLink } from "react-router-dom";
+import { uiCopy } from "../../data/uiCopy";
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/accounts", label: "Accounts" },
-  { to: "/training", label: "Training" },
-  { to: "/levels", label: "Levels" },
-  { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/activity", label: "Activity" },
-  { to: "/rep-metrics", label: "Rep Metrics" },
+  { to: "/dashboard", label: uiCopy.nav.dashboard },
+  { to: "/accounts", label: uiCopy.nav.accounts },
+  { to: "/training", label: uiCopy.nav.training },
+  { to: "/levels", label: uiCopy.nav.levels },
+  { to: "/leaderboard", label: uiCopy.nav.leaderboard },
+  { to: "/activity", label: uiCopy.nav.activity },
+  { to: "/rep-metrics", label: uiCopy.nav.repMetrics },
+  { to: "/manager-view", label: uiCopy.nav.managerView },
 ];
 
 export default function Layout({ title, children }) {
@@ -15,8 +17,8 @@ export default function Layout({ title, children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <h1>Sales Simulator Orion</h1>
-          <p className="sidebar-subtext">Performance, training, and compensation</p>
+          <h1>{uiCopy.appName}</h1>
+          <p className="sidebar-subtext">{uiCopy.appSubtext}</p>
         </div>
 
         <nav className="sidebar-nav">
@@ -32,6 +34,10 @@ export default function Layout({ title, children }) {
             </NavLink>
           ))}
         </nav>
+
+        <div className="sidebar-footer-note">
+          {uiCopy.footerNote}
+        </div>
       </aside>
 
       <main className="main-content">

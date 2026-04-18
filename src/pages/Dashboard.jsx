@@ -149,11 +149,7 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              <span
-                className={`status-pill ${
-                  summary.compStatus.statusTone
-                }`}
-              >
+              <span className={`status-pill ${summary.compStatus.statusTone}`}>
                 {summary.compStatus.statusLabel}
               </span>
             </div>
