@@ -1,14 +1,82 @@
 import { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { accounts } from "../data/accounts";
+import { accounts as initialAccounts } from "../data/accounts";
 
 export default function Accounts() {
-  const [selectedId, setSelectedId] = useState(accounts[0]?.id ?? null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const requestedDealerName = location.state?.dealerName;
+
+  const [accounts, setAccounts] = useState(initialAccounts);
+
+  const initialSelectedId = useMemo(() => {
+    if (!requestedDealerName) return initialAccounts[0]?.id ?? null;
+
+    const match = initialAccounts.find(
+      (account) => account.dealerName === requestedDealerName
+    );
+
+    return match?.id ?? initialAccounts[0]?.id ?? null;
+  }, [requestedDealerName]);
+
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftPlan, setDraftPlan] = useState(null);
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedId) ?? accounts[0],
-    [selectedId]
+    [accounts, selectedId]
   );
+
+  function openEditor() {
+    setDraftPlan({
+      categoryToExpand: selectedAccount.categoryToExpand,
+      skuFocus: selectedAccount.skuFocus.join(", "),
+      plannedOrderFrequency: selectedAccount.plannedOrderFrequency,
+      barrier: selectedAccount.barrier,
+      aeActionRequired: selectedAccount.aeActionRequired,
+      howWeGetThere: selectedAccount.howWeGetThere,
+    });
+    setIsEditing(true);
+  }
+
+  function closeEditor() {
+    setIsEditing(false);
+    setDraftPlan(null);
+  }
+
+  function handleDraftChange(field, value) {
+    setDraftPlan((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  function savePlan() {
+    if (!draftPlan) return;
+
+    const updatedAccounts = accounts.map((account) => {
+      if (account.id !== selectedId) return account;
+
+      return {
+        ...account,
+        categoryToExpand: draftPlan.categoryToExpand,
+        skuFocus: draftPlan.skuFocus
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        plannedOrderFrequency: draftPlan.plannedOrderFrequency,
+        barrier: draftPlan.barrier,
+        aeActionRequired: draftPlan.aeActionRequired,
+        howWeGetThere: draftPlan.howWeGetThere,
+      };
+    });
+
+    setAccounts(updatedAccounts);
+    setIsEditing(false);
+    setDraftPlan(null);
+  }
 
   return (
     <Layout title="Accounts">
@@ -40,7 +108,11 @@ export default function Accounts() {
                   <tr
                     key={account.id}
                     className={selectedId === account.id ? "row-active" : ""}
-                    onClick={() => setSelectedId(account.id)}
+                    onClick={() => {
+                      setSelectedId(account.id);
+                      setIsEditing(false);
+                      setDraftPlan(null);
+                    }}
                   >
                     <td>{account.dealerName}</td>
                     <td>{account.primaryBuyer}</td>
@@ -65,7 +137,8 @@ export default function Accounts() {
               <div>
                 <h2>{selectedAccount.dealerName}</h2>
                 <p className="section-subtext">
-                  {selectedAccount.primaryBuyer} • {selectedAccount.primaryBuyingCategories.join(", ")}
+                  {selectedAccount.primaryBuyer} •{" "}
+                  {selectedAccount.primaryBuyingCategories.join(", ")}
                 </p>
               </div>
               <span className={`status-pill status-${selectedAccount.statusTone}`}>
@@ -105,37 +178,140 @@ export default function Accounts() {
           </div>
 
           <div className="card">
-            <h2>Growth Plan</h2>
-
-            <div className="feedback-row">
-              <span>Category to Expand</span>
-              <strong>{selectedAccount.categoryToExpand}</strong>
-            </div>
-            <div className="feedback-row">
-              <span>SKU Focus</span>
-              <strong>{selectedAccount.skuFocus.join(", ")}</strong>
-            </div>
-            <div className="feedback-row">
-              <span>Planned Order Frequency</span>
-              <strong>{selectedAccount.plannedOrderFrequency}</strong>
-            </div>
-            <div className="feedback-row">
-              <span>Barrier</span>
-              <strong>{selectedAccount.barrier}</strong>
-            </div>
-            <div className="feedback-row">
-              <span>AE Action Required</span>
-              <strong>{selectedAccount.aeActionRequired}</strong>
+            <div className="section-header">
+              <div>
+                <h2>Growth Plan</h2>
+                <p className="section-subtext">
+                  Strategy, expansion, and execution plan for this account.
+                </p>
+              </div>
             </div>
 
-            <p className="coach-text">
-              How we get there: {selectedAccount.howWeGetThere}
-            </p>
+            {!isEditing ? (
+              <>
+                <div className="feedback-row">
+                  <span>Category to Expand</span>
+                  <strong>{selectedAccount.categoryToExpand}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>SKU Focus</span>
+                  <strong>{selectedAccount.skuFocus.join(", ")}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Planned Order Frequency</span>
+                  <strong>{selectedAccount.plannedOrderFrequency}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Barrier</span>
+                  <strong>{selectedAccount.barrier}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>AE Action Required</span>
+                  <strong>{selectedAccount.aeActionRequired}</strong>
+                </div>
 
-            <div className="button-row">
-              <button className="btn-primary">Practice Call</button>
-              <button className="btn-secondary">Update Plan</button>
-            </div>
+                <p className="coach-text">
+                  How we get there: {selectedAccount.howWeGetThere}
+                </p>
+
+                <div className="button-row">
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      navigate("/training", {
+                        state: {
+                          scenarioType: "Growth Mission",
+                          dealerName: selectedAccount.dealerName,
+                        },
+                      })
+                    }
+                  >
+                    Practice Call
+                  </button>
+
+                  <button className="btn-secondary" onClick={openEditor}>
+                    Update Plan
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="plan-editor">
+                <label className="form-field">
+                  <span>Category to Expand</span>
+                  <input
+                    type="text"
+                    value={draftPlan.categoryToExpand}
+                    onChange={(e) =>
+                      handleDraftChange("categoryToExpand", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="form-field">
+                  <span>SKU Focus (comma separated)</span>
+                  <input
+                    type="text"
+                    value={draftPlan.skuFocus}
+                    onChange={(e) =>
+                      handleDraftChange("skuFocus", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="form-field">
+                  <span>Planned Order Frequency</span>
+                  <input
+                    type="text"
+                    value={draftPlan.plannedOrderFrequency}
+                    onChange={(e) =>
+                      handleDraftChange("plannedOrderFrequency", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="form-field">
+                  <span>Barrier</span>
+                  <input
+                    type="text"
+                    value={draftPlan.barrier}
+                    onChange={(e) =>
+                      handleDraftChange("barrier", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="form-field">
+                  <span>AE Action Required</span>
+                  <input
+                    type="text"
+                    value={draftPlan.aeActionRequired}
+                    onChange={(e) =>
+                      handleDraftChange("aeActionRequired", e.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="form-field">
+                  <span>How We Get There</span>
+                  <textarea
+                    className="response-box compact-textarea"
+                    value={draftPlan.howWeGetThere}
+                    onChange={(e) =>
+                      handleDraftChange("howWeGetThere", e.target.value)
+                    }
+                  />
+                </label>
+
+                <div className="button-row">
+                  <button className="btn-primary" onClick={savePlan}>
+                    Save Plan
+                  </button>
+                  <button className="btn-secondary" onClick={closeEditor}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="card">

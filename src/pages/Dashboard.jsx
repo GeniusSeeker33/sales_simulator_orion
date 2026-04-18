@@ -1,18 +1,16 @@
 import Layout from "../components/layout/Layout";
-
-const kpis = [
-  { label: "Calls Today", value: "72 / 100", note: "+12 vs yesterday" },
-  { label: "Revenue Today", value: "$8,450", note: "On pace" },
-  { label: "Avg Order Size", value: "$312", note: "+8%" },
-  { label: "Rank", value: "#6 / 35", note: "Climbing" },
-];
+import { dashboardData } from "../data/dashboard";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   return (
     <Layout title="Dashboard">
+      {/* KPI ROW */}
       <section className="kpi-grid">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="card">
+        {dashboardData.kpis.map((kpi) => (
+          <div key={kpi.id} className="card">
             <div className="card-label">{kpi.label}</div>
             <div className="card-value">{kpi.value}</div>
             <div className="card-note">{kpi.note}</div>
@@ -20,71 +18,236 @@ export default function Dashboard() {
         ))}
       </section>
 
-      <section className="two-column">
-        <div className="card">
-          <h2>Today's Missions</h2>
-          <ul className="mission-list">
-            <li>
-              <span>Run 3 simulations</span>
-              <strong>0 / 3</strong>
-            </li>
-            <li>
-              <span>Close 2 dealer growth gaps</span>
-              <strong>0 / 2</strong>
-            </li>
-            <li>
-              <span>Hit 100 outbound dials</span>
-              <strong>72 / 100</strong>
-            </li>
-          </ul>
+      <section className="dashboard-main-grid">
+        {/* LEFT SIDE */}
+        <div className="dashboard-main-stack">
+          {/* MISSIONS */}
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Today's Missions</h2>
+                <p className="section-subtext">
+                  Daily actions tied directly to production and growth.
+                </p>
+              </div>
+            </div>
+
+            <ul className="mission-list">
+              {dashboardData.missions.map((mission) => (
+                <li key={mission.id}>
+                  <div className="mission-left">
+                    <span
+                      className={`mission-indicator ${
+                        mission.complete
+                          ? "mission-complete"
+                          : "mission-incomplete"
+                      }`}
+                    >
+                      {mission.complete ? "✓" : "•"}
+                    </span>
+                    <span>{mission.label}</span>
+                  </div>
+                  <strong>{mission.value}</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* AI COACH + TRAINING SNAPSHOT */}
+          <div className="two-column dashboard-two-column">
+            <div className="card">
+              <h2>{dashboardData.aiCoach.title}</h2>
+              <p className="coach-text">
+                {dashboardData.aiCoach.message}
+              </p>
+            </div>
+
+            <div className="card">
+              <h2>Training Snapshot</h2>
+              <div className="feedback-row">
+                <span>Primary Scenario</span>
+                <strong>{dashboardData.trainingSnapshot.scenario}</strong>
+              </div>
+              <div className="feedback-row">
+                <span>Average Score</span>
+                <strong>{dashboardData.trainingSnapshot.averageScore}</strong>
+              </div>
+              <p className="coach-text">
+                {dashboardData.trainingSnapshot.recommendation}
+              </p>
+            </div>
+          </div>
+
+          {/* DEALER SPOTLIGHT */}
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Dealer Spotlight</h2>
+                <p className="section-subtext">
+                  Account growth mission requiring attention right now.
+                </p>
+              </div>
+              <span className="status-pill status-risk">At Risk</span>
+            </div>
+
+            <div className="detail-grid">
+              <div className="mini-stat">
+                <span>Dealer</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.dealerName}
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Growth Gap</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.growthGap}
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Current Sales</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.currentSales}
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Target Sales</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.targetSales}
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Category</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.categoryToExpand}
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Barrier</span>
+                <strong>
+                  {dashboardData.dealerSpotlight.barrier}
+                </strong>
+              </div>
+            </div>
+
+            <p className="coach-text">
+              Next move: {dashboardData.dealerSpotlight.nextMove}
+            </p>
+
+            <div className="button-row">
+              <button
+                className="btn-primary"
+                onClick={() =>
+                  navigate("/training", {
+                    state: { scenarioType: "Growth Mission" },
+                  })
+                }
+              >
+                Practice Growth Call
+              </button>
+
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  navigate("/accounts", {
+                    state: {
+                      dealerName:
+                        dashboardData.dealerSpotlight.dealerName,
+                    },
+                  })
+                }
+              >
+                View Account
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="card">
-          <h2>Level Progress</h2>
-          <div className="progress-meta">
-            <span>Level 2 → 3</span>
-            <span>72%</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: "72%" }} />
+        {/* RIGHT SIDE */}
+        <div className="dashboard-side-stack">
+          {/* LEADERBOARD */}
+          <div className="card">
+            <h2>Leaderboard Preview</h2>
+            {dashboardData.leaderboardPreview.map((rep) => (
+              <div key={rep.rank} className="feedback-row">
+                <span>
+                  #{rep.rank} {rep.name}
+                </span>
+                <strong>{rep.revenue}</strong>
+              </div>
+            ))}
           </div>
 
-          <div className="stacked-stats">
-            <div className="mini-stat">
+          {/* LEVEL PROGRESS */}
+          <div className="card">
+            <h2>Level Progress</h2>
+
+            <div className="feedback-row">
+              <span>Current Level</span>
+              <strong>
+                {dashboardData.levelSnapshot.currentLevel}
+              </strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Next Level</span>
+              <strong>
+                {dashboardData.levelSnapshot.nextLevel}
+              </strong>
+            </div>
+
+            <div className="progress-meta">
+              <span>Progress</span>
+              <span>
+                {dashboardData.levelSnapshot.progressPercent}%
+              </span>
+            </div>
+
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${dashboardData.levelSnapshot.progressPercent}%`,
+                }}
+              />
+            </div>
+
+            <div className="card-note">
+              {dashboardData.levelSnapshot.requirementSummary}
+            </div>
+
+            <div className="insight-box">
+              <div className="card-label">Next Reward</div>
+              <p className="coach-text">
+                {dashboardData.levelSnapshot.nextReward}
+              </p>
+            </div>
+          </div>
+
+          {/* REP SNAPSHOT */}
+          <div className="card">
+            <h2>Rep Snapshot</h2>
+
+            <div className="feedback-row">
+              <span>Rep</span>
+              <strong>{dashboardData.user.name}</strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Title</span>
+              <strong>{dashboardData.user.levelTitle}</strong>
+            </div>
+
+            <div className="feedback-row">
               <span>Commission Boost</span>
-              <strong>+0.01%</strong>
+              <strong>{dashboardData.user.commissionBoost}</strong>
             </div>
-            <div className="mini-stat">
+
+            <div className="feedback-row">
               <span>Weekly Bonus</span>
-              <strong>$85</strong>
+              <strong>
+                {dashboardData.user.weeklyBonusAvailable}
+              </strong>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="two-column">
-        <div className="card">
-          <h2>AI Coach</h2>
-          <p className="coach-text">
-            You are losing control after price objections. Run two objection
-            drills before the next outbound block and push for commitment after
-            your reframe.
-          </p>
-        </div>
-
-        <div className="card">
-          <h2>Dealer Mission Spotlight</h2>
-          <div className="dealer-row">
-            <span>Smith Tactical</span>
-            <strong>$5,700 gap</strong>
-          </div>
-          <div className="dealer-row">
-            <span>Category</span>
-            <strong>Optics</strong>
-          </div>
-          <div className="dealer-row">
-            <span>Barrier</span>
-            <strong>Confidence</strong>
           </div>
         </div>
       </section>

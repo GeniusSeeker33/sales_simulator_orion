@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { trainingScenarios } from "../data/training";
 
@@ -10,13 +11,35 @@ const initialProgress = {
 };
 
 export default function Training() {
-  const [selectedScenarioId, setSelectedScenarioId] = useState(trainingScenarios[0].id);
+  const location = useLocation();
+  const requestedScenarioType = location.state?.scenarioType;
+  const requestedDealerName = location.state?.dealerName;
+
+  const defaultScenario = useMemo(() => {
+    if (!requestedScenarioType) return trainingScenarios[0];
+
+    const match = trainingScenarios.find(
+      (scenario) => scenario.type === requestedScenarioType
+    );
+
+    return match || trainingScenarios[0];
+  }, [requestedScenarioType]);
+
+  const [selectedScenarioId, setSelectedScenarioId] = useState(defaultScenario.id);
   const [response, setResponse] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [history, setHistory] = useState([]);
 
+  useEffect(() => {
+    setSelectedScenarioId(defaultScenario.id);
+    setResponse("");
+    setSubmitted(false);
+  }, [defaultScenario]);
+
   const selectedScenario = useMemo(
-    () => trainingScenarios.find((scenario) => scenario.id === selectedScenarioId),
+    () =>
+      trainingScenarios.find((scenario) => scenario.id === selectedScenarioId) ||
+      trainingScenarios[0],
     [selectedScenarioId]
   );
 
@@ -40,6 +63,7 @@ export default function Training() {
       lower.includes("turn") ||
       lower.includes("inventory") ||
       lower.includes("availability");
+
     const closeHit =
       lower.includes("open to") ||
       lower.includes("commit") ||
@@ -69,12 +93,14 @@ export default function Training() {
     setSubmitted(true);
 
     const lower = response.toLowerCase();
+
     const agreementHit =
       lower.includes("fair") ||
       lower.includes("understand") ||
       lower.includes("totally") ||
       lower.includes("absolutely") ||
       lower.includes("perfect");
+
     const questionHit = lower.includes("?");
     const valueHit =
       lower.includes("profit") ||
@@ -83,6 +109,7 @@ export default function Training() {
       lower.includes("turn") ||
       lower.includes("inventory") ||
       lower.includes("availability");
+
     const closeHit =
       lower.includes("open to") ||
       lower.includes("commit") ||
@@ -101,6 +128,7 @@ export default function Training() {
       id: Date.now(),
       scenarioType: selectedScenario.type,
       scenarioTitle: selectedScenario.title,
+      dealerName: requestedDealerName || "General Drill",
       score,
       response,
     };
@@ -152,11 +180,16 @@ export default function Training() {
           <div className="training-layout">
             <div className="card">
               <div className="scenario-tag">{selectedScenario.type}</div>
+
+              {requestedDealerName && (
+                <div className="dealer-context-banner">
+                  Dealer Context: <strong>{requestedDealerName}</strong>
+                </div>
+              )}
+
               <h2>{selectedScenario.title}</h2>
               <p className="dealer-quote">“{selectedScenario.dealerLine}”</p>
-              <p className="coach-text">
-                Goal: {selectedScenario.goal}
-              </p>
+              <p className="coach-text">Goal: {selectedScenario.goal}</p>
 
               <textarea
                 className="response-box"
@@ -180,7 +213,8 @@ export default function Training() {
 
               {!submitted || !evaluation ? (
                 <p className="muted">
-                  Submit your response to score this drill and compare it to a top performer answer.
+                  Submit your response to score this drill and compare it to a top
+                  performer answer.
                 </p>
               ) : (
                 <>
@@ -220,7 +254,9 @@ export default function Training() {
 
                   <div className="insight-box">
                     <div className="card-label">Top Performer Answer</div>
-                    <p className="coach-text">{selectedScenario.topPerformerAnswer}</p>
+                    <p className="coach-text">
+                      {selectedScenario.topPerformerAnswer}
+                    </p>
                   </div>
                 </>
               )}
@@ -254,7 +290,9 @@ export default function Training() {
             <h2>Recent Attempts</h2>
 
             {history.length === 0 ? (
-              <p className="muted">No attempts yet. Submit a response to build your history.</p>
+              <p className="muted">
+                No attempts yet. Submit a response to build your history.
+              </p>
             ) : (
               <div className="history-list">
                 {history.map((attempt) => (
@@ -264,6 +302,7 @@ export default function Training() {
                       <strong>{attempt.score}</strong>
                     </div>
                     <p className="history-title">{attempt.scenarioTitle}</p>
+                    <p className="card-note">Dealer: {attempt.dealerName}</p>
                     <p className="history-response">{attempt.response}</p>
                   </div>
                 ))}

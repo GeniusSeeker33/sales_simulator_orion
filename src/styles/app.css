@@ -560,3 +560,202 @@ input {
     grid-template-columns: 1fr;
   }
 }
+.levels-page-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr;
+  gap: 16px;
+}
+
+.levels-main-stack,
+.levels-side-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.level-selector {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.level-chip {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #eef2ff;
+  border-radius: 16px;
+  padding: 14px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.level-chip span {
+  display: block;
+  color: #97a3c6;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.level-chip-active,
+.level-chip:hover {
+  background: rgba(61, 220, 151, 0.12);
+  border-color: rgba(61, 220, 151, 0.25);
+}
+
+.levels-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.bullet-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #c8d2f0;
+  line-height: 1.7;
+}
+
+.checklist {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce5ff;
+}
+
+.check-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.check-complete {
+  background: rgba(61, 220, 151, 0.14);
+  color: #8dddb8;
+}
+
+.check-incomplete {
+  background: rgba(255, 255, 255, 0.08);
+  color: #97a3c6;
+}
+
+@media (max-width: 1100px) {
+  .levels-page-grid,
+  .levels-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .level-selector {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .level-selector {
+    grid-template-columns: 1fr;
+  }
+}
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.85fr;
+  gap: 16px;
+}
+
+.dashboard-main-stack,
+.dashboard-side-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-two-column {
+  margin-bottom: 0;
+}
+
+.mission-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mission-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.mission-complete {
+  background: rgba(61, 220, 151, 0.14);
+  color: #8dddb8;
+}
+
+.mission-incomplete {
+  background: rgba(255, 255, 255, 0.08);
+  color: #97a3c6;
+}
+
+.leaderboard-preview-list {
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.dealer-context-banner {
+  display: inline-block;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(61, 220, 151, 0.12);
+  color: #c8f5df;
+  font-size: 0.9rem;
+}
+.plan-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.form-field span {
+  font-size: 0.9rem;
+  color: #97a3c6;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(9, 14, 28, 0.8);
+  color: #eef2ff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.compact-textarea {
+  min-height: 120px;
+}
