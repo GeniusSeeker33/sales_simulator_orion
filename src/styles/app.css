@@ -455,3 +455,108 @@ input {
     grid-template-columns: 1fr;
   }
 }
+.training-page-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: 16px;
+}
+
+.training-main-stack,
+.training-side-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.scenario-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scenario-button {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #eef2ff;
+  border-radius: 16px;
+  padding: 14px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.scenario-button:hover,
+.scenario-button-active {
+  background: rgba(61, 220, 151, 0.12);
+  border-color: rgba(61, 220, 151, 0.25);
+}
+
+.scenario-type {
+  display: block;
+  color: #8dddb8;
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+}
+
+.score-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.score-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, rgba(61, 220, 151, 0.2), rgba(28, 181, 224, 0.2));
+  border: 1px solid rgba(61, 220, 151, 0.24);
+}
+
+.score-value-text {
+  font-size: 1.2rem;
+}
+
+.insight-box {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.progress-stack,
+.history-list {
+  display: grid;
+  gap: 14px;
+}
+
+.progress-item,
+.history-item {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.history-title {
+  font-weight: 700;
+  margin: 10px 0 8px;
+}
+
+.history-response {
+  color: #c8d2f0;
+  margin: 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .training-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-picker {
+    grid-template-columns: 1fr;
+  }
+}
