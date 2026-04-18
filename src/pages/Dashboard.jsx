@@ -10,46 +10,10 @@ import {
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
-
-const LEVELS = [
-  {
-    level: 1,
-    title: "Associate AE",
-    minSessions: 0,
-    minAverageScore: 0,
-    nextReward: "Unlock structured coaching path and guided account missions.",
-  },
-  {
-    level: 2,
-    title: "Account Executive I",
-    minSessions: 3,
-    minAverageScore: 60,
-    nextReward: "Unlock stronger visibility and early performance recognition.",
-  },
-  {
-    level: 3,
-    title: "Account Executive II",
-    minSessions: 6,
-    minAverageScore: 70,
-    nextReward: "Unlock advanced scenario missions and higher rep credibility.",
-  },
-  {
-    level: 4,
-    title: "Senior Account Executive",
-    minSessions: 10,
-    minAverageScore: 80,
-    nextReward:
-      "Unlock leadership-facing readiness and advanced growth strategy status.",
-  },
-  {
-    level: 5,
-    title: "Strategic Growth Leader",
-    minSessions: 15,
-    minAverageScore: 90,
-    nextReward:
-      "Unlock elite recognition, top coaching profile, and strategic dealer ownership.",
-  },
-];
+import {
+  getTrainingLevelData,
+  calculateTrainingAverage,
+} from "../data/trainingLevels";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -425,14 +389,7 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
       account.howWeGetThere
   );
 
-  const averageTrainingScore = trainingResults.length
-    ? Math.round(
-        trainingResults.reduce(
-          (sum, entry) => sum + Number(entry.totalScore ?? entry.score ?? 0),
-          0
-        ) / trainingResults.length
-      )
-    : 0;
+  const averageTrainingScore = calculateTrainingAverage(trainingResults);
 
   const scenarioCounts = trainingResults.reduce((acc, entry) => {
     const key = entry.scenarioType || "Unknown";
@@ -444,7 +401,7 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
     Object.entries(scenarioCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ??
     "Growth Mission";
 
-  const levelData = getLevelData(trainingResults.length, averageTrainingScore);
+  const levelData = getTrainingLevelData(trainingResults.length, averageTrainingScore);
   const spotlightDealer =
     [...accounts].sort((a, b) => Number(b.growthGap) - Number(a.growthGap))[0] ??
     fallbackSpotlight();
@@ -657,51 +614,6 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
       weeklyBonusAvailable:
         completedMissions >= 3 ? "Unlocked" : `${3 - completedMissions} action(s) remaining`,
     },
-  };
-}
-
-function getLevelData(trainingCount, averageTrainingScore) {
-  let current = LEVELS[0];
-
-  for (const level of LEVELS) {
-    if (
-      trainingCount >= level.minSessions &&
-      averageTrainingScore >= level.minAverageScore
-    ) {
-      current = level;
-    }
-  }
-
-  const next = LEVELS.find((level) => level.level === current.level + 1) ?? null;
-
-  if (!next) {
-    return {
-      current,
-      next: null,
-      progressPercent: 100,
-      requirementSummary: "All advancement milestones achieved.",
-    };
-  }
-
-  const sessionProgress = Math.min(
-    (trainingCount / next.minSessions) * 100,
-    100
-  );
-
-  const scoreProgress = next.minAverageScore
-    ? Math.min((averageTrainingScore / next.minAverageScore) * 100, 100)
-    : 100;
-
-  const progressPercent = Math.round((sessionProgress + scoreProgress) / 2);
-
-  return {
-    current,
-    next,
-    progressPercent,
-    requirementSummary: `Need ${Math.max(
-      next.minSessions - trainingCount,
-      0
-    )} more training session(s) and average score of ${next.minAverageScore}+ to advance.`,
   };
 }
 

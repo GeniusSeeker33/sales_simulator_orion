@@ -3,39 +3,11 @@ import { buildRepCompSummary, formatCurrency } from "../lib/compEngine";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
-
-const LEVELS = [
-  {
-    level: 1,
-    title: "Associate AE",
-    minSessions: 0,
-    minAverageScore: 0,
-  },
-  {
-    level: 2,
-    title: "Account Executive I",
-    minSessions: 3,
-    minAverageScore: 60,
-  },
-  {
-    level: 3,
-    title: "Account Executive II",
-    minSessions: 6,
-    minAverageScore: 70,
-  },
-  {
-    level: 4,
-    title: "Senior Account Executive",
-    minSessions: 10,
-    minAverageScore: 80,
-  },
-  {
-    level: 5,
-    title: "Strategic Growth Leader",
-    minSessions: 15,
-    minAverageScore: 90,
-  },
-];
+import { loadComparisonReps } from "../lib/repRosterStore";
+import {
+  getCurrentTrainingLevel,
+  calculateTrainingAverage,
+} from "../data/trainingLevels";
 
 export default function Leaderboard() {
   const accounts = loadAccounts();
@@ -243,20 +215,8 @@ export default function Leaderboard() {
 
 function buildLeaderboard(accounts, trainingResults, repMetrics) {
   const currentUserTraining = trainingResults;
-  const currentUserAvg =
-    currentUserTraining.length > 0
-      ? Math.round(
-          currentUserTraining.reduce(
-            (sum, entry) => sum + Number(entry.totalScore ?? entry.score ?? 0),
-            0
-          ) / currentUserTraining.length
-        )
-      : 0;
-
-  const currentUserLevel = getLevelData(
-    currentUserTraining.length,
-    currentUserAvg
-  );
+  const currentUserAvg = calculateTrainingAverage(currentUserTraining);
+  const currentUserLevel = { current: getCurrentTrainingLevel(currentUserTraining.length, currentUserAvg) };
 
   const currentUserComp = buildRepCompSummary({
     startDate: repMetrics.startDate,
@@ -266,97 +226,62 @@ function buildLeaderboard(accounts, trainingResults, repMetrics) {
   });
 
   const accountCoverageScore = getAccountCoverageScore(accounts);
+  const comparisonReps = loadComparisonReps();
 
-  const reps = [
-    {
-      id: "rep-current-user",
-      name: repMetrics.repName || "AE User",
-      subtitle: "Live user profile",
+  const liveRepEntry = {
+    id: "rep-current-user",
+    name: repMetrics.repName || "AE User",
+    subtitle: "Live user profile",
+    trainingAverage: currentUserAvg,
+    trainingSessions: currentUserTraining.length,
+    levelLabel: `L${currentUserLevel.current.level} — ${currentUserLevel.current.title}`,
+    compStatus: !currentUserComp.kpiMeasurementActive
+      ? "Ramp"
+      : currentUserComp.hitAllKpis
+      ? "Accelerated"
+      : "Base",
+    totalComp: currentUserComp.totalEstimatedCompensation,
+    compositeScore: calculateCompositeScore({
       trainingAverage: currentUserAvg,
       trainingSessions: currentUserTraining.length,
-      levelLabel: `L${currentUserLevel.current.level} — ${currentUserLevel.current.title}`,
-      compStatus: !currentUserComp.kpiMeasurementActive
-        ? "Ramp"
-        : currentUserComp.hitAllKpis
-        ? "Accelerated"
-        : "Base",
-      totalComp: currentUserComp.totalEstimatedCompensation,
+      level: currentUserLevel.current.level,
+      accelerated: currentUserComp.hitAllKpis,
+      inRamp: !currentUserComp.kpiMeasurementActive,
+      accountCoverageScore,
+    }),
+    isCurrentUser: true,
+  };
+
+  const demoEntries = comparisonReps.map((rep) => {
+    const comp = buildRepCompSummary({
+      startDate: rep.startDate,
+      revenue: rep.revenue,
+      captures: rep.captures,
+      customersSold: rep.customersSold,
+    });
+    const level = getCurrentTrainingLevel(rep.trainingSessions, rep.trainingAverage);
+    return {
+      id: rep.id,
+      name: rep.name,
+      subtitle: rep.isDemo ? "Comparison profile" : "Roster rep",
+      trainingAverage: rep.trainingAverage,
+      trainingSessions: rep.trainingSessions,
+      levelLabel: `L${level.level} — ${level.title}`,
+      compStatus: !comp.kpiMeasurementActive ? "Ramp" : comp.hitAllKpis ? "Accelerated" : "Base",
+      totalComp: comp.totalEstimatedCompensation,
       compositeScore: calculateCompositeScore({
-        trainingAverage: currentUserAvg,
-        trainingSessions: currentUserTraining.length,
-        level: currentUserLevel.current.level,
-        accelerated: currentUserComp.hitAllKpis,
-        inRamp: !currentUserComp.kpiMeasurementActive,
+        trainingAverage: rep.trainingAverage,
+        trainingSessions: rep.trainingSessions,
+        level: level.level,
+        accelerated: comp.hitAllKpis,
+        inRamp: !comp.kpiMeasurementActive,
         accountCoverageScore,
       }),
-      isCurrentUser: true,
-    },
-    {
-      id: "rep-demo-1",
-      name: "Top Performing AE",
-      subtitle: "Demo comparison profile",
-      trainingAverage: Math.max(currentUserAvg + 8, 88),
-      trainingSessions: Math.max(currentUserTraining.length + 4, 10),
-      levelLabel: "L4 — Senior Account Executive",
-      compStatus: "Accelerated",
-      totalComp: currentUserComp.totalEstimatedCompensation * 1.18,
-      compositeScore: calculateCompositeScore({
-        trainingAverage: Math.max(currentUserAvg + 8, 88),
-        trainingSessions: Math.max(currentUserTraining.length + 4, 10),
-        level: 4,
-        accelerated: true,
-        inRamp: false,
-        accountCoverageScore: Math.max(accountCoverageScore + 10, 85),
-      }),
       isCurrentUser: false,
-    },
-    {
-      id: "rep-demo-2",
-      name: "Developing AE",
-      subtitle: "Demo comparison profile",
-      trainingAverage: currentUserTraining.length
-        ? Math.max(currentUserAvg - 7, 62)
-        : 62,
-      trainingSessions: Math.max(currentUserTraining.length - 1, 2),
-      levelLabel: "L2 — Account Executive I",
-      compStatus: "Base",
-      totalComp: currentUserComp.totalEstimatedCompensation * 0.84,
-      compositeScore: calculateCompositeScore({
-        trainingAverage: currentUserTraining.length
-          ? Math.max(currentUserAvg - 7, 62)
-          : 62,
-        trainingSessions: Math.max(currentUserTraining.length - 1, 2),
-        level: 2,
-        accelerated: false,
-        inRamp: false,
-        accountCoverageScore: Math.max(accountCoverageScore - 12, 50),
-      }),
-      isCurrentUser: false,
-    },
-    {
-      id: "rep-demo-3",
-      name: "Consistent AE",
-      subtitle: "Demo comparison profile",
-      trainingAverage: currentUserTraining.length
-        ? Math.max(currentUserAvg - 2, 76)
-        : 76,
-      trainingSessions: Math.max(currentUserTraining.length + 1, 6),
-      levelLabel: "L3 — Account Executive II",
-      compStatus: "Accelerated",
-      totalComp: currentUserComp.totalEstimatedCompensation * 1.05,
-      compositeScore: calculateCompositeScore({
-        trainingAverage: currentUserTraining.length
-          ? Math.max(currentUserAvg - 2, 76)
-          : 76,
-        trainingSessions: Math.max(currentUserTraining.length + 1, 6),
-        level: 3,
-        accelerated: true,
-        inRamp: false,
-        accountCoverageScore: Math.max(accountCoverageScore + 3, 70),
-      }),
-      isCurrentUser: false,
-    },
-  ];
+    };
+  });
+
+  const reps = [liveRepEntry, ...demoEntries];
 
   return reps
     .sort((a, b) => b.compositeScore - a.compositeScore)
@@ -399,21 +324,6 @@ function calculateCompositeScore({
   return Math.round(
     trainingScore + consistencyScore + levelScore + compScore + executionScore
   );
-}
-
-function getLevelData(trainingCount, averageTrainingScore) {
-  let current = LEVELS[0];
-
-  for (const level of LEVELS) {
-    if (
-      trainingCount >= level.minSessions &&
-      averageTrainingScore >= level.minAverageScore
-    ) {
-      current = level;
-    }
-  }
-
-  return { current };
 }
 
 function buildUserRows(rep) {

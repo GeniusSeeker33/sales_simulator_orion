@@ -1,100 +1,25 @@
 import Layout from "../components/layout/Layout";
-
-const TRAINING_STORAGE_KEY = "sales-simulator-orion-training-results-v1";
-
-const LEVELS = [
-  {
-    level: 1,
-    title: "Associate AE",
-    minSessions: 0,
-    minAverageScore: 0,
-    summary:
-      "Learning account structure, dealer context, and core scenario flow.",
-    checklist: [
-      "Complete your first training session",
-      "Understand dealer growth plan structure",
-      "Practice opening and discovery consistently",
-    ],
-    reward:
-      "Access to foundational coaching flow and rep readiness tracking.",
-  },
-  {
-    level: 2,
-    title: "Account Executive I",
-    minSessions: 3,
-    minAverageScore: 60,
-    summary:
-      "Demonstrates early consistency in scenario completion and account awareness.",
-    checklist: [
-      "Complete at least 3 training sessions",
-      "Maintain average score of 60+",
-      "Show repeatable scenario participation",
-    ],
-    reward:
-      "Recognized as building consistency with measurable rep development.",
-  },
-  {
-    level: 3,
-    title: "Account Executive II",
-    minSessions: 6,
-    minAverageScore: 70,
-    summary:
-      "Shows stronger sales judgment, better value framing, and improving close discipline.",
-    checklist: [
-      "Complete at least 6 training sessions",
-      "Maintain average score of 70+",
-      "Demonstrate stronger value-story execution",
-    ],
-    reward:
-      "Eligible for stronger internal visibility and more advanced growth scenarios.",
-  },
-  {
-    level: 4,
-    title: "Senior Account Executive",
-    minSessions: 10,
-    minAverageScore: 80,
-    summary:
-      "Operates with higher readiness, stronger dealer strategy, and more leadership confidence.",
-    checklist: [
-      "Complete at least 10 training sessions",
-      "Maintain average score of 80+",
-      "Show strong discovery and close patterns",
-    ],
-    reward:
-      "Viewed as advanced rep talent with leadership-facing readiness signals.",
-  },
-  {
-    level: 5,
-    title: "Strategic Growth Leader",
-    minSessions: 15,
-    minAverageScore: 90,
-    summary:
-      "Represents elite readiness and strategic dealer growth capability.",
-    checklist: [
-      "Complete at least 15 training sessions",
-      "Maintain average score of 90+",
-      "Demonstrate high-level strategic consistency",
-    ],
-    reward:
-      "Top-tier status with strongest coaching credibility and growth ownership.",
-  },
-];
+import { loadTrainingResults } from "../lib/trainingStore";
+import {
+  calculateTrainingAverage,
+  getCurrentTrainingLevel,
+  getTrainingLevelData,
+  TRAINING_LEVELS,
+} from "../data/trainingLevels";
 
 export default function Levels() {
   const trainingResults = loadTrainingResults();
 
-  const averageScore = trainingResults.length
-    ? Math.round(
-        trainingResults.reduce(
-          (sum, entry) => sum + Number(entry.totalScore ?? 0),
-          0
-        ) / trainingResults.length
-      )
-    : 0;
+  const averageScore = calculateTrainingAverage(trainingResults);
 
-  const currentLevel = getCurrentLevel(trainingResults.length, averageScore);
-  const nextLevel = LEVELS.find((item) => item.level === currentLevel.level + 1) ?? null;
-  const progressData = getProgressData(trainingResults.length, averageScore, nextLevel);
+  const levelData = getTrainingLevelData(trainingResults.length, averageScore);
+  const currentLevel = levelData.current;
+  const nextLevel = levelData.next;
+  const progressData = {
+    progressPercent: levelData.progressPercent,
+    requirementSummary: levelData.requirementSummary,
+    nextChecklistComplete: levelData.nextChecklistComplete,
+  };
 
   const recentResults = trainingResults.slice(0, 8);
 
@@ -299,72 +224,6 @@ export default function Levels() {
       </section>
     </Layout>
   );
-}
-
-function loadTrainingResults() {
-  try {
-    const raw = localStorage.getItem(TRAINING_STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to load training results for levels:", error);
-    return [];
-  }
-}
-
-function getCurrentLevel(trainingCount, averageScore) {
-  let current = LEVELS[0];
-
-  for (const level of LEVELS) {
-    if (
-      trainingCount >= level.minSessions &&
-      averageScore >= level.minAverageScore
-    ) {
-      current = level;
-    }
-  }
-
-  return current;
-}
-
-function getProgressData(trainingCount, averageScore, nextLevel) {
-  if (!nextLevel) {
-    return {
-      progressPercent: 100,
-      requirementSummary: "All advancement milestones achieved.",
-      nextChecklistComplete: [],
-    };
-  }
-
-  const sessionProgress = Math.min(
-    (trainingCount / nextLevel.minSessions) * 100,
-    100
-  );
-
-  const scoreProgress = nextLevel.minAverageScore
-    ? Math.min((averageScore / nextLevel.minAverageScore) * 100, 100)
-    : 100;
-
-  const progressPercent = Math.round((sessionProgress + scoreProgress) / 2);
-
-  const nextChecklistComplete = [
-    trainingCount >= nextLevel.minSessions,
-    averageScore >= nextLevel.minAverageScore,
-    trainingCount > 0 && averageScore > 0,
-  ];
-
-  return {
-    progressPercent,
-    requirementSummary: `Need ${Math.max(
-      nextLevel.minSessions - trainingCount,
-      0
-    )} more training session(s) and average score of ${
-      nextLevel.minAverageScore
-    }+ to advance.`,
-    nextChecklistComplete,
-  };
 }
 
 function getReadinessLabel(trainingCount, averageScore) {

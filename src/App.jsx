@@ -7,6 +7,7 @@ import Leaderboard from "./pages/Leaderboard";
 import Levels from "./pages/Levels";
 import RepMetrics from "./pages/RepMetrics";
 import ManagerView from "./pages/ManagerView";
+import Employees from "./pages/Employees";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/levels" element={<Levels />} />
       <Route path="/rep-metrics" element={<RepMetrics />} />
       <Route path="/manager-view" element={<ManagerView />} />
+      <Route path="/employees" element={<Employees />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

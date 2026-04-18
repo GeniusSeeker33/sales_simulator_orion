@@ -10,6 +10,7 @@ const navItems = [
   { to: "/activity", label: uiCopy.nav.activity },
   { to: "/rep-metrics", label: uiCopy.nav.repMetrics },
   { to: "/manager-view", label: uiCopy.nav.managerView },
+  { to: "/employees", label: uiCopy.nav.employees },
 ];
 
 export default function Layout({ title, children }) {

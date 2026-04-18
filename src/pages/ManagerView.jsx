@@ -1,19 +1,16 @@
 import Layout from "../components/layout/Layout";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadTrainingResults } from "../lib/trainingStore";
+import { loadComparisonReps } from "../lib/repRosterStore";
 import {
   buildRepCompSummary,
   buildCompOpportunitySummary,
   formatCurrency,
 } from "../lib/compEngine";
-
-const LEVELS = [
-  { level: 1, title: "Associate AE", minSessions: 0, minAverageScore: 0 },
-  { level: 2, title: "Account Executive I", minSessions: 3, minAverageScore: 60 },
-  { level: 3, title: "Account Executive II", minSessions: 6, minAverageScore: 70 },
-  { level: 4, title: "Senior Account Executive", minSessions: 10, minAverageScore: 80 },
-  { level: 5, title: "Strategic Growth Leader", minSessions: 15, minAverageScore: 90 },
-];
+import {
+  getCurrentTrainingLevel,
+  calculateTrainingAverage,
+} from "../data/trainingLevels";
 
 export default function ManagerView() {
   const liveRep = loadRepProfile();
@@ -227,7 +224,9 @@ export default function ManagerView() {
 
 function buildRepComparisonData(liveRep, liveTrainingResults) {
   const liveTrainingAverage = calculateTrainingAverage(liveTrainingResults);
-  const liveLevel = getLevelData(liveTrainingResults.length, liveTrainingAverage);
+  const liveLevel = { current: getCurrentTrainingLevel(liveTrainingResults.length, liveTrainingAverage) };
+
+  const comparisonReps = loadComparisonReps();
 
   const baseProfiles = [
     {
@@ -242,42 +241,18 @@ function buildRepComparisonData(liveRep, liveTrainingResults) {
       level: liveLevel.current,
       isLive: true,
     },
-    {
-      id: "rep-demo-ramp",
-      name: "New Ramp AE",
-      startDate: getDateDaysAgo(12),
-      revenue: 12000,
-      captures: 7,
-      customersSold: 9,
-      trainingAverage: 68,
-      trainingSessions: 2,
-      level: LEVELS[0],
+    ...comparisonReps.map((rep) => ({
+      id: rep.id,
+      name: rep.name,
+      startDate: rep.startDate,
+      revenue: Number(rep.revenue ?? 0),
+      captures: Number(rep.captures ?? 0),
+      customersSold: Number(rep.customersSold ?? 0),
+      trainingAverage: rep.trainingAverage,
+      trainingSessions: rep.trainingSessions,
+      level: getCurrentTrainingLevel(rep.trainingSessions, rep.trainingAverage),
       isLive: false,
-    },
-    {
-      id: "rep-demo-mid",
-      name: "Mid-Ramp AE",
-      startDate: getDateDaysAgo(240),
-      revenue: 210000,
-      captures: 11,
-      customersSold: 63,
-      trainingAverage: 76,
-      trainingSessions: 8,
-      level: LEVELS[2],
-      isLive: false,
-    },
-    {
-      id: "rep-demo-strong",
-      name: "High Performer AE",
-      startDate: getDateDaysAgo(540),
-      revenue: 460000,
-      captures: 9,
-      customersSold: 118,
-      trainingAverage: 89,
-      trainingSessions: 15,
-      level: LEVELS[4],
-      isLive: false,
-    },
+    })),
   ];
 
   return baseProfiles.map((rep) => {
@@ -326,32 +301,6 @@ function buildRepComparisonData(liveRep, liveTrainingResults) {
   });
 }
 
-function calculateTrainingAverage(results) {
-  if (!results.length) return 0;
-
-  return Math.round(
-    results.reduce(
-      (sum, entry) => sum + Number(entry.totalScore ?? entry.score ?? 0),
-      0
-    ) / results.length
-  );
-}
-
-function getLevelData(trainingCount, averageTrainingScore) {
-  let current = LEVELS[0];
-
-  for (const level of LEVELS) {
-    if (
-      trainingCount >= level.minSessions &&
-      averageTrainingScore >= level.minAverageScore
-    ) {
-      current = level;
-    }
-  }
-
-  return { current };
-}
-
 function calculateReadinessScore({
   trainingAverage = 0,
   trainingSessions = 0,
@@ -380,8 +329,3 @@ function getTopReadinessRep(reps) {
   return [...reps].sort((a, b) => b.readinessScore - a.readinessScore)[0] ?? null;
 }
 
-function getDateDaysAgo(daysAgo) {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date.toISOString().slice(0, 10);
-}

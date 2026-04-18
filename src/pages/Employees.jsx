@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import {
   employees,
@@ -8,6 +9,7 @@ import {
 } from "../data/employees";
 
 export default function Employees() {
+  const navigate = useNavigate();
   const sortedEmployees = useMemo(() => sortEmployeesByHireDate(employees), []);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCode, setSelectedCode] = useState(sortedEmployees[0]?.code ?? null);
@@ -248,18 +250,38 @@ export default function Employees() {
 
                 <div className="feedback-row">
                   <span>Comp Plan Eligibility</span>
-                  <strong>Ready to map by tenure</strong>
+                  <strong>
+                    {calculateTenureMonths(selectedEmployee.hireDate) <= 12
+                      ? "Year 1 — $31,200 base"
+                      : "Year 2+ — $25,000 base"}
+                  </strong>
                 </div>
 
                 <div className="feedback-row">
-                  <span>Next Build Step</span>
-                  <strong>Connect rep metrics + compensation</strong>
+                  <span>Hire Date</span>
+                  <strong>{selectedEmployee.hireDate}</strong>
                 </div>
 
                 <p className="coach-text">
-                  This employee profile is now ready to connect to live KPI performance,
-                  compensation plan logic, dashboard tracking, and leadership reporting.
+                  Load this employee into Compensation Inputs to model their KPI
+                  qualification and estimated monthly pay using their actual start date.
                 </p>
+
+                <div className="button-row">
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      navigate("/rep-metrics", {
+                        state: {
+                          repName: getEmployeeFullName(selectedEmployee),
+                          startDate: selectedEmployee.hireDate,
+                        },
+                      })
+                    }
+                  >
+                    Load into Rep Metrics
+                  </button>
+                </div>
               </div>
             </>
           ) : (

@@ -6,6 +6,7 @@ import {
   loadTrainingResults,
   addTrainingResult,
 } from "../lib/trainingStore";
+import { useToast } from "../context/ToastContext";
 
 const scenarioMap = {
   "Growth Mission": {
@@ -70,6 +71,7 @@ export default function Training() {
 
   const [submitted, setSubmitted] = useState(false);
   const [savedResult, setSavedResult] = useState(null);
+  const toast = useToast();
 
   const dealerHistory = useMemo(() => {
     if (!dealer) return [];
@@ -124,6 +126,7 @@ export default function Training() {
     addTrainingResult(result);
     setSavedResult(result);
     setSubmitted(true);
+    toast(`Training complete — score ${scoring.totalScore}/100 saved for ${dealer.dealerName}.`);
   }
 
   function handlePracticeAnother() {

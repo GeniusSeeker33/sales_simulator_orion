@@ -11,6 +11,7 @@ export const uiCopy = {
     activity: "Activity Feed",
     repMetrics: "Compensation Inputs",
     managerView: "Manager View",
+    employees: "Employee Roster",
   },
 
   pageTitles: {

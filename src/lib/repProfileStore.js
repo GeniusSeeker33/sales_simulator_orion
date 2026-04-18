@@ -42,11 +42,9 @@ export function saveRepProfile(profile) {
     startDate: normalizeStartDate(
       profile.startDate ?? defaultRepProfile.startDate
     ),
-    revenue: Number(profile.revenue ?? defaultRepProfile.revenue),
-    captures: Number(profile.captures ?? defaultRepProfile.captures),
-    customersSold: Number(
-      profile.customersSold ?? defaultRepProfile.customersSold
-    ),
+    revenue: Math.max(0, Math.min(10000000, Number(profile.revenue ?? defaultRepProfile.revenue))),
+    captures: Math.max(0, Math.min(9999, Math.round(Number(profile.captures ?? defaultRepProfile.captures)))),
+    customersSold: Math.max(0, Math.min(9999, Math.round(Number(profile.customersSold ?? defaultRepProfile.customersSold)))),
     updatedAt: new Date().toISOString(),
   };
 
@@ -82,7 +80,17 @@ function normalizeStartDate(value) {
     return defaultRepProfile.startDate;
   }
 
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (parsed > today) {
+    return today.toISOString().slice(0, 10);
+  }
+
   return parsed.toISOString().slice(0, 10);
+}
+
+export function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getDefaultStartDate() {

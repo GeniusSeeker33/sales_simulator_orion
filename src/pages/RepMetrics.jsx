@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import Layout from "../components/layout/Layout";
+import { useToast } from "../context/ToastContext";
 import {
   buildRepCompSummary,
   buildCompOpportunitySummary,
@@ -10,11 +12,28 @@ import {
   loadRepProfile,
   saveRepProfile,
   resetRepProfile,
+  getTodayDateString,
 } from "../lib/repProfileStore";
 
 export default function RepMetrics() {
-  const [form, setForm] = useState(() => loadRepProfile());
-  const [savedMessage, setSavedMessage] = useState("");
+  const location = useLocation();
+  const [form, setForm] = useState(() => {
+    const saved = loadRepProfile();
+    const incoming = location.state;
+    if (incoming?.repName || incoming?.startDate) {
+      return {
+        ...saved,
+        repName: incoming.repName ?? saved.repName,
+        startDate: incoming.startDate ?? saved.startDate,
+      };
+    }
+    return saved;
+  });
+  const [savedMessage, setSavedMessage] = useState(
+    location.state?.repName ? `Loaded profile for ${location.state.repName}. Adjust metrics and save.` : ""
+  );
+  const todayStr = getTodayDateString();
+  const toast = useToast();
 
   const summary = useMemo(() => {
     return buildRepCompSummary({
@@ -54,13 +73,15 @@ export default function RepMetrics() {
   function handleSave() {
     const saved = saveRepProfile(form);
     setForm(saved);
-    setSavedMessage("Rep metrics saved. Dashboard compensation is now updated.");
+    setSavedMessage("");
+    toast("Rep metrics saved. Dashboard compensation is now updated.");
   }
 
   function handleReset() {
     const reset = resetRepProfile();
     setForm(reset);
     setSavedMessage("");
+    toast("Metrics reset to demo values.", { type: "info" });
   }
 
   return (
@@ -92,8 +113,16 @@ export default function RepMetrics() {
                 <input
                   type="date"
                   value={form.startDate}
-                  onChange={(e) => handleChange("startDate", e.target.value)}
+                  max={todayStr}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val > todayStr) return;
+                    handleChange("startDate", val);
+                  }}
                 />
+                {form.startDate > todayStr && (
+                  <span className="field-error">Start date cannot be in the future.</span>
+                )}
               </label>
 
               <label className="form-field">
@@ -101,10 +130,17 @@ export default function RepMetrics() {
                 <input
                   type="number"
                   min="0"
+                  max="10000000"
                   step="0.01"
                   value={form.revenue}
                   onChange={(e) => handleChange("revenue", e.target.value)}
                 />
+                {Number(form.revenue) < 0 && (
+                  <span className="field-error">Revenue cannot be negative.</span>
+                )}
+                {Number(form.revenue) > 10000000 && (
+                  <span className="field-error">Revenue exceeds maximum allowed ($10,000,000).</span>
+                )}
               </label>
 
               <label className="form-field">
@@ -112,9 +148,14 @@ export default function RepMetrics() {
                 <input
                   type="number"
                   min="0"
+                  max="9999"
+                  step="1"
                   value={form.captures}
                   onChange={(e) => handleChange("captures", e.target.value)}
                 />
+                {Number(form.captures) < 0 && (
+                  <span className="field-error">Captures cannot be negative.</span>
+                )}
               </label>
 
               <label className="form-field">
@@ -122,9 +163,14 @@ export default function RepMetrics() {
                 <input
                   type="number"
                   min="0"
+                  max="9999"
+                  step="1"
                   value={form.customersSold}
                   onChange={(e) => handleChange("customersSold", e.target.value)}
                 />
+                {Number(form.customersSold) < 0 && (
+                  <span className="field-error">Customers Sold cannot be negative.</span>
+                )}
               </label>
 
               <div className="button-row">
@@ -136,7 +182,7 @@ export default function RepMetrics() {
                 </button>
               </div>
 
-              {savedMessage ? <p className="coach-text">{savedMessage}</p> : null}
+              {savedMessage ? <p className="coach-text" style={{ color: "#93c5fd" }}>{savedMessage}</p> : null}
             </div>
           </div>
 
