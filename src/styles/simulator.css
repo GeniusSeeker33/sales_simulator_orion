@@ -251,3 +251,15 @@
   display: block;
   line-height: 1.45;
 }
+.simulator-control-panel select {
+  appearance: auto;
+  -webkit-appearance: menulist;
+  background-color: #13241c;
+  color: #f4fff8;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.simulator-control-panel select option {
+  background-color: #13241c;
+  color: #f4fff8;
+}
