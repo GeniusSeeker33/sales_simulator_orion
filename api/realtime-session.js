@@ -8,7 +8,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not a:contentReference[oaicite:0]{index=0}
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
     const {
       customerType = "skeptical-store-owner",
       difficulty = "medium",
@@ -86,7 +89,6 @@ Rules:
     return res.status(200).json({
       clientSecret:
         data?.value || data?.client_secret?.value || data?.client_secret,
-      raw: data,
     });
   } catch (error) {
     console.error("Realtime session error:", error);
