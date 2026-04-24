@@ -69,15 +69,16 @@ export default function TranscriptPanel({
     <article className="simulator-panel simulator-transcript-panel">
       <div className="simulator-panel-header">
         <h2>Live Conversation</h2>
+
         <button onClick={customerReply} disabled={!isLive}>
-          Customer Reply
+          Nudge AI Customer
         </button>
       </div>
 
       <div className="simulator-transcript">
         {messages.length === 0 ? (
           <p className="simulator-placeholder">
-            The call transcript will appear here.
+            Start the call. The AI Customer will open the conversation.
           </p>
         ) : (
           messages.map((message, index) => (
@@ -104,7 +105,7 @@ export default function TranscriptPanel({
           placeholder={
             isListening
               ? "Listening..."
-              : "Type or use voice input for mock mode..."
+              : "Speak or type your response. AI will reply automatically."
           }
           disabled={!isLive}
         />

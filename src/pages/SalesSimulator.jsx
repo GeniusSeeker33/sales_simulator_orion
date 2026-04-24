@@ -20,18 +20,34 @@ export default function SalesSimulator() {
   const [objections, setObjections] = useState([]);
   const [score, setScore] = useState(null);
   const [isScoring, setIsScoring] = useState(false);
+  const [isCustomerThinking, setIsCustomerThinking] = useState(false);
 
   const scenario = getScenario(customerType);
 
   function addMessage(speaker, text) {
-    setMessages((prev) => [
-      ...prev,
-      {
-        speaker,
-        text,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+    const newMessage = {
+      speaker,
+      text,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+
+    return newMessage;
+  }
+
+  function speakCustomerReply(text) {
+    if (!text || !window.speechSynthesis) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    window.speechSynthesis.speak(utterance);
   }
 
   function startSession() {
@@ -40,53 +56,70 @@ export default function SalesSimulator() {
     setObjections([]);
     setScore(null);
     setIsScoring(false);
+    setIsCustomerThinking(false);
     setIsLive(true);
     setIsEnded(false);
 
-    setTimeout(() => addMessage("AI Customer", scenario.opener), 150);
+    setTimeout(() => {
+      addMessage("AI Customer", scenario.opener);
+      speakCustomerReply(scenario.opener);
+    }, 150);
   }
 
-  function sendRepMessage(text) {
-    if (!text.trim()) return;
-    addMessage("Sales Rep", text.trim());
+  async function getCustomerReply(updatedMessages) {
+    setIsCustomerThinking(true);
+
+    try {
+      const response = await fetch("/api/customer-reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: updatedMessages,
+          customerType,
+          difficulty,
+          scenario,
+          orderItems,
+          objections,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI customer reply failed");
+      }
+
+      const data = await response.json();
+      const reply = data.reply || "Tell me more about what you recommend.";
+
+      addMessage("AI Customer", reply);
+      speakCustomerReply(reply);
+    } catch (error) {
+      console.error(error);
+
+      const fallback =
+        "I’m having trouble following. Can you explain that another way?";
+
+      addMessage("AI Customer", fallback);
+      speakCustomerReply(fallback);
+    } finally {
+      setIsCustomerThinking(false);
+    }
+  }
+
+  async function sendRepMessage(text) {
+    if (!text.trim() || isCustomerThinking) return;
+
+    const repMessage = addMessage("Sales Rep", text.trim());
+    const updatedMessages = [...messages, repMessage];
+
+    await getCustomerReply(updatedMessages);
   }
 
   async function customerReply() {
-  try {
-    const response = await fetch("/api/customer-reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages,
-        customerType,
-        difficulty,
-        scenario,
-        orderItems,
-        objections,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("AI customer reply failed");
-    }
-
-    const data = await response.json();
-
-    addMessage(
-      "AI Customer",
-      data.reply || "Tell me more about what you recommend."
-    );
-  } catch (error) {
-    console.error(error);
-
-    addMessage(
-      "AI Customer",
-      "I’m having trouble following. Can you explain that another way?"
-    );
+    if (isCustomerThinking) return;
+    await getCustomerReply(messages);
   }
-}
 
   function addOrderItem(item) {
     setOrderItems((prev) => [...prev, item]);
@@ -105,6 +138,8 @@ export default function SalesSimulator() {
     setIsEnded(true);
     setIsScoring(true);
     setScore(null);
+    setIsCustomerThinking(false);
+    window.speechSynthesis?.cancel();
 
     try {
       const response = await fetch("/api/score-call", {
@@ -178,8 +213,10 @@ export default function SalesSimulator() {
             }`}
           />
           <strong>
-            {isLive
-              ? "Live mock session"
+            {isCustomerThinking
+              ? "AI customer thinking..."
+              : isLive
+              ? "Live AI customer session"
               : isScoring
               ? "Scoring with AI..."
               : isEnded
