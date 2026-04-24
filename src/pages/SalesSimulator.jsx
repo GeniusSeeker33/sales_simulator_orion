@@ -51,18 +51,42 @@ export default function SalesSimulator() {
     addMessage("Sales Rep", text.trim());
   }
 
-  function customerReply() {
-    const customerMessageCount = messages.filter(
-      (message) => message.speaker === "AI Customer"
-    ).length;
+  async function customerReply() {
+  try {
+    const response = await fetch("/api/customer-reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages,
+        customerType,
+        difficulty,
+        scenario,
+        orderItems,
+        objections,
+      }),
+    });
 
-    const reply =
-      scenario.replies[
-        Math.min(customerMessageCount, scenario.replies.length - 1)
-      ];
+    if (!response.ok) {
+      throw new Error("AI customer reply failed");
+    }
 
-    addMessage("AI Customer", reply);
+    const data = await response.json();
+
+    addMessage(
+      "AI Customer",
+      data.reply || "Tell me more about what you recommend."
+    );
+  } catch (error) {
+    console.error(error);
+
+    addMessage(
+      "AI Customer",
+      "I’m having trouble following. Can you explain that another way?"
+    );
   }
+}
 
   function addOrderItem(item) {
     setOrderItems((prev) => [...prev, item]);
