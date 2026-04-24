@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ControlPanel from "../components/simulator/ControlPanel";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
@@ -9,6 +9,7 @@ import {
   getScenario,
 } from "../data/customerScenarios";
 import "../styles/simulator.css";
+import RealtimeVoicePanel from "../components/simulator/RealtimeVoicePanel";
 
 export default function SalesSimulator() {
   const [currentAudio, setCurrentAudio] = useState(null);
@@ -22,6 +23,7 @@ export default function SalesSimulator() {
   const [score, setScore] = useState(null);
   const [isScoring, setIsScoring] = useState(false);
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
+  const [repLastMessageTime, setRepLastMessageTime] = useState(null);
 
   const scenario = getScenario(customerType);
 
@@ -102,6 +104,7 @@ export default function SalesSimulator() {
     setScore(null);
     setIsScoring(false);
     setIsCustomerThinking(false);
+    setRepLastMessageTime(Date.now());
     setIsLive(true);
     setIsEnded(false);
 
@@ -159,6 +162,9 @@ export default function SalesSimulator() {
   async function sendRepMessage(text) {
     if (!text.trim() || isCustomerThinking) return;
 
+    const now = Date.now();
+    setRepLastMessageTime(now);
+
     const repMessage = addMessage("Sales Rep", text.trim());
     const updatedMessages = [...messages, repMessage];
 
@@ -181,6 +187,24 @@ export default function SalesSimulator() {
         : [...prev, value]
     );
   }
+
+  useEffect(() => {
+    if (!isLive) return;
+
+    const interval = setInterval(() => {
+      if (!repLastMessageTime || isCustomerThinking) return;
+
+      const timeSinceLastRep = Date.now() - repLastMessageTime;
+
+      if (timeSinceLastRep > 8000) {
+        addMessage("AI Customer", "You still there?");
+        speakCustomerReply("You still there?");
+        setRepLastMessageTime(Date.now());
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isLive, repLastMessageTime, isCustomerThinking]);
 
   async function endSession() {
     if (currentAudio) {
@@ -252,10 +276,6 @@ export default function SalesSimulator() {
         <div>
           <p className="simulator-eyebrow">GeniusSeeker Training Lab</p>
           <h1>AI Customer Sales Simulator</h1>
-          <p>
-            Practice a live sales conversation, handle objections, build an
-            order, and receive coaching feedback.
-          </p>
         </div>
 
         <div className="simulator-status-card">
@@ -290,7 +310,11 @@ export default function SalesSimulator() {
         endSession={endSession}
         scenario={scenario}
       />
-
+      <RealtimeVoicePanel
+        customerType={customerType}
+        difficulty={difficulty}
+        scenario={scenario}
+      />
       <section className="simulator-workspace">
         <TranscriptPanel
           messages={messages}
@@ -309,7 +333,6 @@ export default function SalesSimulator() {
 
       {isScoring && (
         <section className="simulator-panel simulator-score-panel">
-          <h2>AI Coaching Report</h2>
           <p>Scoring conversation...</p>
         </section>
       )}
