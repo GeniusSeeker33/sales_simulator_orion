@@ -1,6 +1,6 @@
 export default function ControlPanel({
-  customerTypes,
-  difficultyLevels,
+  customerTypes = [],
+  difficultyLevels = [],
   customerType,
   setCustomerType,
   difficulty,
@@ -10,6 +10,26 @@ export default function ControlPanel({
   endSession,
   scenario,
 }) {
+  const safeCustomerTypes =
+    customerTypes.length > 0
+      ? customerTypes
+      : [
+          {
+            id: "skeptical-store-owner",
+            label: "Skeptical Store Owner",
+          },
+        ];
+
+  const safeDifficultyLevels =
+    difficultyLevels.length > 0
+      ? difficultyLevels
+      : [
+          {
+            id: "medium",
+            label: "Medium",
+          },
+        ];
+
   return (
     <section className="simulator-control-panel">
       <label>
@@ -19,7 +39,7 @@ export default function ControlPanel({
           onChange={(event) => setCustomerType(event.target.value)}
           disabled={isLive}
         >
-          {customerTypes.map((type) => (
+          {safeCustomerTypes.map((type) => (
             <option key={type.id} value={type.id}>
               {type.label}
             </option>
@@ -34,7 +54,7 @@ export default function ControlPanel({
           onChange={(event) => setDifficulty(event.target.value)}
           disabled={isLive}
         >
-          {difficultyLevels.map((level) => (
+          {safeDifficultyLevels.map((level) => (
             <option key={level.id} value={level.id}>
               {level.label}
             </option>
@@ -50,12 +70,14 @@ export default function ControlPanel({
         End Call / Score Me
       </button>
 
-      {scenario && (
-        <div className="simulator-scenario-preview">
-          <strong>Scenario Preview</strong>
-          <span>{scenario.hiddenNeed}</span>
-        </div>
-      )}
+      <div className="simulator-scenario-preview">
+        <strong>Scenario Preview</strong>
+        <span>
+          Loaded customer types: {safeCustomerTypes.length} | Loaded difficulty
+          levels: {safeDifficultyLevels.length}
+        </span>
+        {scenario?.hiddenNeed && <span>{scenario.hiddenNeed}</span>}
+      </div>
     </section>
   );
 }
