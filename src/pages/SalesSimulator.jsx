@@ -11,6 +11,7 @@ import {
 import "../styles/simulator.css";
 
 export default function SalesSimulator() {
+  const [currentAudio, setCurrentAudio] = useState(null);
   const [isLive, setIsLive] = useState(false);
   const [isEnded, setIsEnded] = useState(false);
   const [customerType, setCustomerType] = useState("skeptical-store-owner");
@@ -32,25 +33,69 @@ export default function SalesSimulator() {
     };
 
     setMessages((prev) => [...prev, newMessage]);
-
     return newMessage;
   }
 
-  function speakCustomerReply(text) {
-    if (!text || !window.speechSynthesis) return;
+  function getVoiceForCustomer(type) {
+    switch (type) {
+      case "angry-customer":
+        return "verse";
+      case "rushed-buyer":
+        return "alloy";
+      case "friendly-repeat-buyer":
+        return "nova";
+      case "expert-buyer":
+        return "onyx";
+      case "price-shopper":
+        return "echo";
+      default:
+        return "alloy";
+    }
+  }
 
-    window.speechSynthesis.cancel();
+  async function speakCustomerReply(text) {
+    if (!text) return;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+    try {
+      if (currentAudio) {
+        currentAudio.pause();
+      }
 
-    window.speechSynthesis.speak(utterance);
+      const response = await fetch("/api/speak-customer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voice: getVoiceForCustomer(customerType),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Speech API failed");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      setCurrentAudio(audio);
+      audio.play();
+    } catch (error) {
+      console.error("Speech playback error:", error);
+    }
   }
 
   function startSession() {
+    if (currentAudio) {
+      currentAudio.pause();
+    }
+
     setMessages([]);
     setOrderItems([]);
     setObjections([]);
@@ -63,7 +108,7 @@ export default function SalesSimulator() {
     setTimeout(() => {
       addMessage("AI Customer", scenario.opener);
       speakCustomerReply(scenario.opener);
-    }, 150);
+    }, 300);
   }
 
   async function getCustomerReply(updatedMessages) {
@@ -92,16 +137,20 @@ export default function SalesSimulator() {
       const data = await response.json();
       const reply = data.reply || "Tell me more about what you recommend.";
 
-      addMessage("AI Customer", reply);
-      speakCustomerReply(reply);
+      setTimeout(() => {
+        addMessage("AI Customer", reply);
+        speakCustomerReply(reply);
+      }, 600 + Math.random() * 900);
     } catch (error) {
       console.error(error);
 
       const fallback =
         "I’m having trouble following. Can you explain that another way?";
 
-      addMessage("AI Customer", fallback);
-      speakCustomerReply(fallback);
+      setTimeout(() => {
+        addMessage("AI Customer", fallback);
+        speakCustomerReply(fallback);
+      }, 600);
     } finally {
       setIsCustomerThinking(false);
     }
@@ -134,12 +183,15 @@ export default function SalesSimulator() {
   }
 
   async function endSession() {
+    if (currentAudio) {
+      currentAudio.pause();
+    }
+
     setIsLive(false);
     setIsEnded(true);
     setIsScoring(true);
     setScore(null);
     setIsCustomerThinking(false);
-    window.speechSynthesis?.cancel();
 
     try {
       const response = await fetch("/api/score-call", {
