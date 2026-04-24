@@ -52,6 +52,7 @@ export default function SalesSimulator() {
   const [orderItems, setOrderItems] = useState([]);
   const [objections, setObjections] = useState([]);
   const [score, setScore] = useState(null);
+  const [isScoring, setIsScoring] = useState(false);
 
   function addMessage(speaker, text) {
     setMessages((prev) => [
@@ -69,6 +70,7 @@ export default function SalesSimulator() {
     setOrderItems([]);
     setObjections([]);
     setScore(null);
+    setIsScoring(false);
     setIsLive(true);
     setIsEnded(false);
 
@@ -103,31 +105,62 @@ export default function SalesSimulator() {
     );
   }
 
-  function endSession() {
-    const repMessages = messages.filter(
-      (message) => message.speaker === "Sales Rep"
-    ).length;
-
-    const discovery = Math.min(100, 40 + repMessages * 10);
-    const orderBuilding = Math.min(100, orderItems.length * 25);
-    const objectionHandling = Math.min(100, objections.length * 20 + repMessages * 5);
-    const closing = orderItems.length > 0 ? 80 : 35;
-    const overall = Math.round(
-      (discovery + orderBuilding + objectionHandling + closing) / 4
-    );
-
-    setScore({
-      overall,
-      discovery,
-      orderBuilding,
-      objectionHandling,
-      closing,
-      coachingNote:
-        "This is mock scoring for UI testing. The API version will evaluate the full transcript, objections, tone, discovery questions, buying signals, and final order quality.",
-    });
-
+  async function endSession() {
     setIsLive(false);
     setIsEnded(true);
+    setIsScoring(true);
+    setScore(null);
+
+    try {
+      const response = await fetch("/api/score-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          transcript: messages,
+          orderItems,
+          objections,
+          customerType,
+          difficulty,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI scoring request failed");
+      }
+
+      const aiScore = await response.json();
+
+      setScore({
+        overall: aiScore.overall ?? 0,
+        discovery: aiScore.discovery ?? 0,
+        orderBuilding: aiScore.orderBuilding ?? 0,
+        objectionHandling: aiScore.objectionHandling ?? 0,
+        closing: aiScore.closing ?? 0,
+        strengths: aiScore.strengths || [],
+        missedOpportunities: aiScore.missedOpportunities || [],
+        coachingNote: aiScore.coachingNote || "",
+        betterPhrases: aiScore.betterPhrases || [],
+      });
+    } catch (error) {
+      console.error(error);
+
+      setScore({
+        overall: 0,
+        discovery: 0,
+        orderBuilding: 0,
+        objectionHandling: 0,
+        closing: 0,
+        strengths: [],
+        missedOpportunities: [],
+        betterPhrases: [],
+        coachingNote:
+          "AI scoring could not run. Check /api/score-call and your OPENAI_API_KEY in Vercel.",
+      });
+    } finally {
+      setIsScoring(false);
+    }
   }
 
   return (
@@ -149,7 +182,13 @@ export default function SalesSimulator() {
             }`}
           />
           <strong>
-            {isLive ? "Live mock session" : isEnded ? "Session ended" : "Ready to begin"}
+            {isLive
+              ? "Live mock session"
+              : isScoring
+              ? "Scoring with AI..."
+              : isEnded
+              ? "Session ended"
+              : "Ready to begin"}
           </strong>
         </div>
       </section>
@@ -179,6 +218,13 @@ export default function SalesSimulator() {
           toggleObjection={toggleObjection}
         />
       </section>
+
+      {isScoring && (
+        <section className="simulator-panel simulator-score-panel">
+          <h2>AI Coaching Report</h2>
+          <p>Scoring conversation...</p>
+        </section>
+      )}
 
       {score && <ScorePanel score={score} />}
     </main>

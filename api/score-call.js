@@ -5,6 +5,14 @@ const client = new OpenAI({
 });
 
 export default async function handler(req, res) {
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      message: "score-call API is live",
+      hasApiKey: Boolean(process.env.OPENAI_API_KEY),
+    });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -20,14 +28,9 @@ export default async function handler(req, res) {
           content: `
 You are a sales training evaluator.
 
-Score from 0-100:
-- overall
-- discovery
-- orderBuilding
-- objectionHandling
-- closing
+Return ONLY valid JSON. No markdown. No explanation outside JSON.
 
-Return ONLY JSON:
+Use this exact shape:
 {
   "overall": 0,
   "discovery": 0,
@@ -39,11 +42,28 @@ Return ONLY JSON:
   "coachingNote": "",
   "betterPhrases": []
 }
+
+Score from 0-100.
+
+Evaluate:
+- discovery questions
+- customer need identification
+- objection handling
+- order quality
+- closing attempt
           `,
         },
         {
           role: "user",
-          content: JSON.stringify({ transcript, orderItems, objections }),
+          content: JSON.stringify(
+            {
+              transcript,
+              orderItems,
+              objections,
+            },
+            null,
+            2
+          ),
         },
       ],
     });
