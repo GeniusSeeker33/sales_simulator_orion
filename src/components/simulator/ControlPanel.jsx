@@ -1,4 +1,6 @@
 export default function ControlPanel({
+  customerTypes,
+  difficultyLevels,
   customerType,
   setCustomerType,
   difficulty,
@@ -6,6 +8,7 @@ export default function ControlPanel({
   isLive,
   startSession,
   endSession,
+  scenario,
 }) {
   return (
     <section className="simulator-control-panel">
@@ -16,11 +19,11 @@ export default function ControlPanel({
           onChange={(event) => setCustomerType(event.target.value)}
           disabled={isLive}
         >
-          <option value="skeptical">Skeptical Store Owner</option>
-          <option value="friendly">Friendly Repeat Buyer</option>
-          <option value="price-shopper">Price Shopper</option>
-          <option value="rushed">Rushed Buyer</option>
-          <option value="expert">Expert Buyer</option>
+          {customerTypes.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.label}
+            </option>
+          ))}
         </select>
       </label>
 
@@ -31,9 +34,11 @@ export default function ControlPanel({
           onChange={(event) => setDifficulty(event.target.value)}
           disabled={isLive}
         >
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
+          {difficultyLevels.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.label}
+            </option>
+          ))}
         </select>
       </label>
 
@@ -44,6 +49,13 @@ export default function ControlPanel({
       <button onClick={endSession} disabled={!isLive}>
         End Call / Score Me
       </button>
+
+      {scenario && (
+        <div className="simulator-scenario-preview">
+          <strong>Scenario Preview</strong>
+          <span>{scenario.hiddenNeed}</span>
+        </div>
+      )}
     </section>
   );
 }

@@ -3,56 +3,25 @@ import ControlPanel from "../components/simulator/ControlPanel";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
 import ScorePanel from "../components/simulator/ScorePanel";
+import {
+  customerTypes,
+  difficultyLevels,
+  getScenario,
+} from "../data/customerScenarios";
 import "../styles/simulator.css";
-
-const mockCustomerReplies = {
-  skeptical: [
-    "Before I add anything, tell me why I should order from you instead of my current distributor.",
-    "Price matters, but I also need to know what is actually moving right now.",
-    "I do not want dead inventory. What would you recommend for a weekend promotion?",
-    "Shipping has burned me before. How fast can I realistically get this?",
-    "Okay, build me a small order that makes sense, but do not overload me.",
-  ],
-  friendly: [
-    "Good to hear from you. I need a few things, but I am open to suggestions.",
-    "What are your best movers this week?",
-    "That could work. What would you pair with it?",
-    "Can you help me keep this order balanced?",
-    "Go ahead and recap what you recommend.",
-  ],
-  "price-shopper": [
-    "I am mostly comparing prices today.",
-    "Your competitor says they can beat that.",
-    "What kind of margin can I make on this?",
-    "I am not buying unless the numbers make sense.",
-    "Give me your tightest practical order.",
-  ],
-  rushed: [
-    "I only have five minutes. What do you have that I should care about?",
-    "Get to the point for me.",
-    "Is it in stock or not?",
-    "What is the fastest order you can build for me?",
-    "Okay, summarize it quickly.",
-  ],
-  expert: [
-    "I already know the market. Tell me what is different this week.",
-    "What SKUs are moving that others are missing?",
-    "I need data, not a generic pitch.",
-    "How would you structure this order by customer demand?",
-    "Convince me this order will turn.",
-  ],
-};
 
 export default function SalesSimulator() {
   const [isLive, setIsLive] = useState(false);
   const [isEnded, setIsEnded] = useState(false);
-  const [customerType, setCustomerType] = useState("skeptical");
+  const [customerType, setCustomerType] = useState("skeptical-store-owner");
   const [difficulty, setDifficulty] = useState("medium");
   const [messages, setMessages] = useState([]);
   const [orderItems, setOrderItems] = useState([]);
   const [objections, setObjections] = useState([]);
   const [score, setScore] = useState(null);
   const [isScoring, setIsScoring] = useState(false);
+
+  const scenario = getScenario(customerType);
 
   function addMessage(speaker, text) {
     setMessages((prev) => [
@@ -74,8 +43,7 @@ export default function SalesSimulator() {
     setIsLive(true);
     setIsEnded(false);
 
-    const opener = mockCustomerReplies[customerType][0];
-    setTimeout(() => addMessage("AI Customer", opener), 150);
+    setTimeout(() => addMessage("AI Customer", scenario.opener), 150);
   }
 
   function sendRepMessage(text) {
@@ -84,12 +52,15 @@ export default function SalesSimulator() {
   }
 
   function customerReply() {
-    const replies = mockCustomerReplies[customerType];
     const customerMessageCount = messages.filter(
       (message) => message.speaker === "AI Customer"
     ).length;
 
-    const reply = replies[Math.min(customerMessageCount, replies.length - 1)];
+    const reply =
+      scenario.replies[
+        Math.min(customerMessageCount, scenario.replies.length - 1)
+      ];
+
     addMessage("AI Customer", reply);
   }
 
@@ -123,6 +94,7 @@ export default function SalesSimulator() {
           objections,
           customerType,
           difficulty,
+          scenario,
         }),
       });
 
@@ -194,6 +166,8 @@ export default function SalesSimulator() {
       </section>
 
       <ControlPanel
+        customerTypes={customerTypes}
+        difficultyLevels={difficultyLevels}
         customerType={customerType}
         setCustomerType={setCustomerType}
         difficulty={difficulty}
@@ -201,6 +175,7 @@ export default function SalesSimulator() {
         isLive={isLive}
         startSession={startSession}
         endSession={endSession}
+        scenario={scenario}
       />
 
       <section className="simulator-workspace">

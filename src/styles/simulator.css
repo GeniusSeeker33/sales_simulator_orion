@@ -232,3 +232,22 @@
     grid-template-columns: 1fr;
   }
 }
+.simulator-scenario-preview {
+  grid-column: 1 / -1;
+  background: rgba(96, 211, 148, 0.08);
+  border: 1px solid rgba(96, 211, 148, 0.18);
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: #a9b9af;
+}
+
+.simulator-scenario-preview strong {
+  display: block;
+  color: #60d394;
+  margin-bottom: 4px;
+}
+
+.simulator-scenario-preview span {
+  display: block;
+  line-height: 1.45;
+}
