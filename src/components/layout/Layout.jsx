@@ -4,12 +4,14 @@ import { uiCopy } from "../../data/uiCopy";
 const navItems = [
   { to: "/dashboard", label: uiCopy.nav.dashboard },
   { to: "/accounts", label: uiCopy.nav.accounts },
-  { to: "/training", label: uiCopy.nav.training },
+  { to: "/sales-simulator", label: "AI Sales Simulator" },
+  { to: "/training", label: "Training" },
   { to: "/levels", label: uiCopy.nav.levels },
   { to: "/leaderboard", label: uiCopy.nav.leaderboard },
   { to: "/activity", label: uiCopy.nav.activity },
   { to: "/rep-metrics", label: uiCopy.nav.repMetrics },
   { to: "/manager-view", label: uiCopy.nav.managerView },
+  { to: "/employees", label: "Employees" },
 ];
 
 export default function Layout({ title, children }) {
@@ -35,9 +37,7 @@ export default function Layout({ title, children }) {
           ))}
         </nav>
 
-        <div className="sidebar-footer-note">
-          {uiCopy.footerNote}
-        </div>
+        <div className="sidebar-footer-note">{uiCopy.footerNote}</div>
       </aside>
 
       <main className="main-content">

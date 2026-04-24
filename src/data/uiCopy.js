@@ -5,11 +5,13 @@ export const uiCopy = {
   nav: {
     dashboard: "Performance Dashboard",
     accounts: "Dealer Accounts",
-    training: "Sales Simulator",
+    salesSimulator: "AI Sales Simulator",
+    training: "Training",
     levels: "Rep Progression",
     leaderboard: "Readiness Leaderboard",
     activity: "Activity Feed",
     repMetrics: "Compensation Inputs",
+    employees: "Employees", 
     managerView: "Manager View",
   },
 

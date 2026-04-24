@@ -1,0 +1,234 @@
+.simulator-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0;
+  color: #f4fff8;
+}
+
+.simulator-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.simulator-eyebrow {
+  color: #60d394;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  margin: 0 0 8px;
+}
+
+.simulator-hero h1 {
+  font-size: clamp(2rem, 4vw, 4rem);
+  margin-bottom: 12px;
+}
+
+.simulator-hero p {
+  color: #a9b9af;
+  max-width: 720px;
+}
+
+.simulator-status-card,
+.simulator-panel,
+.simulator-control-panel {
+  background: linear-gradient(180deg, #101b16, #15251d);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.26);
+}
+
+.simulator-status-card {
+  padding: 18px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.simulator-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+  background: #a9b9af;
+}
+
+.simulator-status-dot.live {
+  background: #60d394;
+  box-shadow: 0 0 18px #60d394;
+}
+
+.simulator-status-dot.ended {
+  background: #f7c948;
+}
+
+.simulator-control-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 18px;
+  margin-bottom: 18px;
+  gap: 18px;
+  align-items: end;
+}
+
+.simulator-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.simulator-panel {
+  padding: 20px;
+}
+
+.simulator-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.simulator-panel label,
+.simulator-control-panel label {
+  display: grid;
+  gap: 7px;
+  color: #a9b9af;
+  font-size: 0.92rem;
+}
+
+.simulator-panel input,
+.simulator-panel select,
+.simulator-control-panel input,
+.simulator-control-panel select {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 12px 14px;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4fff8;
+}
+
+.simulator-panel button,
+.simulator-control-panel button {
+  border-radius: 14px;
+  border: 0;
+  padding: 12px 14px;
+  font: inherit;
+  background: #60d394;
+  color: #041008;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.simulator-panel button:disabled,
+.simulator-control-panel button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.simulator-transcript {
+  min-height: 430px;
+  max-height: 560px;
+  overflow: auto;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.simulator-placeholder {
+  color: #a9b9af;
+}
+
+.simulator-message {
+  padding: 12px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.simulator-message.customer {
+  background: rgba(96, 211, 148, 0.12);
+  border: 1px solid rgba(96, 211, 148, 0.22);
+}
+
+.simulator-message.rep {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.simulator-message span {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 5px;
+  color: #60d394;
+}
+
+.simulator-rep-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.simulator-order-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.simulator-order-list li {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.simulator-checkbox-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.simulator-checkbox-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simulator-score-panel {
+  margin-top: 18px;
+}
+
+.simulator-score-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.simulator-score-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.simulator-score-card strong {
+  display: block;
+  font-size: 1.6rem;
+  color: #60d394;
+}
+
+@media (max-width: 850px) {
+  .simulator-hero,
+  .simulator-control-panel,
+  .simulator-workspace,
+  .simulator-score-grid {
+    grid-template-columns: 1fr;
+  }
+}
