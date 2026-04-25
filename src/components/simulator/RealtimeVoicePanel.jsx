@@ -7,14 +7,20 @@ export default function RealtimeVoicePanel({
 }) {
   const [isConnected, setIsConnected] = useState(false);
   const [status, setStatus] = useState("Ready for live voice.");
+  const [recordingUrl, setRecordingUrl] = useState(null);
+
   const peerConnectionRef = useRef(null);
   const dataChannelRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
 
   async function startRealtimeCall() {
     try {
       setStatus("Creating live AI customer session...");
+      setRecordingUrl(null);
+      recordedChunksRef.current = [];
 
       const sessionResponse = await fetch("/api/realtime-session", {
         method: "POST",
@@ -59,6 +65,8 @@ export default function RealtimeVoicePanel({
       localStream.getTracks().forEach((track) => {
         peerConnection.addTrack(track, localStream);
       });
+
+      startRecording(localStream);
 
       const dataChannel = peerConnection.createDataChannel("oai-events");
       dataChannelRef.current = dataChannel;
@@ -123,7 +131,57 @@ export default function RealtimeVoicePanel({
     }
   }
 
+  function startRecording(stream) {
+    try {
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        if (recordedChunksRef.current.length === 0) return;
+
+        const blob = new Blob(recordedChunksRef.current, {
+          type: "audio/webm",
+        });
+
+        const url = URL.createObjectURL(blob);
+        setRecordingUrl(url);
+      };
+
+      mediaRecorder.start();
+    } catch (error) {
+      console.error("Recording failed:", error);
+    }
+  }
+
+  function stopRecording() {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  function downloadRecording() {
+    if (!recordingUrl) return;
+
+    const a = document.createElement("a");
+    a.href = recordingUrl;
+    a.download = `sales-call-${new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")}.webm`;
+    a.click();
+  }
+
   function stopRealtimeCall() {
+    stopRecording();
+
     dataChannelRef.current?.close();
 
     if (peerConnectionRef.current) {
@@ -138,6 +196,7 @@ export default function RealtimeVoicePanel({
     dataChannelRef.current = null;
     localStreamRef.current = null;
     remoteAudioRef.current = null;
+    mediaRecorderRef.current = null;
 
     setIsConnected(false);
     setStatus("Live voice stopped.");
@@ -156,7 +215,20 @@ export default function RealtimeVoicePanel({
         <button onClick={stopRealtimeCall} disabled={!isConnected}>
           Stop Live Voice Call
         </button>
+
+        {recordingUrl && (
+          <button onClick={downloadRecording}>
+            Download Call Recording
+          </button>
+        )}
       </div>
+
+      {recordingUrl && (
+        <div className="realtime-recording-preview">
+          <p>Call recording ready:</p>
+          <audio controls src={recordingUrl} />
+        </div>
+      )}
     </section>
   );
 }
