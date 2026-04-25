@@ -1,5 +1,5 @@
 import Layout from "../components/layout/Layout";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   buildCompKpiCards,
   buildCompOpportunitySummary,
@@ -61,16 +61,21 @@ export default function Dashboard() {
   const summary = buildDashboardSummary(accounts, trainingResults, repMetrics);
 
   return (
-    <Layout title="Dashboard">
-      <section className="kpi-grid">
-        {summary.kpis.map((kpi) => (
-          <div key={kpi.id} className="card">
-            <div className="card-label">{kpi.label}</div>
-            <div className="card-value">{kpi.value}</div>
-            <div className="card-note">{kpi.note}</div>
-          </div>
-        ))}
-      </section>
+  <Layout title="Dashboard">
+
+    <div style={{ padding: "12px 0" }}>
+      <a href="/admin/import">Go to Admin Import</a>
+    </div>
+
+    <section className="kpi-grid">
+      {summary.kpis.map((kpi) => (
+        <div key={kpi.id} className="card">
+          <div className="card-label">{kpi.label}</div>
+          <div className="card-value">{kpi.value}</div>
+          <div className="card-note">{kpi.note}</div>
+        </div>
+      ))}
+    </section>
 
       <section className="kpi-grid" style={{ marginTop: 16 }}>
         {summary.compKpis.map((kpi) => (

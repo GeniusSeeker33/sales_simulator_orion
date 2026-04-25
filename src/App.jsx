@@ -15,10 +15,10 @@ import Employees from "./pages/Employees";
 export default function App() {
   return (
     <Routes>
-      {/* Default Route */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* Core Pages */}
+      <Route path="/admin/import" element={<AdminImport />} />
+      
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/sales-simulator" element={<SalesSimulator />} />
       <Route path="/training" element={<Training />} />
@@ -30,11 +30,7 @@ export default function App() {
       <Route path="/manager-view" element={<ManagerView />} />
       <Route path="/employees" element={<Employees />} />
       <Route path="/admin/import" element={<AdminImport />} />
-      
-      {/* ✅ Sales Simulator (must be BEFORE wildcard) */}
-      <Route path="/sales-simulator" element={<SalesSimulator />} />
 
-      {/* Catch-All Route (ALWAYS LAST) */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
