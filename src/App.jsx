@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
+import AdminImport from "./pages/AdminImport.jsx";
 import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
 import Accounts from "./pages/Accounts";
@@ -28,7 +29,8 @@ export default function App() {
       <Route path="/rep-metrics" element={<RepMetrics />} />
       <Route path="/manager-view" element={<ManagerView />} />
       <Route path="/employees" element={<Employees />} />
-
+      <Route path="/admin/import" element={<AdminImport />} />
+      
       {/* ✅ Sales Simulator (must be BEFORE wildcard) */}
       <Route path="/sales-simulator" element={<SalesSimulator />} />
 
