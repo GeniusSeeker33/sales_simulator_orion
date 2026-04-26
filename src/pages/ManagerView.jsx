@@ -1,6 +1,7 @@
 import Layout from "../components/layout/Layout";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadTrainingResults } from "../lib/trainingStore";
+import { loadSimulatorResults } from "../lib/simulatorResultsStore";
 import {
   buildRepCompSummary,
   buildCompOpportunitySummary,
@@ -18,15 +19,32 @@ const LEVELS = [
 export default function ManagerView() {
   const liveRep = loadRepProfile();
   const liveTrainingResults = loadTrainingResults();
+  const simulatorResults = loadSimulatorResults();
 
   const reps = buildRepComparisonData(liveRep, liveTrainingResults);
 
-  const qualifiedCount = reps.filter((rep) => rep.compSummary.kpiMeasurementActive && rep.compSummary.hitAllKpis).length;
-  const inRampCount = reps.filter((rep) => !rep.compSummary.kpiMeasurementActive).length;
+  const qualifiedCount = reps.filter(
+    (rep) => rep.compSummary.kpiMeasurementActive && rep.compSummary.hitAllKpis
+  ).length;
+
+  const inRampCount = reps.filter(
+    (rep) => !rep.compSummary.kpiMeasurementActive
+  ).length;
+
   const avgTraining =
     reps.length > 0
       ? Math.round(
           reps.reduce((sum, rep) => sum + rep.trainingAverage, 0) / reps.length
+        )
+      : 0;
+
+  const avgSimulatorScore =
+    simulatorResults.length > 0
+      ? Math.round(
+          simulatorResults.reduce(
+            (sum, result) => sum + Number(result.score?.overall ?? 0),
+            0
+          ) / simulatorResults.length
         )
       : 0;
 
@@ -53,8 +71,24 @@ export default function ManagerView() {
 
         <div className="card">
           <div className="card-label">Avg Training Score</div>
-          <div className="card-value">{reps.length ? `${avgTraining}/100` : "No data"}</div>
+          <div className="card-value">
+            {reps.length ? `${avgTraining}/100` : "No data"}
+          </div>
           <div className="card-note">Across comparison set</div>
+        </div>
+
+        <div className="card">
+          <div className="card-label">Simulator Sessions</div>
+          <div className="card-value">{simulatorResults.length}</div>
+          <div className="card-note">Completed AI practice calls</div>
+        </div>
+
+        <div className="card">
+          <div className="card-label">Avg Simulator Score</div>
+          <div className="card-value">
+            {simulatorResults.length ? `${avgSimulatorScore}/100` : "No data"}
+          </div>
+          <div className="card-note">Real saved simulator results</div>
         </div>
       </section>
 
@@ -126,6 +160,54 @@ export default function ManagerView() {
           <div className="card">
             <div className="section-header">
               <div>
+                <h2>Simulator Activity</h2>
+                <p className="section-subtext">
+                  Real saved AI practice calls by rep, dealer, score, and coaching note.
+                </p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rep</th>
+                    <th>Dealer</th>
+                    <th>Buyer</th>
+                    <th>Score</th>
+                    <th>Difficulty</th>
+                    <th>Date</th>
+                    <th>Coach Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simulatorResults.map((result) => (
+                    <tr key={result.id}>
+                      <td>{result.assignedRep || "—"}</td>
+                      <td>{result.dealerName || "General Scenario"}</td>
+                      <td>{result.primaryBuyer || "—"}</td>
+                      <td>{result.score?.overall ?? 0}/100</td>
+                      <td>{result.difficulty || "—"}</td>
+                      <td>{formatDate(result.createdAt)}</td>
+                      <td style={{ maxWidth: 280 }}>
+                        {result.score?.coachingNote || result.error || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {simulatorResults.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No simulator sessions saved yet. Run a practice call and end the session to populate this table.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
                 <h2>Manager Notes</h2>
                 <p className="section-subtext">
                   What this view helps leadership spot quickly.
@@ -161,6 +243,13 @@ export default function ManagerView() {
                   <span>Who is fully aligned across training, execution, and compensation</span>
                 </div>
                 <strong>Readiness</strong>
+              </li>
+              <li>
+                <div className="mission-left">
+                  <span className="mission-indicator mission-complete">✓</span>
+                  <span>Which reps are completing account-based AI practice calls</span>
+                </div>
+                <strong>Simulator</strong>
               </li>
             </ul>
           </div>
@@ -214,9 +303,38 @@ export default function ManagerView() {
           </div>
 
           <div className="card">
+            <h2>Simulator Coaching Snapshot</h2>
+            {simulatorResults.length ? (
+              <>
+                <div className="feedback-row">
+                  <span>Most Recent Dealer</span>
+                  <strong>{simulatorResults[0]?.dealerName || "—"}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Most Recent Score</span>
+                  <strong>{simulatorResults[0]?.score?.overall ?? 0}/100</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Assigned Rep</span>
+                  <strong>{simulatorResults[0]?.assignedRep || "—"}</strong>
+                </div>
+                <p className="coach-text">
+                  {simulatorResults[0]?.score?.coachingNote ||
+                    simulatorResults[0]?.error ||
+                    "Recent simulator activity is available for manager review."}
+                </p>
+              </>
+            ) : (
+              <p className="coach-text">
+                Simulator sessions will appear here after reps complete account-based practice calls.
+              </p>
+            )}
+          </div>
+
+          <div className="card">
             <h2>Leadership View</h2>
             <p className="coach-text">
-              This page is the bridge from individual rep coaching to team-level management. It helps Orion leadership compare where each Sales Executive is in ramp, KPI execution, and compensation performance using one consistent logic model.
+              This page is the bridge from individual rep coaching to team-level management. It helps Orion leadership compare where each Sales Executive is in ramp, KPI execution, compensation performance, and AI simulator readiness using one consistent logic model.
             </p>
           </div>
         </div>
@@ -314,7 +432,8 @@ function buildRepComparisonData(liveRep, liveTrainingResults) {
       statusLabel,
       statusTone,
       levelLabel: `L${rep.level.level} — ${rep.level.title}`,
-      trainingAverageLabel: rep.trainingSessions > 0 ? `${rep.trainingAverage}/100` : "No data",
+      trainingAverageLabel:
+        rep.trainingSessions > 0 ? `${rep.trainingAverage}/100` : "No data",
       missedUpside: compOpportunity.missedCompensation,
       readinessScore: calculateReadinessScore({
         trainingAverage: rep.trainingAverage,
@@ -384,4 +503,18 @@ function getDateDaysAgo(daysAgo) {
   const date = new Date();
   date.setDate(date.getDate() - daysAgo);
   return date.toISOString().slice(0, 10);
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  try {
+    return new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
 }

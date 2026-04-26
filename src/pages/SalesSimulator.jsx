@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import ControlPanel from "../components/simulator/ControlPanel";
+import { addSimulatorResult } from "../lib/simulatorResultsStore";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
 import ScorePanel from "../components/simulator/ScorePanel";
@@ -232,6 +233,22 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
     return () => clearInterval(interval);
   }, [isLive, repLastMessageTime, isCustomerThinking]);
 
+  function saveSimulatorSession(finalScore, error = null) {
+    addSimulatorResult({
+      accountId: account?.id || null,
+      dealerName: account?.dealerName || "General Scenario",
+      primaryBuyer: account?.primaryBuyer || "",
+      assignedRep: account?.assignedRep || "",
+      customerType,
+      difficulty,
+      score: finalScore,
+      transcript: messages,
+      orderItems,
+      objections,
+      error,
+    });
+  }
+
   async function endSession() {
     if (currentAudio) {
       currentAudio.pause();
@@ -266,7 +283,7 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
 
       const aiScore = await response.json();
 
-      setScore({
+      const finalScore = {
         overall: aiScore.overall ?? 0,
         discovery: aiScore.discovery ?? 0,
         orderBuilding: aiScore.orderBuilding ?? 0,
@@ -276,11 +293,14 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
         missedOpportunities: aiScore.missedOpportunities || [],
         coachingNote: aiScore.coachingNote || "",
         betterPhrases: aiScore.betterPhrases || [],
-      });
+      };
+
+      setScore(finalScore);
+      saveSimulatorSession(finalScore);
     } catch (error) {
       console.error(error);
 
-      setScore({
+      const fallbackScore = {
         overall: 0,
         discovery: 0,
         orderBuilding: 0,
@@ -291,7 +311,10 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
         betterPhrases: [],
         coachingNote:
           "AI scoring could not run. Check /api/score-call and your OPENAI_API_KEY in Vercel.",
-      });
+      };
+
+      setScore(fallbackScore);
+      saveSimulatorSession(fallbackScore, "AI scoring failed");
     } finally {
       setIsScoring(false);
     }
