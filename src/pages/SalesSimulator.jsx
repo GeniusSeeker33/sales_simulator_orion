@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import ControlPanel from "../components/simulator/ControlPanel";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
@@ -12,6 +13,9 @@ import "../styles/simulator.css";
 import RealtimeVoicePanel from "../components/simulator/RealtimeVoicePanel";
 
 export default function SalesSimulator() {
+  const location = useLocation();
+  const account = location.state?.account || null;
+
   const [currentAudio, setCurrentAudio] = useState(null);
   const [isLive, setIsLive] = useState(false);
   const [isEnded, setIsEnded] = useState(false);
@@ -25,7 +29,28 @@ export default function SalesSimulator() {
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
   const [repLastMessageTime, setRepLastMessageTime] = useState(null);
 
-  const scenario = getScenario(customerType);
+  const baseScenario = getScenario(customerType);
+
+  const scenario = account
+    ? {
+        ...baseScenario,
+        opener: `You are ${account.primaryBuyer || "the buyer"} from ${
+          account.dealerName || "this dealer account"
+        }. You are speaking with your sales rep.
+
+Current Situation:
+- Dealer: ${account.dealerName || "Unknown"}
+- Primary Buyer: ${account.primaryBuyer || "Unknown"}
+- Assigned Rep: ${account.assignedRep || "Unassigned"}
+- Category to Expand: ${account.categoryToExpand || "Not defined"}
+- Barrier: ${account.barrier || "No clear barrier yet"}
+- Strategy: ${account.howWeGetThere || "General growth discussion"}
+- Status: ${account.statusLabel || "Unknown"}
+
+Personality:
+Act like a real buyer. Be skeptical but realistic. Respond naturally based on the rep’s approach. Do not make the call too easy.`,
+      }
+    : baseScenario;
 
   function addMessage(speaker, text) {
     const newMessage = {
@@ -130,6 +155,7 @@ export default function SalesSimulator() {
           scenario,
           orderItems,
           objections,
+          account,
         }),
       });
 
@@ -230,6 +256,7 @@ export default function SalesSimulator() {
           customerType,
           difficulty,
           scenario,
+          account,
         }),
       });
 
@@ -298,6 +325,28 @@ export default function SalesSimulator() {
         </div>
       </section>
 
+      {account && (
+        <section className="simulator-panel">
+          <h3>Live Account Context</h3>
+
+          <p>
+            <strong>Dealer:</strong> {account.dealerName || "—"}
+          </p>
+          <p>
+            <strong>Buyer:</strong> {account.primaryBuyer || "—"}
+          </p>
+          <p>
+            <strong>Rep:</strong> {account.assignedRep || "—"}
+          </p>
+          <p>
+            <strong>Category:</strong> {account.categoryToExpand || "—"}
+          </p>
+          <p>
+            <strong>Barrier:</strong> {account.barrier || "—"}
+          </p>
+        </section>
+      )}
+
       <ControlPanel
         customerTypes={customerTypes}
         difficultyLevels={difficultyLevels}
@@ -310,11 +359,13 @@ export default function SalesSimulator() {
         endSession={endSession}
         scenario={scenario}
       />
+
       <RealtimeVoicePanel
         customerType={customerType}
         difficulty={difficulty}
         scenario={scenario}
       />
+
       <section className="simulator-workspace">
         <TranscriptPanel
           messages={messages}

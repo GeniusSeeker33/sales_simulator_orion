@@ -1,17 +1,14 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { loadAccounts } from "../lib/accountStore";
-import {
-  loadTrainingResults,
-  addTrainingResult,
-} from "../lib/trainingStore";
+import { loadAccounts, normalizeAccount } from "../lib/accountStore";
+import { loadTrainingResults, addTrainingResult } from "../lib/trainingStore";
 
 const scenarioMap = {
   "Growth Mission": {
     title: "Growth Mission",
     objective:
-      "Expand the account by identifying the next best category, overcoming the dealer’s hesitation, and earning commitment to a clear next step.",
+      "Expand the account by identifying the next best category, overcoming hesitation, and earning commitment to a clear next step.",
     opener:
       "You are speaking with the dealer’s primary buyer. Your goal is to guide the conversation toward growth without sounding transactional.",
   },
@@ -31,6 +28,46 @@ const scenarioMap = {
   },
 };
 
+function loadImportedContacts() {
+  try {
+    return JSON.parse(localStorage.getItem("importedContacts") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function mapContactToAccount(contact, index) {
+  return normalizeAccount({
+    id: contact.id || `imported-${contact.phone || index}`,
+    dealerName: contact.accountName || "Imported Account",
+    primaryBuyer: contact.contactName || "Unknown Buyer",
+    primaryBuyingCategories: [contact.customerType || "Prospect"],
+    lastMonthSales: 0,
+    currentMonthTarget: 0,
+    growthGap: 0,
+    statusLabel: contact.status || "Imported",
+    statusTone: "neutral",
+    dealerCommitment: contact.priority || "Not set",
+    progressPercent: 0,
+    categoryToExpand: contact.customerType || "Prospect",
+    skuFocus: [],
+    plannedOrderFrequency: "",
+    barrier: "",
+    aeActionRequired: `Assigned Rep: ${contact.assignedRep || "Unassigned"}`,
+    howWeGetThere: contact.rulesOfEngagement || contact.notes || "",
+    nextFollowUpDate: contact.lastContactDate || "",
+    expectedCloseDate: "",
+    allocationTrade: "",
+    complianceStatus: "Needs review",
+    notes: contact.notes || "",
+    phone: contact.phone || "",
+    email: contact.email || "",
+    assignedRep: contact.assignedRep || "",
+    territory: contact.territory || "",
+    source: contact.source || "Excel Import",
+  });
+}
+
 export default function Training() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -38,11 +75,19 @@ export default function Training() {
   const scenarioType = location.state?.scenarioType ?? "Growth Mission";
   const dealerIdFromRoute = location.state?.dealerId ?? null;
   const dealerNameFromRoute = location.state?.dealerName ?? null;
+  const accountFromRoute = location.state?.account ?? null;
 
-  const accounts = useMemo(() => loadAccounts(), []);
+  const accounts = useMemo(() => {
+    const demoAccounts = loadAccounts();
+    const importedAccounts = loadImportedContacts().map(mapContactToAccount);
+    return [...importedAccounts, ...demoAccounts];
+  }, []);
+
   const trainingHistory = useMemo(() => loadTrainingResults(), []);
 
   const dealer = useMemo(() => {
+    if (accountFromRoute) return normalizeAccount(accountFromRoute);
+
     if (dealerIdFromRoute) {
       const byId = accounts.find((account) => account.id === dealerIdFromRoute);
       if (byId) return byId;
@@ -56,7 +101,7 @@ export default function Training() {
     }
 
     return accounts[0] ?? null;
-  }, [accounts, dealerIdFromRoute, dealerNameFromRoute]);
+  }, [accounts, dealerIdFromRoute, dealerNameFromRoute, accountFromRoute]);
 
   const scenario = scenarioMap[scenarioType] ?? scenarioMap["Growth Mission"];
 
@@ -97,6 +142,9 @@ export default function Training() {
       dealerId: dealer.id,
       dealerName: dealer.dealerName,
       primaryBuyer: dealer.primaryBuyer,
+      assignedRep: dealer.assignedRep || "",
+      phone: dealer.phone || "",
+      email: dealer.email || "",
       scoreBreakdown: scoring.breakdown,
       totalScore: scoring.totalScore,
       maxScore: 100,
@@ -118,6 +166,10 @@ export default function Training() {
         currentMonthTarget: dealer.currentMonthTarget,
         growthGap: dealer.growthGap,
         progressPercent: dealer.progressPercent,
+        assignedRep: dealer.assignedRep,
+        phone: dealer.phone,
+        email: dealer.email,
+        source: dealer.source,
       },
     };
 
@@ -150,10 +202,7 @@ export default function Training() {
             </p>
 
             <div className="button-row">
-              <button
-                className="btn-primary"
-                onClick={() => navigate("/accounts")}
-              >
+              <button className="btn-primary" onClick={() => navigate("/accounts")}>
                 Go to Accounts
               </button>
             </div>
@@ -183,7 +232,7 @@ export default function Training() {
             <div>
               <h2>Dealer Context</h2>
               <p className="section-subtext">
-                Use the live account strategy to guide your call.
+                Use this live account strategy to guide your call.
               </p>
             </div>
           </div>
@@ -192,28 +241,48 @@ export default function Training() {
             <span>Dealer</span>
             <strong>{dealer.dealerName}</strong>
           </div>
+
           <div className="feedback-row">
             <span>Primary Buyer</span>
             <strong>{dealer.primaryBuyer}</strong>
           </div>
+
           <div className="feedback-row">
-            <span>Category to Expand</span>
-            <strong>{dealer.categoryToExpand}</strong>
-          </div>
-          <div className="feedback-row">
-            <span>SKU Focus</span>
-            <strong>{dealer.skuFocus.join(", ")}</strong>
-          </div>
-          <div className="feedback-row">
-            <span>Barrier</span>
-            <strong>{dealer.barrier}</strong>
-          </div>
-          <div className="feedback-row">
-            <span>AE Action Required</span>
-            <strong>{dealer.aeActionRequired}</strong>
+            <span>Assigned Rep</span>
+            <strong>{dealer.assignedRep || "—"}</strong>
           </div>
 
-          <p className="coach-text">How we get there: {dealer.howWeGetThere}</p>
+          <div className="feedback-row">
+            <span>Phone</span>
+            <strong>{dealer.phone || "—"}</strong>
+          </div>
+
+          <div className="feedback-row">
+            <span>Email</span>
+            <strong>{dealer.email || "—"}</strong>
+          </div>
+
+          <div className="feedback-row">
+            <span>Category to Expand</span>
+            <strong>{dealer.categoryToExpand || "—"}</strong>
+          </div>
+
+          <div className="feedback-row">
+            <span>SKU Focus</span>
+            <strong>{dealer.skuFocus?.length ? dealer.skuFocus.join(", ") : "—"}</strong>
+          </div>
+
+          <div className="feedback-row">
+            <span>Barrier</span>
+            <strong>{dealer.barrier || "—"}</strong>
+          </div>
+
+          <div className="feedback-row">
+            <span>AE Action Required</span>
+            <strong>{dealer.aeActionRequired || "—"}</strong>
+          </div>
+
+          <p className="coach-text">How we get there: {dealer.howWeGetThere || "—"}</p>
         </div>
 
         {!submitted ? (
@@ -234,7 +303,7 @@ export default function Training() {
                   className="response-box"
                   value={form.openingApproach}
                   onChange={(e) => updateField("openingApproach", e.target.value)}
-                  placeholder="How would you open the conversation and frame the opportunity?"
+                  placeholder={`How would you open the conversation with ${dealer.primaryBuyer}?`}
                 />
               </label>
 
@@ -254,7 +323,7 @@ export default function Training() {
                   className="response-box"
                   value={form.valueStory}
                   onChange={(e) => updateField("valueStory", e.target.value)}
-                  placeholder="How would you connect the product recommendation to their business?"
+                  placeholder="How would you connect the recommendation to their business?"
                 />
               </label>
 
@@ -274,7 +343,7 @@ export default function Training() {
                   className="response-box compact-textarea"
                   value={form.coachNotes}
                   onChange={(e) => updateField("coachNotes", e.target.value)}
-                  placeholder="Optional: capture what you were trying to accomplish in the scenario."
+                  placeholder="Optional: capture what you were trying to accomplish."
                 />
               </label>
 
@@ -349,10 +418,7 @@ export default function Training() {
                 Back to Account
               </button>
 
-              <button
-                className="btn-secondary"
-                onClick={() => navigate("/dashboard")}
-              >
+              <button className="btn-secondary" onClick={() => navigate("/dashboard")}>
                 Go to Dashboard
               </button>
             </div>
@@ -363,9 +429,7 @@ export default function Training() {
           <div className="section-header">
             <div>
               <h2>Dealer Training History</h2>
-              <p className="section-subtext">
-                Recent saved results for this dealer.
-              </p>
+              <p className="section-subtext">Recent saved results for this dealer.</p>
             </div>
           </div>
 
@@ -391,9 +455,7 @@ export default function Training() {
               ))}
             </div>
           ) : (
-            <p className="coach-text">
-              No training history saved for this dealer yet.
-            </p>
+            <p className="coach-text">No training history saved for this dealer yet.</p>
           )}
         </div>
       </section>

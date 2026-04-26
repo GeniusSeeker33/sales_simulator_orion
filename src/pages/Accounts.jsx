@@ -23,6 +23,7 @@ export default function Accounts() {
 
   const [accounts, setAccounts] = useState(() => loadAccounts());
   const [apiContacts, setApiContacts] = useState(() => loadImportedContacts());
+  const [currentRep, setCurrentRep] = useState("ALL");
   const [isEditing, setIsEditing] = useState(false);
   const [draftPlan, setDraftPlan] = useState(null);
 
@@ -75,14 +76,26 @@ export default function Accounts() {
     );
   }, [apiContacts]);
 
+  const repOptions = useMemo(() => {
+    const reps = [...importedAccounts, ...accounts]
+      .map((account) => account.assignedRep)
+      .filter(Boolean);
+
+    return ["ALL", ...Array.from(new Set(reps))];
+  }, [accounts, importedAccounts]);
+
   const displayAccounts = useMemo(() => {
     const existingIds = new Set(accounts.map((account) => account.id));
     const newImports = importedAccounts.filter(
       (account) => !existingIds.has(account.id)
     );
 
-    return [...newImports, ...accounts];
-  }, [accounts, importedAccounts]);
+    const combined = [...newImports, ...accounts];
+
+    if (currentRep === "ALL") return combined;
+
+    return combined.filter((account) => account.assignedRep === currentRep);
+  }, [accounts, importedAccounts, currentRep]);
 
   const initialSelectedId = useMemo(() => {
     if (!requestedDealerName) return displayAccounts[0]?.id ?? null;
@@ -181,8 +194,14 @@ export default function Accounts() {
           <div className="card">
             <h2>No accounts found</h2>
             <p className="section-subtext">
-              There are no account records available yet.
+              There are no account records available for this rep filter.
             </p>
+
+            <div className="button-row">
+              <button className="btn-secondary" onClick={() => setCurrentRep("ALL")}>
+                Show All Reps
+              </button>
+            </div>
           </div>
         </section>
       </Layout>
@@ -205,6 +224,21 @@ export default function Accounts() {
             </div>
 
             <div className="button-row">
+              <select
+                value={currentRep}
+                onChange={(e) => {
+                  setCurrentRep(e.target.value);
+                  setIsEditing(false);
+                  setDraftPlan(null);
+                }}
+              >
+                {repOptions.map((rep) => (
+                  <option key={rep} value={rep}>
+                    {rep === "ALL" ? "All Reps" : rep}
+                  </option>
+                ))}
+              </select>
+
               <button className="btn-secondary" onClick={handleResetAccounts}>
                 Reset Demo Data
               </button>
@@ -224,6 +258,7 @@ export default function Accounts() {
                   <th>Status</th>
                 </tr>
               </thead>
+
               <tbody>
                 {displayAccounts.map((account) => (
                   <tr
@@ -379,15 +414,16 @@ export default function Accounts() {
                   <button
                     className="btn-primary"
                     onClick={() =>
-                      navigate("/training", {
+                      navigate("/sales-simulator", {
                         state: {
                           scenarioType: "Growth Mission",
                           dealerName: selectedAccount.dealerName,
                           dealerId: selectedAccount.id,
+                          account: selectedAccount,
                         },
                       })
                     }
-                  >
+                  >   
                     Practice Call
                   </button>
 
