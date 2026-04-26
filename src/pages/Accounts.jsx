@@ -8,33 +8,43 @@ import {
   normalizeAccount,
 } from "../lib/accountStore";
 
+function loadImportedContacts() {
+  try {
+    return JSON.parse(localStorage.getItem("importedContacts") || "[]");
+  } catch {
+    return [];
+  }
+}
+
 export default function Accounts() {
   const location = useLocation();
   const navigate = useNavigate();
   const requestedDealerName = location.state?.dealerName;
 
   const [accounts, setAccounts] = useState(() => loadAccounts());
-  const [apiContacts, setApiContacts] = useState([]);
+  const [apiContacts, setApiContacts] = useState(() => loadImportedContacts());
   const [isEditing, setIsEditing] = useState(false);
   const [draftPlan, setDraftPlan] = useState(null);
 
   useEffect(() => {
+    const localContacts = loadImportedContacts();
+
     fetch("/api/contacts/list")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data.contacts)) {
-          setApiContacts(data.contacts);
-        }
+        const apiList = Array.isArray(data.contacts) ? data.contacts : [];
+        setApiContacts([...localContacts, ...apiList]);
       })
       .catch((err) => {
-        console.warn("Contacts API not loaded yet:", err);
+        console.warn("Contacts API not loaded yet. Using local contacts:", err);
+        setApiContacts(localContacts);
       });
   }, []);
 
   const importedAccounts = useMemo(() => {
     return apiContacts.map((contact, index) =>
       normalizeAccount({
-        id: contact.id || `imported-${index}`,
+        id: contact.id || `imported-${contact.phone || index}`,
         dealerName: contact.accountName || "Imported Account",
         primaryBuyer: contact.contactName || "Unknown Buyer",
         primaryBuyingCategories: [contact.customerType || "Prospect"],
@@ -45,7 +55,7 @@ export default function Accounts() {
         statusTone: "neutral",
         dealerCommitment: contact.priority || "Not set",
         progressPercent: 0,
-        categoryToExpand: contact.customerType || "",
+        categoryToExpand: contact.customerType || "Prospect",
         skuFocus: [],
         plannedOrderFrequency: "",
         barrier: "",
@@ -66,10 +76,10 @@ export default function Accounts() {
   }, [apiContacts]);
 
   const displayAccounts = useMemo(() => {
-    if (importedAccounts.length === 0) return accounts;
-
     const existingIds = new Set(accounts.map((account) => account.id));
-    const newImports = importedAccounts.filter((account) => !existingIds.has(account.id));
+    const newImports = importedAccounts.filter(
+      (account) => !existingIds.has(account.id)
+    );
 
     return [...newImports, ...accounts];
   }, [accounts, importedAccounts]);
@@ -96,8 +106,8 @@ export default function Accounts() {
 
   const selectedAccount = useMemo(() => {
     return (
-      displayAccounts.find((account) => account.id === selectedId) ??
-      displayAccounts[0] ??
+      displayAccounts.find((account) => account.id === selectedId) ||
+      displayAccounts[0] ||
       null
     );
   }, [displayAccounts, selectedId]);
@@ -186,6 +196,9 @@ export default function Accounts() {
           <div className="section-header">
             <div>
               <h2>Dealer Overview</h2>
+              <p className="section-subtext">
+                Imported contacts loaded: {apiContacts.length}
+              </p>
               <p className="section-subtext">
                 Revenue targets, growth gaps, imported contacts, and next actions by account.
               </p>
