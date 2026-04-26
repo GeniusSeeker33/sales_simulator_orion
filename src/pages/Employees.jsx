@@ -1,17 +1,38 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "../components/layout/Layout";
 import {
-  employees,
+  employees as staticEmployees,
   getEmployeeDisplayName,
   getEmployeeFullName,
   sortEmployeesByHireDate,
 } from "../data/employees";
 
 export default function Employees() {
-  const sortedEmployees = useMemo(() => sortEmployeesByHireDate(employees), []);
+  const [apiEmployees, setApiEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCode, setSelectedCode] = useState(sortedEmployees[0]?.code ?? null);
+  const [selectedCode, setSelectedCode] = useState(null);
   const [sortMode, setSortMode] = useState("hireDateAsc");
+
+  useEffect(() => {
+    fetch("/api/employees/list")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.employees) && data.employees.length > 0) {
+          setApiEmployees(data.employees);
+          setSelectedCode(data.employees[0]?.code ?? null);
+        }
+      })
+      .catch((err) => {
+        console.warn("Using static employee data. API not loaded:", err);
+      });
+  }, []);
+
+  const sourceEmployees = apiEmployees.length > 0 ? apiEmployees : staticEmployees;
+
+  const sortedEmployees = useMemo(
+    () => sortEmployeesByHireDate(sourceEmployees),
+    [sourceEmployees]
+  );
 
   const filteredEmployees = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -49,13 +70,17 @@ export default function Employees() {
 
     if (sortMode === "lastNameAsc") {
       list = [...list].sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
+        `${a.lastName} ${a.firstName}`.localeCompare(
+          `${b.lastName} ${b.firstName}`
+        )
       );
     }
 
     if (sortMode === "locationAsc") {
       list = [...list].sort((a, b) =>
-        `${a.location} ${a.lastName}`.localeCompare(`${b.location} ${b.lastName}`)
+        `${a.location} ${a.lastName}`.localeCompare(
+          `${b.location} ${b.lastName}`
+        )
       );
     }
 
@@ -63,21 +88,20 @@ export default function Employees() {
   }, [searchTerm, sortedEmployees, sortMode]);
 
   const selectedEmployee = useMemo(() => {
-    const fromFiltered =
-      filteredEmployees.find((employee) => employee.code === selectedCode) ?? null;
-
-    if (fromFiltered) return fromFiltered;
-
-    return filteredEmployees[0] ?? null;
+    return (
+      filteredEmployees.find((employee) => employee.code === selectedCode) ||
+      filteredEmployees[0] ||
+      null
+    );
   }, [filteredEmployees, selectedCode]);
 
   const locationCounts = useMemo(() => {
-    return employees.reduce((acc, employee) => {
+    return sourceEmployees.reduce((acc, employee) => {
       const location = employee.location || "Unknown";
       acc[location] = (acc[location] || 0) + 1;
       return acc;
     }, {});
-  }, []);
+  }, [sourceEmployees]);
 
   return (
     <Layout title="Employees">
@@ -96,7 +120,7 @@ export default function Employees() {
             <div className="detail-grid" style={{ marginBottom: 16 }}>
               <div className="mini-stat">
                 <span>Total Employees</span>
-                <strong>{employees.length}</strong>
+                <strong>{sourceEmployees.length}</strong>
               </div>
 
               <div className="mini-stat">
@@ -112,7 +136,8 @@ export default function Employees() {
               <div className="mini-stat">
                 <span>Remote</span>
                 <strong>
-                  {(locationCounts["Remote-NH"] ?? 0) + (locationCounts["Remote SC"] ?? 0)}
+                  {(locationCounts["Remote-NH"] ?? 0) +
+                    (locationCounts["Remote SC"] ?? 0)}
                 </strong>
               </div>
             </div>
@@ -129,10 +154,7 @@ export default function Employees() {
                 style={{ minWidth: 280 }}
               />
 
-              <select
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value)}
-              >
+              <select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
                 <option value="hireDateAsc">Hire Date: Oldest First</option>
                 <option value="hireDateDesc">Hire Date: Newest First</option>
                 <option value="lastNameAsc">Last Name: A-Z</option>
@@ -156,7 +178,9 @@ export default function Employees() {
                   {filteredEmployees.map((employee) => (
                     <tr
                       key={employee.code}
-                      className={selectedEmployee?.code === employee.code ? "row-active" : ""}
+                      className={
+                        selectedEmployee?.code === employee.code ? "row-active" : ""
+                      }
                       onClick={() => setSelectedCode(employee.code)}
                     >
                       <td>{getEmployeeFullName(employee)}</td>
@@ -224,12 +248,12 @@ export default function Employees() {
 
                 <div className="feedback-row">
                   <span>Phone</span>
-                  <strong>{selectedEmployee.phone}</strong>
+                  <strong>{selectedEmployee.phone || "—"}</strong>
                 </div>
 
                 <div className="feedback-row">
                   <span>Email</span>
-                  <strong>{selectedEmployee.email}</strong>
+                  <strong>{selectedEmployee.email || "—"}</strong>
                 </div>
 
                 <div className="feedback-row">
@@ -253,12 +277,13 @@ export default function Employees() {
 
                 <div className="feedback-row">
                   <span>Next Build Step</span>
-                  <strong>Connect rep metrics + compensation</strong>
+                  <strong>Connect rep metrics + RingCentral activity</strong>
                 </div>
 
                 <p className="coach-text">
-                  This employee profile is now ready to connect to live KPI performance,
-                  compensation plan logic, dashboard tracking, and leadership reporting.
+                  This employee profile is ready to connect to live KPI performance,
+                  compensation plan logic, call activity, dashboard tracking, and manager
+                  coaching.
                 </p>
               </div>
             </>

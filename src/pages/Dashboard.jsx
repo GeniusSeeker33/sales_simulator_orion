@@ -64,7 +64,7 @@ export default function Dashboard() {
   <Layout title="Dashboard">
 
     <div style={{ padding: "12px 0" }}>
-      <a href="/admin/import">Go to Admin Import</a>
+      <Link to="/admin/import">Go to Admin Import</Link>
     </div>
 
     <section className="kpi-grid">
