@@ -14,18 +14,75 @@ export default function Accounts() {
   const requestedDealerName = location.state?.dealerName;
 
   const [accounts, setAccounts] = useState(() => loadAccounts());
+  const [apiContacts, setApiContacts] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [draftPlan, setDraftPlan] = useState(null);
 
-  const initialSelectedId = useMemo(() => {
-    if (!requestedDealerName) return accounts[0]?.id ?? null;
+  useEffect(() => {
+    fetch("/api/contacts/list")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.contacts)) {
+          setApiContacts(data.contacts);
+        }
+      })
+      .catch((err) => {
+        console.warn("Contacts API not loaded yet:", err);
+      });
+  }, []);
 
-    const match = accounts.find(
+  const importedAccounts = useMemo(() => {
+    return apiContacts.map((contact, index) =>
+      normalizeAccount({
+        id: contact.id || `imported-${index}`,
+        dealerName: contact.accountName || "Imported Account",
+        primaryBuyer: contact.contactName || "Unknown Buyer",
+        primaryBuyingCategories: [contact.customerType || "Prospect"],
+        lastMonthSales: 0,
+        currentMonthTarget: 0,
+        growthGap: 0,
+        statusLabel: contact.status || "Imported",
+        statusTone: "neutral",
+        dealerCommitment: contact.priority || "Not set",
+        progressPercent: 0,
+        categoryToExpand: contact.customerType || "",
+        skuFocus: [],
+        plannedOrderFrequency: "",
+        barrier: "",
+        aeActionRequired: `Assigned Rep: ${contact.assignedRep || "Unassigned"}`,
+        howWeGetThere: contact.rulesOfEngagement || contact.notes || "",
+        nextFollowUpDate: contact.lastContactDate || "",
+        expectedCloseDate: "",
+        allocationTrade: "",
+        complianceStatus: "Needs review",
+        notes: contact.notes || "",
+        phone: contact.phone || "",
+        email: contact.email || "",
+        assignedRep: contact.assignedRep || "",
+        territory: contact.territory || "",
+        source: contact.source || "Excel Import",
+      })
+    );
+  }, [apiContacts]);
+
+  const displayAccounts = useMemo(() => {
+    if (importedAccounts.length === 0) return accounts;
+
+    const existingIds = new Set(accounts.map((account) => account.id));
+    const newImports = importedAccounts.filter((account) => !existingIds.has(account.id));
+
+    return [...newImports, ...accounts];
+  }, [accounts, importedAccounts]);
+
+  const initialSelectedId = useMemo(() => {
+    if (!requestedDealerName) return displayAccounts[0]?.id ?? null;
+
+    const match = displayAccounts.find(
       (account) => account.dealerName === requestedDealerName
     );
 
-    return match?.id ?? accounts[0]?.id ?? null;
-  }, [requestedDealerName, accounts]);
+    return match?.id ?? displayAccounts[0]?.id ?? null;
+  }, [requestedDealerName, displayAccounts]);
 
   const [selectedId, setSelectedId] = useState(initialSelectedId);
 
@@ -38,8 +95,12 @@ export default function Accounts() {
   }, [accounts]);
 
   const selectedAccount = useMemo(() => {
-    return accounts.find((account) => account.id === selectedId) ?? accounts[0] ?? null;
-  }, [accounts, selectedId]);
+    return (
+      displayAccounts.find((account) => account.id === selectedId) ??
+      displayAccounts[0] ??
+      null
+    );
+  }, [displayAccounts, selectedId]);
 
   function openEditor() {
     if (!selectedAccount) return;
@@ -76,7 +137,7 @@ export default function Accounts() {
     const updatedAccounts = accounts.map((account) => {
       if (account.id !== selectedAccount.id) return account;
 
-      const updatedAccount = {
+      return normalizeAccount({
         ...account,
         categoryToExpand: draftPlan.categoryToExpand.trim(),
         skuFocus: draftPlan.skuFocus
@@ -88,9 +149,7 @@ export default function Accounts() {
         aeActionRequired: draftPlan.aeActionRequired.trim(),
         howWeGetThere: draftPlan.howWeGetThere.trim(),
         updatedAt: new Date().toISOString(),
-      };
-
-      return normalizeAccount(updatedAccount);
+      });
     });
 
     setAccounts(updatedAccounts);
@@ -128,7 +187,7 @@ export default function Accounts() {
             <div>
               <h2>Dealer Overview</h2>
               <p className="section-subtext">
-                Revenue targets, growth gaps, and next actions by account.
+                Revenue targets, growth gaps, imported contacts, and next actions by account.
               </p>
             </div>
 
@@ -145,14 +204,15 @@ export default function Accounts() {
                 <tr>
                   <th>Dealer</th>
                   <th>Primary Buyer</th>
+                  <th>Rep</th>
+                  <th>Phone</th>
                   <th>Last Month</th>
                   <th>Target</th>
-                  <th>Growth Gap</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {accounts.map((account) => (
+                {displayAccounts.map((account) => (
                   <tr
                     key={account.id}
                     className={selectedId === account.id ? "row-active" : ""}
@@ -164,9 +224,10 @@ export default function Accounts() {
                   >
                     <td>{account.dealerName}</td>
                     <td>{account.primaryBuyer}</td>
+                    <td>{account.assignedRep || "—"}</td>
+                    <td>{account.phone || "—"}</td>
                     <td>{formatCurrency(account.lastMonthSales)}</td>
                     <td>{formatCurrency(account.currentMonthTarget)}</td>
-                    <td>{formatCurrency(account.growthGap)}</td>
                     <td>
                       <span className={`status-pill status-${account.statusTone}`}>
                         {account.statusLabel}
@@ -228,6 +289,35 @@ export default function Accounts() {
           </div>
 
           <div className="card">
+            <h2>Contact + Ownership</h2>
+
+            <div className="feedback-row">
+              <span>Phone</span>
+              <strong>{selectedAccount.phone || "—"}</strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Email</span>
+              <strong>{selectedAccount.email || "—"}</strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Assigned Rep</span>
+              <strong>{selectedAccount.assignedRep || "—"}</strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Territory</span>
+              <strong>{selectedAccount.territory || "—"}</strong>
+            </div>
+
+            <div className="feedback-row">
+              <span>Source</span>
+              <strong>{selectedAccount.source || "Demo Data"}</strong>
+            </div>
+          </div>
+
+          <div className="card">
             <div className="section-header">
               <div>
                 <h2>Growth Plan</h2>
@@ -241,31 +331,35 @@ export default function Accounts() {
               <>
                 <div className="feedback-row">
                   <span>Category to Expand</span>
-                  <strong>{selectedAccount.categoryToExpand}</strong>
+                  <strong>{selectedAccount.categoryToExpand || "—"}</strong>
                 </div>
 
                 <div className="feedback-row">
                   <span>SKU Focus</span>
-                  <strong>{selectedAccount.skuFocus.join(", ")}</strong>
+                  <strong>
+                    {selectedAccount.skuFocus?.length
+                      ? selectedAccount.skuFocus.join(", ")
+                      : "—"}
+                  </strong>
                 </div>
 
                 <div className="feedback-row">
                   <span>Planned Order Frequency</span>
-                  <strong>{selectedAccount.plannedOrderFrequency}</strong>
+                  <strong>{selectedAccount.plannedOrderFrequency || "—"}</strong>
                 </div>
 
                 <div className="feedback-row">
                   <span>Barrier</span>
-                  <strong>{selectedAccount.barrier}</strong>
+                  <strong>{selectedAccount.barrier || "—"}</strong>
                 </div>
 
                 <div className="feedback-row">
                   <span>AE Action Required</span>
-                  <strong>{selectedAccount.aeActionRequired}</strong>
+                  <strong>{selectedAccount.aeActionRequired || "—"}</strong>
                 </div>
 
                 <p className="coach-text">
-                  How we get there: {selectedAccount.howWeGetThere}
+                  How we get there: {selectedAccount.howWeGetThere || "—"}
                 </p>
 
                 <div className="button-row">
@@ -370,22 +464,22 @@ export default function Accounts() {
 
             <div className="feedback-row">
               <span>Next Follow-Up Date</span>
-              <strong>{selectedAccount.nextFollowUpDate}</strong>
+              <strong>{selectedAccount.nextFollowUpDate || "—"}</strong>
             </div>
             <div className="feedback-row">
               <span>Expected Close Date</span>
-              <strong>{selectedAccount.expectedCloseDate}</strong>
+              <strong>{selectedAccount.expectedCloseDate || "—"}</strong>
             </div>
             <div className="feedback-row">
               <span>Allocation Trade</span>
-              <strong>{selectedAccount.allocationTrade}</strong>
+              <strong>{selectedAccount.allocationTrade || "—"}</strong>
             </div>
             <div className="feedback-row">
               <span>Compliance Status</span>
-              <strong>{selectedAccount.complianceStatus}</strong>
+              <strong>{selectedAccount.complianceStatus || "—"}</strong>
             </div>
 
-            <p className="coach-text">{selectedAccount.notes}</p>
+            <p className="coach-text">{selectedAccount.notes || "—"}</p>
           </div>
         </div>
       </section>
@@ -398,5 +492,5 @@ function formatCurrency(value) {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Number(value) || 0);
 }
