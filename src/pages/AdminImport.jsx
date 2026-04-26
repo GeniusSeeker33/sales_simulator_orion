@@ -22,6 +22,20 @@ export default function AdminImport() {
       });
 
       const data = await res.json();
+
+      if (activeTab === "contacts") {
+        const payload = JSON.parse(json);
+        const existing = JSON.parse(
+          localStorage.getItem("importedContacts") || "[]"
+        );
+        const incoming = payload.contacts || [];
+
+        localStorage.setItem(
+          "importedContacts",
+          JSON.stringify([...incoming, ...existing])
+        );
+      }
+
       alert(`Imported ${data.count || 0} records`);
     } catch (err) {
       console.error(err);
@@ -34,7 +48,6 @@ export default function AdminImport() {
       <h1>Admin Import Hub</h1>
       <p>Paste JSON and import data into the system.</p>
 
-      {/* Tabs */}
       <div style={{ marginBottom: 20 }}>
         {TABS.map((tab) => (
           <button
@@ -57,7 +70,6 @@ export default function AdminImport() {
         ))}
       </div>
 
-      {/* Instructions */}
       <p style={{ marginBottom: 10 }}>
         {activeTab === "employees" && "Import employee roster data"}
         {activeTab === "contacts" && "Import customer/prospect data"}
@@ -65,7 +77,6 @@ export default function AdminImport() {
         {activeTab === "calls" && "Import RingCentral call logs"}
       </p>
 
-      {/* Textarea */}
       <textarea
         rows="14"
         style={{ width: "100%", padding: "12px" }}
@@ -74,11 +85,10 @@ export default function AdminImport() {
         placeholder={getPlaceholder(activeTab)}
       />
 
-      <br /><br />
+      <br />
+      <br />
 
-      <button onClick={handleImport}>
-        Import {activeTab}
-      </button>
+      <button onClick={handleImport}>Import {activeTab}</button>
     </div>
   );
 }
