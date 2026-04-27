@@ -28,6 +28,7 @@ export default function SalesSimulator() {
     const matches = products.filter((product) => {
       const category = String(product.category || "").toLowerCase();
       const recommendedFor = String(product.recommendedFor || "").toLowerCase();
+
       return (
         accountCategory &&
         (category.includes(accountCategory) ||
@@ -37,6 +38,10 @@ export default function SalesSimulator() {
 
     return matches.length ? matches.slice(0, 5) : products.slice(0, 5);
   }, [products, account]);
+
+  const availableProducts = useMemo(() => {
+    return recommendedProducts.length ? recommendedProducts : products;
+  }, [recommendedProducts, products]);
 
   const [currentAudio, setCurrentAudio] = useState(null);
   const [isLive, setIsLive] = useState(false);
@@ -53,10 +58,12 @@ export default function SalesSimulator() {
 
   const baseScenario = getScenario(customerType);
 
-  const inventoryContext = recommendedProducts
+  const inventoryContext = availableProducts
     .map(
       (p) =>
-        `- ${p.name || p.sku}: ${p.category || "Uncategorized"}, ${p.inventory ?? 0} in stock, dealer price ${formatMoney(
+        `- ${p.name || p.sku}: ${p.category || "Uncategorized"}, ${
+          p.inventory ?? 0
+        } in stock, dealer price ${formatMoney(
           p.dealerPrice
         )}, retail ${formatMoney(p.retailPrice)}, velocity ${
           p.velocity || "Unknown"
@@ -189,15 +196,16 @@ ${inventoryContext || "- No imported inventory available yet."}`,
           scenario,
           orderItems,
           objections,
-          account,
-          products: recommendedProducts,
+          products: availableProducts,
         }),
       });
 
       if (!response.ok) throw new Error("AI customer reply failed");
 
       const data = await response.json();
-      const reply = data.reply || "Tell me more about what you recommend.";
+      const reply =
+        data.reply ||
+        "Which SKU are you recommending, and why does that make sense for my store?";
 
       setTimeout(() => {
         addMessage("AI Customer", reply);
@@ -207,7 +215,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
       console.error(error);
 
       const fallback =
-        "I’m having trouble following. Can you explain that another way?";
+        "I’m having trouble following. Which SKU are you recommending?";
 
       setTimeout(() => {
         addMessage("AI Customer", fallback);
@@ -293,7 +301,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
       orderItems,
       objections,
       productsUsed: orderItems,
-      availableProducts: recommendedProducts,
+      availableProducts,
       error,
     });
   }
@@ -321,7 +329,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
           difficulty,
           scenario,
           account,
-          products: recommendedProducts,
+          products: availableProducts,
         }),
       });
 
@@ -458,7 +466,8 @@ ${inventoryContext || "- No imported inventory available yet."}`,
           </div>
         ) : (
           <p className="coach-text">
-            No imported products found yet. Import products from Admin Import to use real inventory in the simulator.
+            No imported products found yet. Import products from Admin Import to
+            use real inventory in the simulator.
           </p>
         )}
       </section>
