@@ -1,8 +1,15 @@
+import { Link } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { buildRepCompSummary, formatCurrency } from "../lib/compEngine";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
+import { loadPrizes, getTodayWinners, PRIZE_TIERS, isNewHireEligible, generateDailyScore, calcTenureMonths } from "../lib/prizesStore";
+import { employees, getEmployeeFullName } from "../data/employees";
+import { loadSimulatorResults } from "../lib/simulatorResultsStore";
+
+const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
+const MEDAL_COLORS = { 1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32" };
 
 const LEVELS = [
   {
@@ -41,9 +48,13 @@ export default function Leaderboard() {
   const accounts = loadAccounts();
   const trainingResults = loadTrainingResults();
   const repMetrics = loadRepProfile();
+  const prizes = loadPrizes();
+  const simulatorResults = loadSimulatorResults();
 
   const leaderboard = buildLeaderboard(accounts, trainingResults, repMetrics);
   const currentUser = leaderboard.find((rep) => rep.isCurrentUser) || null;
+  const todayWinners = getTodayWinners(prizes);
+  const newHireStandings = buildNewHireStandings(repMetrics, simulatorResults).slice(0, 5);
 
   return (
     <Layout title="Leaderboard">
@@ -144,6 +155,76 @@ export default function Leaderboard() {
           <div className="card">
             <div className="section-header">
               <div>
+                <h2>New Hire Training Prize Leaderboard</h2>
+                <p className="section-subtext">
+                  Daily cash and GeniusDollars prizes for employees within their first 6 months. Top 3 scorers in the AI Sales Simulator win every day.
+                </p>
+              </div>
+              <Link to="/training-leaderboard">
+                <button className="btn-secondary">Full View</button>
+              </Link>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Rep</th>
+                    <th>Months Employed</th>
+                    <th>Score</th>
+                    <th>Daily Prize</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newHireStandings.map((rep, index) => {
+                    const rank = index + 1;
+                    const tier = PRIZE_TIERS.find((t) => t.rank === rank);
+                    const color = MEDAL_COLORS[rank];
+
+                    return (
+                      <tr key={rep.repCode}>
+                        <td>
+                          <strong style={{ color: color || "inherit" }}>
+                            {MEDAL_ICONS[rank] || `#${rank}`}
+                          </strong>
+                        </td>
+                        <td><strong>{rep.repName}</strong></td>
+                        <td>{rep.tenureMonths} mo</td>
+                        <td>{rep.score}/100</td>
+                        <td>
+                          {tier ? (
+                            <span>
+                              <span style={{ color: "#4ade80", fontWeight: 600 }}>${tier.cashPrize}</span>
+                              {" + "}
+                              <span style={{ color: "#818cf8" }}>{tier.geniusDollars} GD</span>
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {todayWinners.length > 0 && (
+              <div className="insight-box" style={{ marginTop: 14 }}>
+                <div className="card-label">Today's Recorded Winners</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
+                  {todayWinners.map((w) => (
+                    <span key={w.rank} style={{ color: MEDAL_COLORS[w.rank] }}>
+                      {MEDAL_ICONS[w.rank]} {w.repName} — ${w.cashPrize} + {w.geniusDollars} GD
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
                 <h2>How Ranking Works</h2>
                 <p className="section-subtext">
                   The leaderboard is designed to reflect what leadership actually cares about.
@@ -228,6 +309,29 @@ export default function Leaderboard() {
               ))}
             </div>
           ) : null}
+
+          <div className="card">
+            <h2>Daily Prize Summary</h2>
+            <p className="section-subtext" style={{ marginBottom: 12 }}>
+              New hire competition (first 6 months) — prizes reset daily.
+            </p>
+
+            {PRIZE_TIERS.map((tier) => (
+              <div key={tier.rank} className="feedback-row">
+                <span>{MEDAL_ICONS[tier.rank]} {tier.label}</span>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ color: "#4ade80", fontWeight: 600 }}>${tier.cashPrize} </span>
+                  <span style={{ color: "#818cf8", fontSize: "0.85rem" }}>+ {tier.geniusDollars} GD</span>
+                </div>
+              </div>
+            ))}
+
+            <Link to="/training-leaderboard">
+              <button className="btn-secondary" style={{ marginTop: 12, width: "100%" }}>
+                View Prize Leaderboard
+              </button>
+            </Link>
+          </div>
 
           <div className="card">
             <h2>Leadership View</h2>
@@ -447,4 +551,46 @@ function buildUserRows(rep) {
       value: rep.totalCompLabel,
     },
   ];
+}
+
+function buildNewHireStandings(repProfile, simulatorResults) {
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySimScores = simulatorResults
+    .filter((r) => r.createdAt && r.createdAt.slice(0, 10) === today)
+    .reduce((acc, r) => {
+      const name = (r.assignedRep || "").toLowerCase().trim();
+      const score = Number(r.score?.overall ?? r.score ?? 0);
+      if (!acc[name] || score > acc[name]) acc[name] = score;
+      return acc;
+    }, {});
+
+  const currentUserName = (repProfile.repName || "").toLowerCase().trim();
+
+  return employees
+    .filter((emp) => isNewHireEligible(emp.hireDate))
+    .map((emp) => {
+      const fullName = getEmployeeFullName(emp);
+      const isCurrentUser = fullName.toLowerCase() === currentUserName;
+      const todayScore = todaySimScores[currentUserName];
+
+      let score;
+      if (isCurrentUser && todayScore) {
+        score = todayScore;
+      } else if (isCurrentUser && simulatorResults.length) {
+        score = Math.round(
+          simulatorResults.reduce((s, r) => s + Number(r.score?.overall ?? r.score ?? 0), 0) /
+            simulatorResults.length
+        );
+      } else {
+        score = generateDailyScore(emp.code);
+      }
+
+      return {
+        repCode: emp.code,
+        repName: fullName,
+        tenureMonths: calcTenureMonths(emp.hireDate),
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 }

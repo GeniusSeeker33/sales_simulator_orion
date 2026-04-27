@@ -10,6 +10,11 @@ import {
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
+import { loadPrizes, getTodayWinners, getRepEarnings, isNewHireEligible, generateDailyScore, calcTenureMonths, PRIZE_TIERS } from "../lib/prizesStore";
+import { employees, getEmployeeFullName } from "../data/employees";
+import { loadSimulatorResults } from "../lib/simulatorResultsStore";
+
+const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
 const LEVELS = [
   {
@@ -57,8 +62,11 @@ export default function Dashboard() {
   const accounts = loadAccounts();
   const trainingResults = loadTrainingResults();
   const repMetrics = loadRepProfile();
+  const prizes = loadPrizes();
+  const simulatorResults = loadSimulatorResults();
 
   const summary = buildDashboardSummary(accounts, trainingResults, repMetrics);
+  const prizeWidget = buildPrizeWidget(repMetrics, prizes, simulatorResults);
 
   return (
   <Layout title="Dashboard">
@@ -400,6 +408,63 @@ export default function Dashboard() {
               <strong>{summary.user.weeklyBonusAvailable}</strong>
             </div>
           </div>
+
+          {prizeWidget.eligible && (
+            <div className="card">
+              <div className="section-header" style={{ marginBottom: 12 }}>
+                <h2>Training Prize</h2>
+                <span className="status-pill status-positive">Active</span>
+              </div>
+
+              <p className="section-subtext" style={{ marginBottom: 12 }}>
+                New hire competition — first 6 months of employment.
+              </p>
+
+              <div className="feedback-row">
+                <span>Today's Rank</span>
+                <strong style={{ color: prizeWidget.rankColor }}>
+                  {MEDAL_ICONS[prizeWidget.todayRank] || `#${prizeWidget.todayRank}`} Place
+                </strong>
+              </div>
+
+              <div className="feedback-row">
+                <span>Today's Score</span>
+                <strong>{prizeWidget.todayScore}/100</strong>
+              </div>
+
+              {prizeWidget.todayRank <= 3 && (
+                <div className="insight-box" style={{ marginTop: 10 }}>
+                  <div className="card-label">Today's Prize</div>
+                  <p className="coach-text" style={{ margin: "6px 0 0" }}>
+                    <span style={{ color: "#4ade80", fontWeight: 700 }}>${prizeWidget.todayPrize.cashPrize} Cash</span>
+                    {" + "}
+                    <span style={{ color: "#818cf8", fontWeight: 700 }}>{prizeWidget.todayPrize.geniusDollars} GeniusDollars</span>
+                  </p>
+                </div>
+              )}
+
+              <div className="feedback-row" style={{ marginTop: 10 }}>
+                <span>Total GeniusDollars</span>
+                <strong style={{ color: "#818cf8" }}>{prizeWidget.totalGeniusDollars} GD</strong>
+              </div>
+
+              <div className="feedback-row">
+                <span>Total Cash Earned</span>
+                <strong style={{ color: "#4ade80" }}>${prizeWidget.totalCash}</strong>
+              </div>
+
+              <div className="feedback-row">
+                <span>Career Wins</span>
+                <strong>{prizeWidget.totalWins}</strong>
+              </div>
+
+              <Link to="/training-leaderboard">
+                <button className="btn-secondary" style={{ marginTop: 12, width: "100%" }}>
+                  View Prize Leaderboard
+                </button>
+              </Link>
+            </div>
+          )}
         </div>
       </section>
     </Layout>
@@ -770,5 +835,63 @@ function fallbackSpotlight() {
     progressPercent: 0,
     aeActionRequired: "Load account data to begin planning",
     howWeGetThere: "Open Accounts and update a dealer plan.",
+  };
+}
+
+function buildPrizeWidget(repMetrics, prizes, simulatorResults) {
+  const startDate = repMetrics.startDate;
+  const eligible = isNewHireEligible(startDate);
+
+  if (!eligible) {
+    return { eligible: false };
+  }
+
+  const repCode = employees.find((emp) => {
+    const fullName = getEmployeeFullName(emp).toLowerCase();
+    const repName = (repMetrics.repName || "").toLowerCase();
+    return fullName === repName || emp.preferredName?.toLowerCase() === repName;
+  })?.code || "LIVE";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySimScores = simulatorResults
+    .filter((r) => r.createdAt && r.createdAt.slice(0, 10) === today)
+    .map((r) => Number(r.score?.overall ?? r.score ?? 0));
+
+  const todayScore = todaySimScores.length
+    ? Math.max(...todaySimScores)
+    : simulatorResults.length
+    ? Math.round(
+        simulatorResults.reduce((s, r) => s + Number(r.score?.overall ?? r.score ?? 0), 0) /
+          simulatorResults.length
+      )
+    : generateDailyScore(repCode);
+
+  const allEligible = employees
+    .filter((emp) => isNewHireEligible(emp.hireDate))
+    .map((emp) => ({ code: emp.code, score: generateDailyScore(emp.code) }))
+    .sort((a, b) => b.score - a.score);
+
+  const myEntry = allEligible.find((e) => e.code === repCode);
+  if (myEntry) myEntry.score = todayScore;
+
+  const sortedAll = [...allEligible].sort((a, b) => b.score - a.score);
+  const todayRank = sortedAll.findIndex((e) => e.code === repCode) + 1 || sortedAll.length;
+
+  const tierColors = { 1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32" };
+  const rankColor = tierColors[todayRank] || "#eef2ff";
+  const todayPrize = PRIZE_TIERS.find((t) => t.rank === todayRank) || null;
+
+  const earnings = getRepEarnings(prizes, repCode);
+
+  return {
+    eligible: true,
+    todayScore,
+    todayRank,
+    rankColor,
+    todayPrize,
+    totalGeniusDollars: earnings.totalGeniusDollars,
+    totalCash: earnings.totalCash,
+    totalWins: earnings.wins,
+    podiums: earnings.podiums,
   };
 }

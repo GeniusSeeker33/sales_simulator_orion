@@ -10,6 +10,7 @@ import {
   BarChart3,
   UserCog,
   Gamepad2,
+  Medal,
 } from "lucide-react";
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: "/accounts", label: "Accounts", icon: Building2 },
   { to: "/activity", label: "Activity", icon: Phone },
   { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  { to: "/training-leaderboard", label: "Prize Leaderboard", icon: Medal },
   { to: "/levels", label: "Level Progress", icon: TrendingUp },
   { to: "/rep-metrics", label: "Rep Metrics", icon: BarChart3 },
   { to: "/manager-view", label: "Manager View", icon: UserCog },

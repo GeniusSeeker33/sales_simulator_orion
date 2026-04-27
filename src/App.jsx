@@ -6,6 +6,7 @@ import Training from "./pages/Training";
 import Accounts from "./pages/Accounts";
 import Activity from "./pages/Activity";
 import Leaderboard from "./pages/Leaderboard";
+import TrainingLeaderboard from "./pages/TrainingLeaderboard";
 import Levels from "./pages/Levels";
 import RepMetrics from "./pages/RepMetrics";
 import ManagerView from "./pages/ManagerView";
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/accounts" element={<Accounts />} />
       <Route path="/activity" element={<Activity />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
+      <Route path="/training-leaderboard" element={<TrainingLeaderboard />} />
       <Route path="/levels" element={<Levels />} />
       <Route path="/rep-metrics" element={<RepMetrics />} />
       <Route path="/manager-view" element={<ManagerView />} />

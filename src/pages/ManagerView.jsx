@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadTrainingResults } from "../lib/trainingStore";
@@ -8,6 +9,19 @@ import {
   buildCompOpportunitySummary,
   formatCurrency,
 } from "../lib/compEngine";
+import {
+  loadPrizes,
+  recordDailyWinners,
+  getTodayWinners,
+  isNewHireEligible,
+  generateDailyScore,
+  calcTenureMonths,
+  PRIZE_TIERS,
+} from "../lib/prizesStore";
+import { employees, getEmployeeFullName } from "../data/employees";
+
+const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
+const MEDAL_COLORS = { 1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32" };
 
 const LEVELS = [
   { level: 1, title: "Associate AE", minSessions: 0, minAverageScore: 0 },
@@ -34,6 +48,34 @@ export default function ManagerView() {
   const liveTrainingResults = loadTrainingResults();
   const simulatorResults = loadSimulatorResults();
   const ringCentralCalls = loadRingCentralCalls();
+  const [prizes, setPrizes] = useState(loadPrizes);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayWinners = getTodayWinners(prizes);
+  const newHireStandings = useMemo(
+    () => buildManagerNewHireStandings(liveRep, simulatorResults),
+    [liveRep, simulatorResults]
+  );
+  const allTimeEarnings = useMemo(
+    () =>
+      Object.entries(prizes.repEarnings)
+        .map(([code, data]) => ({ repCode: code, ...data }))
+        .sort((a, b) => b.totalGeniusDollars - a.totalGeniusDollars),
+    [prizes]
+  );
+
+  function handleRecordTodayWinners() {
+    const top3 = newHireStandings.slice(0, 3).map((rep, i) => ({
+      rank: i + 1,
+      repCode: rep.repCode,
+      repName: rep.repName,
+      cashPrize: PRIZE_TIERS[i].cashPrize,
+      geniusDollars: PRIZE_TIERS[i].geniusDollars,
+      score: rep.score,
+    }));
+    const updated = recordDailyWinners(today, top3);
+    setPrizes({ ...updated });
+  }
 
   const reps = buildRepComparisonData(liveRep, liveTrainingResults);
 
@@ -569,6 +611,144 @@ export default function ManagerView() {
           <div className="card">
             <div className="section-header">
               <div>
+                <h2>New Hire Training Prize Leaderboard</h2>
+                <p className="section-subtext">
+                  Daily rankings for employees within their first 6 months. Top 3 earn cash and GeniusDollars prizes. Scores are based on AI Sales Simulator performance.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {todayWinners.length === 0 ? (
+                  <button className="btn-primary" onClick={handleRecordTodayWinners}>
+                    Record Today's Winners
+                  </button>
+                ) : (
+                  <button className="btn-secondary" onClick={handleRecordTodayWinners}>
+                    Re-record Winners
+                  </button>
+                )}
+                <Link to="/training-leaderboard">
+                  <button className="btn-secondary">Full View</button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Rep</th>
+                    <th>Months Employed</th>
+                    <th>Hire Date</th>
+                    <th>Today's Score</th>
+                    <th>Daily Prize</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newHireStandings.map((rep, index) => {
+                    const rank = index + 1;
+                    const tier = PRIZE_TIERS.find((t) => t.rank === rank);
+                    const color = MEDAL_COLORS[rank];
+
+                    return (
+                      <tr key={rep.repCode}>
+                        <td>
+                          <strong style={{ color: color || "inherit" }}>
+                            {MEDAL_ICONS[rank] || `#${rank}`}
+                          </strong>
+                        </td>
+                        <td><strong>{rep.repName}</strong></td>
+                        <td>{rep.tenureMonths} mo</td>
+                        <td>{formatDateShort(rep.hireDate)}</td>
+                        <td><strong>{rep.score}/100</strong></td>
+                        <td>
+                          {tier ? (
+                            <span>
+                              <span style={{ color: "#4ade80", fontWeight: 600 }}>${tier.cashPrize} Cash</span>
+                              <span style={{ color: "#818cf8", fontSize: "0.85rem" }}> + {tier.geniusDollars} GD</span>
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {newHireStandings.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No employees in the new hire window (6 months or less).
+                </p>
+              )}
+            </div>
+
+            {todayWinners.length > 0 && (
+              <div className="insight-box" style={{ marginTop: 14 }}>
+                <div className="card-label">Today's Recorded Winners</div>
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 8 }}>
+                  {todayWinners.map((w) => (
+                    <div key={w.rank}>
+                      <span style={{ color: MEDAL_COLORS[w.rank], fontWeight: 700 }}>
+                        {MEDAL_ICONS[w.rank]} {w.repName}
+                      </span>
+                      <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
+                        {" "}— ${w.cashPrize} + {w.geniusDollars} GD
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>All-Time Prize Earnings</h2>
+                <p className="section-subtext">
+                  Cumulative cash and GeniusDollars earned through the training competition.
+                </p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Rep</th>
+                    <th>Total Cash</th>
+                    <th>GeniusDollars</th>
+                    <th>1st Place Wins</th>
+                    <th>Total Podiums</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allTimeEarnings.map((rep, index) => (
+                    <tr key={rep.repCode}>
+                      <td>#{index + 1}</td>
+                      <td><strong>{rep.repName}</strong></td>
+                      <td style={{ color: "#4ade80", fontWeight: 600 }}>${rep.totalCash}</td>
+                      <td style={{ color: "#818cf8" }}>{rep.totalGeniusDollars} GD</td>
+                      <td>{rep.wins}</td>
+                      <td>{rep.podiums}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {allTimeEarnings.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No prize earnings recorded yet.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
                 <h2>Manager Notes</h2>
                 <p className="section-subtext">
                   What this view helps leadership spot quickly.
@@ -992,4 +1172,61 @@ function formatDate(value) {
   } catch {
     return value;
   }
+}
+
+function formatDateShort(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value + "T12:00:00").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function buildManagerNewHireStandings(repProfile, simulatorResults) {
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySimScores = simulatorResults
+    .filter((r) => r.createdAt && r.createdAt.slice(0, 10) === today)
+    .reduce((acc, r) => {
+      const name = (r.assignedRep || "").toLowerCase().trim();
+      const score = Number(r.score?.overall ?? r.score ?? 0);
+      if (!acc[name] || score > acc[name]) acc[name] = score;
+      return acc;
+    }, {});
+
+  const currentUserName = (repProfile.repName || "").toLowerCase().trim();
+
+  return employees
+    .filter((emp) => isNewHireEligible(emp.hireDate))
+    .map((emp) => {
+      const fullName = getEmployeeFullName(emp);
+      const isCurrentUser = fullName.toLowerCase() === currentUserName;
+      const todayScore = todaySimScores[currentUserName];
+
+      let score;
+      if (isCurrentUser && todayScore) {
+        score = todayScore;
+      } else if (isCurrentUser && simulatorResults.length) {
+        score = Math.round(
+          simulatorResults.reduce((s, r) => s + Number(r.score?.overall ?? r.score ?? 0), 0) /
+            simulatorResults.length
+        );
+      } else {
+        score = generateDailyScore(emp.code);
+      }
+
+      return {
+        repCode: emp.code,
+        repName: fullName,
+        hireDate: emp.hireDate,
+        location: emp.location,
+        tenureMonths: calcTenureMonths(emp.hireDate),
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 }
