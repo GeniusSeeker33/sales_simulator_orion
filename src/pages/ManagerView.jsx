@@ -37,6 +37,61 @@ export default function ManagerView() {
 
   const reps = buildRepComparisonData(liveRep, liveTrainingResults);
 
+  const leaderboard = useMemo(() => {
+    const repMap = {};
+
+    simulatorResults.forEach((r) => {
+      const rep = r.assignedRep || "Unknown";
+
+      if (!repMap[rep]) {
+        repMap[rep] = { rep, simScores: [], calls: [] };
+      }
+
+      repMap[rep].simScores.push(Number(r.score?.overall ?? 0));
+    });
+
+    ringCentralCalls.forEach((c) => {
+      const rep = c.repCode || "Unknown";
+
+      if (!repMap[rep]) {
+        repMap[rep] = { rep, simScores: [], calls: [] };
+      }
+
+      repMap[rep].calls.push(c);
+    });
+
+    return Object.values(repMap)
+      .map((rep) => {
+        const avgSim =
+          rep.simScores.length > 0
+            ? Math.round(rep.simScores.reduce((a, b) => a + b, 0) / rep.simScores.length)
+            : 0;
+
+        const callCount = rep.calls.length;
+
+        const connected = rep.calls.filter((c) =>
+          String(c.result || "").toLowerCase().includes("connected")
+        ).length;
+
+        const connectRate = callCount > 0 ? Math.round((connected / callCount) * 100) : 0;
+
+        const performanceScore = Math.round(avgSim * 0.5 + callCount * 2 + connectRate * 0.3);
+
+        return {
+          rep: rep.rep,
+          avgSim,
+          callCount,
+          connectRate,
+          performanceScore,
+        };
+      })
+      .sort((a, b) => b.performanceScore - a.performanceScore);
+  }, [simulatorResults, ringCentralCalls]);
+
+  const coachingAlerts = useMemo(() => {
+    return buildCoachingAlerts(leaderboard);
+  }, [leaderboard]);
+
   const repOptions = useMemo(() => {
     const reps = [
       ...simulatorResults.map((r) => r.assignedRep),
@@ -63,18 +118,12 @@ export default function ManagerView() {
 
     if (sortMode === "lowestScore") {
       list.sort((a, b) => Number(a.score?.overall ?? 0) - Number(b.score?.overall ?? 0));
-    }
-
-    if (sortMode === "highestScore") {
+    } else if (sortMode === "highestScore") {
       list.sort((a, b) => Number(b.score?.overall ?? 0) - Number(a.score?.overall ?? 0));
-    }
-
-    if (sortMode === "newest") {
-      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-
-    if (sortMode === "oldest") {
+    } else if (sortMode === "oldest") {
       list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    } else {
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
     return list;
@@ -86,7 +135,10 @@ export default function ManagerView() {
     if (repFilter !== "ALL") list = list.filter((c) => c.repCode === repFilter);
     if (dealerFilter !== "ALL") list = list.filter((c) => c.dealerName === dealerFilter);
 
-    list.sort((a, b) => new Date(b.startedAt || b.createdAt) - new Date(a.startedAt || a.createdAt));
+    list.sort(
+      (a, b) =>
+        new Date(b.startedAt || b.createdAt) - new Date(a.startedAt || a.createdAt)
+    );
 
     return list;
   }, [ringCentralCalls, repFilter, dealerFilter]);
@@ -112,8 +164,8 @@ export default function ManagerView() {
         )
       : 0;
 
-  const connectedCalls = ringCentralCalls.filter(
-    (call) => String(call.result || "").toLowerCase() === "connected"
+  const connectedCalls = ringCentralCalls.filter((call) =>
+    String(call.result || "").toLowerCase().includes("connected")
   ).length;
 
   const avgCallDuration =
@@ -149,9 +201,7 @@ export default function ManagerView() {
 
         <div className="card">
           <div className="card-label">Avg Training Score</div>
-          <div className="card-value">
-            {reps.length ? `${avgTraining}/100` : "No data"}
-          </div>
+          <div className="card-value">{reps.length ? `${avgTraining}/100` : "No data"}</div>
           <div className="card-note">Across comparison set</div>
         </div>
 
@@ -177,9 +227,7 @@ export default function ManagerView() {
 
         <div className="card">
           <div className="card-label">Avg Call Duration</div>
-          <div className="card-value">
-            {ringCentralCalls.length ? `${avgCallDuration}s` : "No data"}
-          </div>
+          <div className="card-value">{ringCentralCalls.length ? `${avgCallDuration}s` : "No data"}</div>
           <div className="card-note">Imported RingCentral activity</div>
         </div>
       </section>
@@ -272,8 +320,8 @@ export default function ManagerView() {
                 <span>Connected Calls</span>
                 <strong>
                   {
-                    filteredRingCentralCalls.filter(
-                      (call) => String(call.result || "").toLowerCase() === "connected"
+                    filteredRingCentralCalls.filter((call) =>
+                      String(call.result || "").toLowerCase().includes("connected")
                     ).length
                   }
                 </strong>
@@ -291,6 +339,96 @@ export default function ManagerView() {
                     : "No data"}
                 </strong>
               </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Rep Performance Leaderboard</h2>
+                <p className="section-subtext">
+                  Combined score from simulator skill, call activity, and connection rate.
+                </p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Rep</th>
+                    <th>Sim Score</th>
+                    <th>Calls</th>
+                    <th>Connect %</th>
+                    <th>Performance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((rep, index) => (
+                    <tr key={rep.rep}>
+                      <td>#{index + 1}</td>
+                      <td>{rep.rep}</td>
+                      <td>{rep.avgSim}/100</td>
+                      <td>{rep.callCount}</td>
+                      <td>{rep.connectRate}%</td>
+                      <td>
+                        <strong>{rep.performanceScore}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {leaderboard.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No rep data available yet.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Coaching Alerts</h2>
+                <p className="section-subtext">
+                  Auto-generated coaching signals based on simulator practice and RingCentral call activity.
+                </p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Severity</th>
+                    <th>Rep</th>
+                    <th>Type</th>
+                    <th>Recommended Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coachingAlerts.map((alert, index) => (
+                    <tr key={`${alert.rep}-${alert.type}-${index}`}>
+                      <td>
+                        <span className={`status-pill ${getSeverityTone(alert.severity)}`}>
+                          {alert.severity}
+                        </span>
+                      </td>
+                      <td>{alert.rep}</td>
+                      <td>{alert.type}</td>
+                      <td>{alert.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {coachingAlerts.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No coaching alerts right now. Reps are balanced across practice and activity.
+                </p>
+              )}
             </div>
           </div>
 
@@ -351,9 +489,7 @@ export default function ManagerView() {
                     return (
                       <tr key={result.id}>
                         <td>
-                          <span className={`status-pill ${alert.tone}`}>
-                            {alert.label}
-                          </span>
+                          <span className={`status-pill ${alert.tone}`}>{alert.label}</span>
                         </td>
                         <td>{result.assignedRep || "—"}</td>
                         <td>{result.dealerName || "General Scenario"}</td>
@@ -626,6 +762,65 @@ function getCoachingAlert(score, error) {
   return { label: "Strong", tone: "status-positive" };
 }
 
+function buildCoachingAlerts(leaderboard) {
+  const alerts = [];
+
+  leaderboard.forEach((rep) => {
+    if (rep.avgSim > 0 && rep.avgSim < 60) {
+      alerts.push({
+        rep: rep.rep,
+        type: "Skill",
+        severity: "High",
+        message: "Low simulator score. Needs targeted practice and manager coaching.",
+      });
+    }
+
+    if (rep.callCount > 0 && rep.connectRate < 40) {
+      alerts.push({
+        rep: rep.rep,
+        type: "Call Effectiveness",
+        severity: "Medium",
+        message: "Low connection rate. Review call timing, list quality, and opener.",
+      });
+    }
+
+    if (rep.callCount < 3) {
+      alerts.push({
+        rep: rep.rep,
+        type: "Activity",
+        severity: "Medium",
+        message: "Low call volume. Manager should verify activity expectations.",
+      });
+    }
+
+    if (rep.avgSim === 0 && rep.callCount > 0) {
+      alerts.push({
+        rep: rep.rep,
+        type: "Training Gap",
+        severity: "Medium",
+        message: "Rep is making real calls but has no simulator practice recorded.",
+      });
+    }
+
+    if (rep.avgSim > 0 && rep.callCount === 0) {
+      alerts.push({
+        rep: rep.rep,
+        type: "Execution Gap",
+        severity: "High",
+        message: "Rep is practicing but has no real call activity imported.",
+      });
+    }
+  });
+
+  return alerts;
+}
+
+function getSeverityTone(severity) {
+  if (severity === "High") return "status-risk";
+  if (severity === "Medium") return "status-neutral";
+  return "status-positive";
+}
+
 function buildRepComparisonData(liveRep, liveTrainingResults) {
   const liveTrainingAverage = calculateTrainingAverage(liveTrainingResults);
   const liveLevel = getLevelData(liveTrainingResults.length, liveTrainingAverage);
@@ -743,10 +938,7 @@ function getLevelData(trainingCount, averageTrainingScore) {
   let current = LEVELS[0];
 
   for (const level of LEVELS) {
-    if (
-      trainingCount >= level.minSessions &&
-      averageTrainingScore >= level.minAverageScore
-    ) {
+    if (trainingCount >= level.minSessions && averageTrainingScore >= level.minAverageScore) {
       current = level;
     }
   }
