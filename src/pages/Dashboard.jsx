@@ -1,5 +1,6 @@
 import Layout from "../components/layout/Layout";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   buildCompKpiCards,
   buildCompOpportunitySummary,
@@ -58,6 +59,7 @@ const LEVELS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { session } = useAuth();
 
   const accounts = loadAccounts();
   const trainingResults = loadTrainingResults();
@@ -65,14 +67,45 @@ export default function Dashboard() {
   const prizes = loadPrizes();
   const simulatorResults = loadSimulatorResults();
 
+  const displayName = session?.name || repMetrics.repName || "AE User";
+  const repCode = session?.repCode || null;
+
   const summary = buildDashboardSummary(accounts, trainingResults, repMetrics);
   const prizeWidget = buildPrizeWidget(repMetrics, prizes, simulatorResults);
 
   return (
   <Layout title="Dashboard">
 
-    <div style={{ padding: "12px 0" }}>
-      <Link to="/admin/import">Go to Admin Import</Link>
+    <div
+      style={{
+        padding: "14px 18px",
+        borderRadius: 14,
+        background: "rgba(61,220,151,0.07)",
+        border: "1px solid rgba(61,220,151,0.15)",
+        marginBottom: 4,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+      }}
+    >
+      <div>
+        <span style={{ fontWeight: 700, color: "#3ddc97" }}>
+          Welcome back, {displayName.split(" ")[0]}
+        </span>
+        <span style={{ color: "#97a3c6", marginLeft: 8, fontSize: "0.88rem" }}>
+          {repCode ? `Rep Code: ${repCode}` : ""}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <Link to="/training-leaderboard" style={{ color: "#818cf8", fontSize: "0.85rem" }}>
+          Prize Leaderboard
+        </Link>
+        <Link to="/sales-simulator" style={{ color: "#3ddc97", fontSize: "0.85rem" }}>
+          Launch Simulator
+        </Link>
+      </div>
     </div>
 
     <section className="kpi-grid">

@@ -1,5 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 
+import Login from "./pages/Login";
 import AdminImport from "./pages/AdminImport.jsx";
 import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
@@ -12,27 +15,39 @@ import RepMetrics from "./pages/RepMetrics";
 import ManagerView from "./pages/ManagerView";
 import SalesSimulator from "./pages/SalesSimulator";
 import Employees from "./pages/Employees";
+import AdminView from "./pages/AdminView";
+
+function RootRedirect() {
+  const { session } = useAuth();
+  if (!session) return <Navigate to="/login" replace />;
+  if (session.role === "admin") return <Navigate to="/admin-view" replace />;
+  if (session.role === "manager") return <Navigate to="/manager-view" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<RootRedirect />} />
 
-      <Route path="/admin/import" element={<AdminImport />} />
-      
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/sales-simulator" element={<SalesSimulator />} />
-      <Route path="/training" element={<Training />} />
-      <Route path="/accounts" element={<Accounts />} />
-      <Route path="/activity" element={<Activity />} />
-      <Route path="/leaderboard" element={<Leaderboard />} />
-      <Route path="/training-leaderboard" element={<TrainingLeaderboard />} />
-      <Route path="/levels" element={<Levels />} />
-      <Route path="/rep-metrics" element={<RepMetrics />} />
-      <Route path="/manager-view" element={<ManagerView />} />
-      <Route path="/employees" element={<Employees />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/sales-simulator" element={<ProtectedRoute><SalesSimulator /></ProtectedRoute>} />
+      <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+      <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+      <Route path="/activity" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
+      <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+      <Route path="/training-leaderboard" element={<ProtectedRoute><TrainingLeaderboard /></ProtectedRoute>} />
+      <Route path="/levels" element={<ProtectedRoute><Levels /></ProtectedRoute>} />
+      <Route path="/rep-metrics" element={<ProtectedRoute><RepMetrics /></ProtectedRoute>} />
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/manager-view" element={<ProtectedRoute roles={["manager", "admin"]}><ManagerView /></ProtectedRoute>} />
+      <Route path="/employees" element={<ProtectedRoute roles={["manager", "admin"]}><Employees /></ProtectedRoute>} />
+
+      <Route path="/admin-view" element={<ProtectedRoute roles={["admin"]}><AdminView /></ProtectedRoute>} />
+      <Route path="/admin/import" element={<ProtectedRoute roles={["admin"]}><AdminImport /></ProtectedRoute>} />
+
+      <Route path="*" element={<RootRedirect />} />
     </Routes>
   );
 }
