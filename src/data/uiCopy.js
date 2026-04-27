@@ -45,6 +45,5 @@ export const uiCopy = {
       "Compare Sales Executives side by side using the same KPI, training, and compensation logic.",
   },
 
-  footerNote:
-    "Built to help Orion leadership connect rep behavior to measurable dealer growth outcomes.",
+  footerNote: "Orion Sales Performance OS · Powered by GeniusSeeker",
 };

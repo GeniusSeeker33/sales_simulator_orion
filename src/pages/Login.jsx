@@ -87,6 +87,13 @@ export default function Login() {
             <strong>Admin / Executive access:</strong> contact Desiree Thayer for credentials.
           </p>
         </div>
+
+        <div style={styles.poweredBy}>
+          Powered by{" "}
+          <a href="https://geniusseeker.com" target="_blank" rel="noopener noreferrer" style={styles.poweredByLink}>
+            GeniusSeeker
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -204,5 +211,16 @@ const styles = {
     color: "#97a3c6",
     fontSize: "0.78rem",
     lineHeight: 1.55,
+  },
+  poweredBy: {
+    marginTop: 20,
+    textAlign: "center",
+    fontSize: "0.75rem",
+    color: "rgba(151,163,198,0.5)",
+  },
+  poweredByLink: {
+    color: "#3ddc97",
+    textDecoration: "none",
+    fontWeight: 600,
   },
 };
