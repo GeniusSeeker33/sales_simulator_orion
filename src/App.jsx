@@ -29,7 +29,6 @@ export default function App() {
       <Route path="/rep-metrics" element={<RepMetrics />} />
       <Route path="/manager-view" element={<ManagerView />} />
       <Route path="/employees" element={<Employees />} />
-      <Route path="/admin/import" element={<AdminImport />} />
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

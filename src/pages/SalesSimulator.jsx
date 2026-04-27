@@ -378,7 +378,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     <main className="simulator-shell">
       <section className="simulator-hero">
         <div>
-          <p className="simulator-eyebrow">GeniusSeeker Training Lab</p>
+          <p className="simulator-eyebrow">Orion Sales Training Lab</p>
           <h1>AI Customer Sales Simulator</h1>
         </div>
 
