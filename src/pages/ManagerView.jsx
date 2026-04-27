@@ -17,6 +17,14 @@ const LEVELS = [
   { level: 5, title: "Strategic Growth Leader", minSessions: 15, minAverageScore: 90 },
 ];
 
+function loadRingCentralCalls() {
+  try {
+    return JSON.parse(localStorage.getItem("ringCentralCalls") || "[]");
+  } catch {
+    return [];
+  }
+}
+
 export default function ManagerView() {
   const [repFilter, setRepFilter] = useState("ALL");
   const [dealerFilter, setDealerFilter] = useState("ALL");
@@ -25,29 +33,33 @@ export default function ManagerView() {
   const liveRep = loadRepProfile();
   const liveTrainingResults = loadTrainingResults();
   const simulatorResults = loadSimulatorResults();
+  const ringCentralCalls = loadRingCentralCalls();
 
   const reps = buildRepComparisonData(liveRep, liveTrainingResults);
 
   const repOptions = useMemo(() => {
-    const reps = simulatorResults.map((r) => r.assignedRep).filter(Boolean);
+    const reps = [
+      ...simulatorResults.map((r) => r.assignedRep),
+      ...ringCentralCalls.map((c) => c.repCode),
+    ].filter(Boolean);
+
     return ["ALL", ...Array.from(new Set(reps))];
-  }, [simulatorResults]);
+  }, [simulatorResults, ringCentralCalls]);
 
   const dealerOptions = useMemo(() => {
-    const dealers = simulatorResults.map((r) => r.dealerName).filter(Boolean);
+    const dealers = [
+      ...simulatorResults.map((r) => r.dealerName),
+      ...ringCentralCalls.map((c) => c.dealerName),
+    ].filter(Boolean);
+
     return ["ALL", ...Array.from(new Set(dealers))];
-  }, [simulatorResults]);
+  }, [simulatorResults, ringCentralCalls]);
 
   const filteredSimulatorResults = useMemo(() => {
     let list = [...simulatorResults];
 
-    if (repFilter !== "ALL") {
-      list = list.filter((r) => r.assignedRep === repFilter);
-    }
-
-    if (dealerFilter !== "ALL") {
-      list = list.filter((r) => r.dealerName === dealerFilter);
-    }
+    if (repFilter !== "ALL") list = list.filter((r) => r.assignedRep === repFilter);
+    if (dealerFilter !== "ALL") list = list.filter((r) => r.dealerName === dealerFilter);
 
     if (sortMode === "lowestScore") {
       list.sort((a, b) => Number(a.score?.overall ?? 0) - Number(b.score?.overall ?? 0));
@@ -68,13 +80,22 @@ export default function ManagerView() {
     return list;
   }, [simulatorResults, repFilter, dealerFilter, sortMode]);
 
+  const filteredRingCentralCalls = useMemo(() => {
+    let list = [...ringCentralCalls];
+
+    if (repFilter !== "ALL") list = list.filter((c) => c.repCode === repFilter);
+    if (dealerFilter !== "ALL") list = list.filter((c) => c.dealerName === dealerFilter);
+
+    list.sort((a, b) => new Date(b.startedAt || b.createdAt) - new Date(a.startedAt || a.createdAt));
+
+    return list;
+  }, [ringCentralCalls, repFilter, dealerFilter]);
+
   const qualifiedCount = reps.filter(
     (rep) => rep.compSummary.kpiMeasurementActive && rep.compSummary.hitAllKpis
   ).length;
 
-  const inRampCount = reps.filter(
-    (rep) => !rep.compSummary.kpiMeasurementActive
-  ).length;
+  const inRampCount = reps.filter((rep) => !rep.compSummary.kpiMeasurementActive).length;
 
   const avgTraining =
     reps.length > 0
@@ -88,6 +109,20 @@ export default function ManagerView() {
             (sum, result) => sum + Number(result.score?.overall ?? 0),
             0
           ) / simulatorResults.length
+        )
+      : 0;
+
+  const connectedCalls = ringCentralCalls.filter(
+    (call) => String(call.result || "").toLowerCase() === "connected"
+  ).length;
+
+  const avgCallDuration =
+    ringCentralCalls.length > 0
+      ? Math.round(
+          ringCentralCalls.reduce(
+            (sum, call) => sum + Number(call.durationSeconds || call.duration || 0),
+            0
+          ) / ringCentralCalls.length
         )
       : 0;
 
@@ -127,11 +162,25 @@ export default function ManagerView() {
         </div>
 
         <div className="card">
+          <div className="card-label">RingCentral Calls</div>
+          <div className="card-value">{ringCentralCalls.length}</div>
+          <div className="card-note">{connectedCalls} connected calls</div>
+        </div>
+
+        <div className="card">
           <div className="card-label">Avg Simulator Score</div>
           <div className="card-value">
             {simulatorResults.length ? `${avgSimulatorScore}/100` : "No data"}
           </div>
           <div className="card-note">Real saved simulator results</div>
+        </div>
+
+        <div className="card">
+          <div className="card-label">Avg Call Duration</div>
+          <div className="card-value">
+            {ringCentralCalls.length ? `${avgCallDuration}s` : "No data"}
+          </div>
+          <div className="card-note">Imported RingCentral activity</div>
         </div>
       </section>
 
@@ -197,6 +246,51 @@ export default function ManagerView() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Real Calls vs Simulator Practice</h2>
+                <p className="section-subtext">
+                  Compare imported RingCentral call activity against AI simulator practice.
+                </p>
+              </div>
+            </div>
+
+            <div className="detail-grid">
+              <div className="mini-stat">
+                <span>Real Calls Imported</span>
+                <strong>{filteredRingCentralCalls.length}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Simulator Sessions</span>
+                <strong>{filteredSimulatorResults.length}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Connected Calls</span>
+                <strong>
+                  {
+                    filteredRingCentralCalls.filter(
+                      (call) => String(call.result || "").toLowerCase() === "connected"
+                    ).length
+                  }
+                </strong>
+              </div>
+              <div className="mini-stat">
+                <span>Avg Simulator Score</span>
+                <strong>
+                  {filteredSimulatorResults.length
+                    ? `${Math.round(
+                        filteredSimulatorResults.reduce(
+                          (sum, result) => sum + Number(result.score?.overall ?? 0),
+                          0
+                        ) / filteredSimulatorResults.length
+                      )}/100`
+                    : "No data"}
+                </strong>
+              </div>
             </div>
           </div>
 
@@ -287,6 +381,58 @@ export default function ManagerView() {
           <div className="card">
             <div className="section-header">
               <div>
+                <h2>RingCentral Real Call Activity</h2>
+                <p className="section-subtext">
+                  Imported call records from RingCentral by rep, dealer, outcome, and duration.
+                </p>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>Rep</th>
+                    <th>Dealer</th>
+                    <th>Contact</th>
+                    <th>Direction</th>
+                    <th>Result</th>
+                    <th>Duration</th>
+                    <th>Date</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRingCentralCalls.map((call) => (
+                    <tr key={call.id || call.sessionId || `${call.phone}-${call.startedAt}`}>
+                      <td>{call.repCode || "—"}</td>
+                      <td>{call.dealerName || "—"}</td>
+                      <td>{call.contactName || call.phone || "—"}</td>
+                      <td>{call.direction || "—"}</td>
+                      <td>
+                        <span className={`status-pill ${getCallResultTone(call.result)}`}>
+                          {call.result || call.outcome || "—"}
+                        </span>
+                      </td>
+                      <td>{formatDuration(call.durationSeconds || call.duration)}</td>
+                      <td>{formatDate(call.startedAt || call.createdAt)}</td>
+                      <td style={{ maxWidth: 280 }}>{call.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filteredRingCentralCalls.length === 0 && (
+                <p className="coach-text" style={{ marginTop: 16 }}>
+                  No RingCentral calls match the current filters.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
                 <h2>Manager Notes</h2>
                 <p className="section-subtext">
                   What this view helps leadership spot quickly.
@@ -319,16 +465,16 @@ export default function ManagerView() {
               <li>
                 <div className="mission-left">
                   <span className="mission-indicator mission-complete">✓</span>
-                  <span>Who is fully aligned across training, execution, and compensation</span>
+                  <span>Who is practicing account-based AI calls</span>
                 </div>
-                <strong>Readiness</strong>
+                <strong>Simulator</strong>
               </li>
               <li>
                 <div className="mission-left">
                   <span className="mission-indicator mission-complete">✓</span>
-                  <span>Which reps are completing account-based AI practice calls</span>
+                  <span>Who is making real RingCentral calls and creating activity</span>
                 </div>
-                <strong>Simulator</strong>
+                <strong>Calls</strong>
               </li>
             </ul>
           </div>
@@ -411,15 +557,66 @@ export default function ManagerView() {
           </div>
 
           <div className="card">
+            <h2>RingCentral Snapshot</h2>
+            {filteredRingCentralCalls.length ? (
+              <>
+                <div className="feedback-row">
+                  <span>Most Recent Dealer</span>
+                  <strong>{filteredRingCentralCalls[0]?.dealerName || "—"}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Most Recent Result</span>
+                  <strong>{filteredRingCentralCalls[0]?.result || "—"}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Assigned Rep</span>
+                  <strong>{filteredRingCentralCalls[0]?.repCode || "—"}</strong>
+                </div>
+                <p className="coach-text">
+                  {filteredRingCentralCalls[0]?.notes ||
+                    "Recent RingCentral call activity is available for manager review."}
+                </p>
+              </>
+            ) : (
+              <p className="coach-text">
+                RingCentral calls will appear here after call logs are imported.
+              </p>
+            )}
+          </div>
+
+          <div className="card">
             <h2>Leadership View</h2>
             <p className="coach-text">
-              This page is the bridge from individual rep coaching to team-level management. It helps Orion leadership compare where each Sales Executive is in ramp, KPI execution, compensation performance, and AI simulator readiness using one consistent logic model.
+              This page now connects compensation, training, AI simulator practice, and RingCentral call activity into one sales management operating view.
             </p>
           </div>
         </div>
       </section>
     </Layout>
   );
+}
+
+function getCallResultTone(result) {
+  const normalized = String(result || "").toLowerCase();
+
+  if (normalized.includes("connected")) return "status-positive";
+  if (normalized.includes("voicemail")) return "status-neutral";
+  if (normalized.includes("missed") || normalized.includes("failed")) return "status-risk";
+
+  return "status-neutral";
+}
+
+function formatDuration(seconds) {
+  const total = Number(seconds || 0);
+
+  if (!total) return "—";
+
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+
+  if (mins === 0) return `${secs}s`;
+
+  return `${mins}m ${secs}s`;
 }
 
 function getCoachingAlert(score, error) {
