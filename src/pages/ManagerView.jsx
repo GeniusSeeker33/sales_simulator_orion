@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import Layout from "../components/layout/Layout";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadTrainingResults } from "../lib/trainingStore";
@@ -17,11 +18,55 @@ const LEVELS = [
 ];
 
 export default function ManagerView() {
+  const [repFilter, setRepFilter] = useState("ALL");
+  const [dealerFilter, setDealerFilter] = useState("ALL");
+  const [sortMode, setSortMode] = useState("newest");
+
   const liveRep = loadRepProfile();
   const liveTrainingResults = loadTrainingResults();
   const simulatorResults = loadSimulatorResults();
 
   const reps = buildRepComparisonData(liveRep, liveTrainingResults);
+
+  const repOptions = useMemo(() => {
+    const reps = simulatorResults.map((r) => r.assignedRep).filter(Boolean);
+    return ["ALL", ...Array.from(new Set(reps))];
+  }, [simulatorResults]);
+
+  const dealerOptions = useMemo(() => {
+    const dealers = simulatorResults.map((r) => r.dealerName).filter(Boolean);
+    return ["ALL", ...Array.from(new Set(dealers))];
+  }, [simulatorResults]);
+
+  const filteredSimulatorResults = useMemo(() => {
+    let list = [...simulatorResults];
+
+    if (repFilter !== "ALL") {
+      list = list.filter((r) => r.assignedRep === repFilter);
+    }
+
+    if (dealerFilter !== "ALL") {
+      list = list.filter((r) => r.dealerName === dealerFilter);
+    }
+
+    if (sortMode === "lowestScore") {
+      list.sort((a, b) => Number(a.score?.overall ?? 0) - Number(b.score?.overall ?? 0));
+    }
+
+    if (sortMode === "highestScore") {
+      list.sort((a, b) => Number(b.score?.overall ?? 0) - Number(a.score?.overall ?? 0));
+    }
+
+    if (sortMode === "newest") {
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    if (sortMode === "oldest") {
+      list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    }
+
+    return list;
+  }, [simulatorResults, repFilter, dealerFilter, sortMode]);
 
   const qualifiedCount = reps.filter(
     (rep) => rep.compSummary.kpiMeasurementActive && rep.compSummary.hitAllKpis
@@ -33,9 +78,7 @@ export default function ManagerView() {
 
   const avgTraining =
     reps.length > 0
-      ? Math.round(
-          reps.reduce((sum, rep) => sum + rep.trainingAverage, 0) / reps.length
-        )
+      ? Math.round(reps.reduce((sum, rep) => sum + rep.trainingAverage, 0) / reps.length)
       : 0;
 
   const avgSimulatorScore =
@@ -162,15 +205,41 @@ export default function ManagerView() {
               <div>
                 <h2>Simulator Activity</h2>
                 <p className="section-subtext">
-                  Real saved AI practice calls by rep, dealer, score, and coaching note.
+                  Filter real AI practice calls by rep, dealer, score, and coaching risk.
                 </p>
               </div>
+            </div>
+
+            <div className="button-row" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+              <select value={repFilter} onChange={(e) => setRepFilter(e.target.value)}>
+                {repOptions.map((rep) => (
+                  <option key={rep} value={rep}>
+                    {rep === "ALL" ? "All Reps" : rep}
+                  </option>
+                ))}
+              </select>
+
+              <select value={dealerFilter} onChange={(e) => setDealerFilter(e.target.value)}>
+                {dealerOptions.map((dealer) => (
+                  <option key={dealer} value={dealer}>
+                    {dealer === "ALL" ? "All Dealers" : dealer}
+                  </option>
+                ))}
+              </select>
+
+              <select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="lowestScore">Lowest Score First</option>
+                <option value="highestScore">Highest Score First</option>
+              </select>
             </div>
 
             <div className="table-wrap">
               <table className="accounts-table">
                 <thead>
                   <tr>
+                    <th>Alert</th>
                     <th>Rep</th>
                     <th>Dealer</th>
                     <th>Buyer</th>
@@ -181,25 +250,35 @@ export default function ManagerView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {simulatorResults.map((result) => (
-                    <tr key={result.id}>
-                      <td>{result.assignedRep || "—"}</td>
-                      <td>{result.dealerName || "General Scenario"}</td>
-                      <td>{result.primaryBuyer || "—"}</td>
-                      <td>{result.score?.overall ?? 0}/100</td>
-                      <td>{result.difficulty || "—"}</td>
-                      <td>{formatDate(result.createdAt)}</td>
-                      <td style={{ maxWidth: 280 }}>
-                        {result.score?.coachingNote || result.error || "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredSimulatorResults.map((result) => {
+                    const score = Number(result.score?.overall ?? 0);
+                    const alert = getCoachingAlert(score, result.error);
+
+                    return (
+                      <tr key={result.id}>
+                        <td>
+                          <span className={`status-pill ${alert.tone}`}>
+                            {alert.label}
+                          </span>
+                        </td>
+                        <td>{result.assignedRep || "—"}</td>
+                        <td>{result.dealerName || "General Scenario"}</td>
+                        <td>{result.primaryBuyer || "—"}</td>
+                        <td>{score}/100</td>
+                        <td>{result.difficulty || "—"}</td>
+                        <td>{formatDate(result.createdAt)}</td>
+                        <td style={{ maxWidth: 280 }}>
+                          {result.score?.coachingNote || result.error || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
-              {simulatorResults.length === 0 && (
+              {filteredSimulatorResults.length === 0 && (
                 <p className="coach-text" style={{ marginTop: 16 }}>
-                  No simulator sessions saved yet. Run a practice call and end the session to populate this table.
+                  No simulator sessions match the current filters.
                 </p>
               )}
             </div>
@@ -304,23 +383,23 @@ export default function ManagerView() {
 
           <div className="card">
             <h2>Simulator Coaching Snapshot</h2>
-            {simulatorResults.length ? (
+            {filteredSimulatorResults.length ? (
               <>
                 <div className="feedback-row">
                   <span>Most Recent Dealer</span>
-                  <strong>{simulatorResults[0]?.dealerName || "—"}</strong>
+                  <strong>{filteredSimulatorResults[0]?.dealerName || "—"}</strong>
                 </div>
                 <div className="feedback-row">
                   <span>Most Recent Score</span>
-                  <strong>{simulatorResults[0]?.score?.overall ?? 0}/100</strong>
+                  <strong>{filteredSimulatorResults[0]?.score?.overall ?? 0}/100</strong>
                 </div>
                 <div className="feedback-row">
                   <span>Assigned Rep</span>
-                  <strong>{simulatorResults[0]?.assignedRep || "—"}</strong>
+                  <strong>{filteredSimulatorResults[0]?.assignedRep || "—"}</strong>
                 </div>
                 <p className="coach-text">
-                  {simulatorResults[0]?.score?.coachingNote ||
-                    simulatorResults[0]?.error ||
+                  {filteredSimulatorResults[0]?.score?.coachingNote ||
+                    filteredSimulatorResults[0]?.error ||
                     "Recent simulator activity is available for manager review."}
                 </p>
               </>
@@ -341,6 +420,13 @@ export default function ManagerView() {
       </section>
     </Layout>
   );
+}
+
+function getCoachingAlert(score, error) {
+  if (error) return { label: "Review", tone: "status-risk" };
+  if (score < 60) return { label: "Coach", tone: "status-risk" };
+  if (score < 80) return { label: "Watch", tone: "status-neutral" };
+  return { label: "Strong", tone: "status-positive" };
 }
 
 function buildRepComparisonData(liveRep, liveTrainingResults) {
