@@ -26,10 +26,23 @@ const ADMIN_NAV = [
   { to: "/admin/import", label: "Import Data" },
 ];
 
+const PROTECTED_PATHS = ["/manager-view", "/employees", "/admin-view", "/admin/import"];
+
 function getNavItems(role) {
-  if (role === "admin") return ADMIN_NAV;
-  if (role === "manager") return MANAGER_NAV;
-  return REP_NAV;
+  let items;
+  if (role === "admin") items = ADMIN_NAV;
+  else if (role === "manager") items = MANAGER_NAV;
+  else items = REP_NAV;
+
+  // Hard filter: reps can never see manager or admin nav links regardless of array contents
+  if (role !== "admin" && role !== "manager") {
+    items = items.filter((item) => !PROTECTED_PATHS.includes(item.to));
+  }
+  if (role !== "admin") {
+    items = items.filter((item) => item.to !== "/admin-view" && item.to !== "/admin/import");
+  }
+
+  return items;
 }
 
 export default function Layout({ title, children }) {

@@ -44,7 +44,13 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => {
     try {
       const raw = localStorage.getItem(AUTH_SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const stored = JSON.parse(raw);
+      // Always re-derive role from email so stale sessions can't escalate privileges
+      if (stored?.email) {
+        stored.role = resolveRole(stored.email);
+      }
+      return stored;
     } catch {
       return null;
     }
