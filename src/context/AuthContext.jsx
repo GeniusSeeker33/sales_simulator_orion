@@ -5,6 +5,7 @@ const AUTH_SESSION_KEY = "orion-auth-session";
 
 export const ADMIN_EMAILS = [
   "desireethayer1@gmail.com",
+  "desiree@orionwholesaleonline.com",
   "cfo@orionwholesaleonline.com",
   "controller@orionwholesaleonline.com",
   "ceo@orionwholesaleonline.com",
@@ -12,12 +13,14 @@ export const ADMIN_EMAILS = [
 
 export const MANAGER_EMAILS = [
   "desireethayer1@gmail.com",
+  "desiree@orionwholesaleonline.com",
   "chase@orionwholesaleonline.com",
   "don@orionwholesaleonline.com",
 ];
 
 const ADMIN_ACCOUNTS = [
   { email: "desireethayer1@gmail.com", password: "Orion2026!", name: "Desiree Thayer", repCode: null },
+  { email: "desiree@orionwholesaleonline.com", password: "use4orion", name: "Desiree Thayer", repCode: null },
   { email: "cfo@orionwholesaleonline.com", password: "OrionCFO2026!", name: "Chief Financial Officer", repCode: null },
   { email: "controller@orionwholesaleonline.com", password: "OrionCtrl2026!", name: "Controller", repCode: null },
   { email: "ceo@orionwholesaleonline.com", password: "OrionCEO2026!", name: "Chief Executive Officer", repCode: null },
