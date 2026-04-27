@@ -7,39 +7,62 @@ export default function AdminImport() {
   const [json, setJson] = useState("");
 
   const handleImport = async () => {
-    let endpoint = "";
-
-    if (activeTab === "employees") endpoint = "/api/employees/import";
-    if (activeTab === "contacts") endpoint = "/api/contacts/import";
-    if (activeTab === "products") endpoint = "/api/products/import";
-    if (activeTab === "calls") endpoint = "/api/ringcentral/import";
-
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: json,
-      });
-
-      const data = await res.json();
+      const payload = JSON.parse(json);
 
       if (activeTab === "contacts") {
-        const payload = JSON.parse(json);
-        const existing = JSON.parse(
-          localStorage.getItem("importedContacts") || "[]"
-        );
+        const existing = JSON.parse(localStorage.getItem("importedContacts") || "[]");
         const incoming = payload.contacts || [];
 
         localStorage.setItem(
           "importedContacts",
           JSON.stringify([...incoming, ...existing])
         );
+
+        alert(`Imported ${incoming.length} contacts`);
+        return;
       }
 
-      alert(`Imported ${data.count || 0} records`);
+      if (activeTab === "calls") {
+        const existing = JSON.parse(localStorage.getItem("ringCentralCalls") || "[]");
+        const incoming = payload.calls || [];
+
+        localStorage.setItem(
+          "ringCentralCalls",
+          JSON.stringify([...incoming, ...existing])
+        );
+
+        alert(`Imported ${incoming.length} RingCentral calls`);
+        return;
+      }
+
+      if (activeTab === "employees") {
+        const res = await fetch("/api/employees/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: json,
+        });
+
+        const data = await res.json();
+        alert(`Imported ${data.count || 0} employees`);
+        return;
+      }
+
+      if (activeTab === "products") {
+        const existing = JSON.parse(localStorage.getItem("importedProducts") || "[]");
+        const incoming = payload.products || [];
+
+        localStorage.setItem(
+          "importedProducts",
+          JSON.stringify([...incoming, ...existing])
+        );
+
+        alert(`Imported ${incoming.length} products`);
+        return;
+      }
     } catch (err) {
       console.error(err);
-      alert("Import failed. Check console.");
+      alert("Import failed. Check your JSON format.");
     }
   };
 
@@ -142,10 +165,17 @@ function getPlaceholder(tab) {
     return `{
   "calls": [
     {
+      "sessionId": "rc-001",
       "repCode": "CJF",
+      "repName": "Chase Farmer",
       "phone": "8125551234",
-      "duration": 180,
-      "outcome": "Connected"
+      "direction": "Outbound",
+      "result": "Connected",
+      "durationSeconds": 245,
+      "dealerName": "ABC Firearms",
+      "contactName": "John Smith",
+      "startedAt": "2026-04-27T10:15:00Z",
+      "notes": "Discussed hunting inventory and next order."
     }
   ]
 }`;
