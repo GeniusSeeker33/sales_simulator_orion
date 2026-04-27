@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import ControlPanel from "../components/simulator/ControlPanel";
 import { addSimulatorResult } from "../lib/simulatorResultsStore";
+import { loadProducts } from "../lib/productStore";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
 import ScorePanel from "../components/simulator/ScorePanel";
@@ -17,6 +18,26 @@ export default function SalesSimulator() {
   const location = useLocation();
   const account = location.state?.account || null;
 
+  const products = useMemo(() => loadProducts(), []);
+
+  const recommendedProducts = useMemo(() => {
+    if (!products.length) return [];
+
+    const accountCategory = String(account?.categoryToExpand || "").toLowerCase();
+
+    const matches = products.filter((product) => {
+      const category = String(product.category || "").toLowerCase();
+      const recommendedFor = String(product.recommendedFor || "").toLowerCase();
+      return (
+        accountCategory &&
+        (category.includes(accountCategory) ||
+          recommendedFor.includes(accountCategory))
+      );
+    });
+
+    return matches.length ? matches.slice(0, 5) : products.slice(0, 5);
+  }, [products, account]);
+
   const [currentAudio, setCurrentAudio] = useState(null);
   const [isLive, setIsLive] = useState(false);
   const [isEnded, setIsEnded] = useState(false);
@@ -31,6 +52,17 @@ export default function SalesSimulator() {
   const [repLastMessageTime, setRepLastMessageTime] = useState(null);
 
   const baseScenario = getScenario(customerType);
+
+  const inventoryContext = recommendedProducts
+    .map(
+      (p) =>
+        `- ${p.name || p.sku}: ${p.category || "Uncategorized"}, ${p.inventory ?? 0} in stock, dealer price ${formatMoney(
+          p.dealerPrice
+        )}, retail ${formatMoney(p.retailPrice)}, velocity ${
+          p.velocity || "Unknown"
+        }`
+    )
+    .join("\n");
 
   const scenario = account
     ? {
@@ -48,10 +80,19 @@ Current Situation:
 - Strategy: ${account.howWeGetThere || "General growth discussion"}
 - Status: ${account.statusLabel || "Unknown"}
 
+Available Inventory:
+${inventoryContext || "- No imported inventory available yet."}
+
 Personality:
-Act like a real buyer. Be skeptical but realistic. Respond naturally based on the rep’s approach. Do not make the call too easy.`,
+Act like a real buyer. Be skeptical but realistic. Ask questions about margin, sell-through, inventory risk, price, and why this product makes sense for your store. Do not make the call too easy.`,
       }
-    : baseScenario;
+    : {
+        ...baseScenario,
+        opener: `${baseScenario.opener}
+
+Available Inventory:
+${inventoryContext || "- No imported inventory available yet."}`,
+      };
 
   function addMessage(speaker, text) {
     const newMessage = {
@@ -85,9 +126,7 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
     if (!text) return;
 
     try {
-      if (currentAudio) {
-        currentAudio.pause();
-      }
+      if (currentAudio) currentAudio.pause();
 
       const response = await fetch("/api/speak-customer", {
         method: "POST",
@@ -100,17 +139,13 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Speech API failed");
-      }
+      if (!response.ok) throw new Error("Speech API failed");
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
 
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-      };
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
 
       setCurrentAudio(audio);
       audio.play();
@@ -120,9 +155,7 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
   }
 
   function startSession() {
-    if (currentAudio) {
-      currentAudio.pause();
-    }
+    if (currentAudio) currentAudio.pause();
 
     setMessages([]);
     setOrderItems([]);
@@ -157,12 +190,11 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
           orderItems,
           objections,
           account,
+          products: recommendedProducts,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("AI customer reply failed");
-      }
+      if (!response.ok) throw new Error("AI customer reply failed");
 
       const data = await response.json();
       const reply = data.reply || "Tell me more about what you recommend.";
@@ -189,8 +221,7 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
   async function sendRepMessage(text) {
     if (!text.trim() || isCustomerThinking) return;
 
-    const now = Date.now();
-    setRepLastMessageTime(now);
+    setRepLastMessageTime(Date.now());
 
     const repMessage = addMessage("Sales Rep", text.trim());
     const updatedMessages = [...messages, repMessage];
@@ -204,6 +235,22 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
   }
 
   function addOrderItem(item) {
+    setOrderItems((prev) => [...prev, item]);
+  }
+
+  function addProductToOrder(product) {
+    const item = {
+      id: product.id || product.sku || product.name,
+      sku: product.sku || "",
+      name: product.name || "Unnamed Product",
+      category: product.category || "",
+      dealerPrice: product.dealerPrice || 0,
+      retailPrice: product.retailPrice || 0,
+      inventory: product.inventory || 0,
+      quantity: 1,
+      source: product.source || "Imported Inventory",
+    };
+
     setOrderItems((prev) => [...prev, item]);
   }
 
@@ -245,14 +292,14 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
       transcript: messages,
       orderItems,
       objections,
+      productsUsed: orderItems,
+      availableProducts: recommendedProducts,
       error,
     });
   }
 
   async function endSession() {
-    if (currentAudio) {
-      currentAudio.pause();
-    }
+    if (currentAudio) currentAudio.pause();
 
     setIsLive(false);
     setIsEnded(true);
@@ -274,12 +321,11 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
           difficulty,
           scenario,
           account,
+          products: recommendedProducts,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("AI scoring request failed");
-      }
+      if (!response.ok) throw new Error("AI scoring request failed");
 
       const aiScore = await response.json();
 
@@ -351,7 +397,6 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
       {account && (
         <section className="simulator-panel">
           <h3>Live Account Context</h3>
-
           <p>
             <strong>Dealer:</strong> {account.dealerName || "—"}
           </p>
@@ -369,6 +414,54 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
           </p>
         </section>
       )}
+
+      <section className="simulator-panel">
+        <h3>Recommended Inventory</h3>
+
+        {recommendedProducts.length > 0 ? (
+          <div className="table-wrap">
+            <table className="accounts-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Stock</th>
+                  <th>Dealer</th>
+                  <th>Retail</th>
+                  <th>Velocity</th>
+                  <th>Add</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendedProducts.map((product) => (
+                  <tr key={product.id || product.sku || product.name}>
+                    <td>{product.sku || "—"}</td>
+                    <td>{product.name || "—"}</td>
+                    <td>{product.category || "—"}</td>
+                    <td>{product.inventory ?? "—"}</td>
+                    <td>{formatMoney(product.dealerPrice)}</td>
+                    <td>{formatMoney(product.retailPrice)}</td>
+                    <td>{product.velocity || "—"}</td>
+                    <td>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => addProductToOrder(product)}
+                      >
+                        Add
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="coach-text">
+            No imported products found yet. Import products from Admin Import to use real inventory in the simulator.
+          </p>
+        )}
+      </section>
 
       <ControlPanel
         customerTypes={customerTypes}
@@ -414,4 +507,14 @@ Act like a real buyer. Be skeptical but realistic. Respond naturally based on th
       {score && <ScorePanel score={score} />}
     </main>
   );
+}
+
+function formatMoney(value) {
+  if (value === undefined || value === null || value === "") return "—";
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
 }
