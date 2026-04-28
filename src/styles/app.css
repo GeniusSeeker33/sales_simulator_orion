@@ -1133,3 +1133,321 @@ button:hover {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
 }
+
+/* ─── Referral Card (Dashboard) ────────────────────────────────────────────── */
+.referral-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  background: rgba(61, 220, 151, 0.05);
+  border: 1px solid rgba(61, 220, 151, 0.2);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.referral-card-left h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: #e2e8f0;
+}
+.referral-card-bonuses {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.referral-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+.referral-pill.green {
+  background: rgba(61, 220, 151, 0.12);
+  color: #3ddc97;
+  border: 1px solid rgba(61, 220, 151, 0.25);
+}
+.referral-pill.gold {
+  background: rgba(201, 168, 76, 0.12);
+  color: #c9a84c;
+  border: 1px solid rgba(201, 168, 76, 0.25);
+}
+.referral-card-history {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.referral-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: #97a3c6;
+  gap: 12px;
+}
+.referral-status-dot {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.referral-card-earned {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: #97a3c6;
+}
+.referral-card-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── Referral Modal ────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.modal-card {
+  background: #131c30;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 28px;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.modal-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+}
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #97a3c6;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.modal-close-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); }
+.referral-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.referral-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.referral-form-row.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.referral-label {
+  font-size: 0.78rem;
+  color: #97a3c6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.referral-required { color: #ef4444; }
+.referral-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #f4fff8;
+  padding: 9px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.referral-input:focus { outline: none; border-color: rgba(61, 220, 151, 0.4); }
+.referral-input option { background: #1e2a3a; color: #f4fff8; }
+.referral-bonus-strip {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 12px 16px;
+  gap: 0;
+}
+.referral-bonus-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.referral-bonus-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.referral-bonus-label {
+  font-size: 0.72rem;
+  color: #97a3c6;
+  text-align: center;
+}
+.referral-bonus-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255,255,255,0.08);
+}
+.referral-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.referral-success-icon { font-size: 2.5rem; }
+.referral-success h3 { margin: 0; font-size: 1.1rem; }
+.referral-success p { margin: 0; font-size: 0.9rem; color: #97a3c6; }
+
+/* ─── Shoutouts Board ───────────────────────────────────────────────────────── */
+.shoutouts-section {
+  margin-top: 28px;
+  padding: 24px;
+  background: rgba(129, 140, 248, 0.04);
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: 16px;
+}
+.shoutouts-header {
+  margin-bottom: 16px;
+}
+.shoutouts-header h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.shoutout-compose {
+  margin-bottom: 20px;
+}
+.shoutout-textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 10px;
+  color: #f4fff8;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: none;
+  box-sizing: border-box;
+}
+.shoutout-textarea:focus { outline: none; border-color: rgba(129, 140, 248, 0.5); }
+.shoutout-compose-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.shoutout-char-count {
+  font-size: 0.75rem;
+  color: #97a3c6;
+}
+.shoutout-char-count.warning { color: #f59e0b; }
+.shoutout-post-btn { padding: 7px 20px; font-size: 0.85rem; }
+.shoutout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.shoutout-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.shoutout-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.shoutout-author {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #818cf8;
+}
+.shoutout-time {
+  font-size: 0.72rem;
+  color: #97a3c6;
+  white-space: nowrap;
+}
+.shoutout-message {
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  margin: 0;
+  line-height: 1.5;
+}
+.shoutout-reactions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.shoutout-reaction-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.15s;
+}
+.shoutout-reaction-btn:hover { background: rgba(129, 140, 248, 0.12); border-color: rgba(129, 140, 248, 0.3); }
+.shoutout-reaction-count {
+  font-size: 0.78rem;
+  color: #97a3c6;
+}
+
+/* ─── Admin Referral Table ──────────────────────────────────────────────────── */
+.admin-table-wrap {
+  overflow-x: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.admin-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  color: #97a3c6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: #e2e8f0;
+  vertical-align: middle;
+}
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table-sub {
+  font-size: 0.75rem;
+  color: #97a3c6;
+  margin-top: 2px;
+}

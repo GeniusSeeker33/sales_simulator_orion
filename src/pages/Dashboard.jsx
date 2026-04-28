@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Layout from "../components/layout/Layout";
 import GeniusDollarsWidget from "../components/GeniusDollarsWidget";
+import ReferralModal from "../components/ReferralModal";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -15,6 +17,7 @@ import { loadTrainingResults } from "../lib/trainingStore";
 import { loadPrizes, getTodayWinners, getRepEarnings, isNewHireEligible, generateDailyScore, calcTenureMonths, PRIZE_TIERS } from "../lib/prizesStore";
 import { employees, getEmployeeFullName } from "../data/employees";
 import { loadSimulatorResults } from "../lib/simulatorResultsStore";
+import { getReferralsByEmail, calcPendingBonuses, STATUS_LABELS } from "../lib/referralStore";
 
 const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
@@ -61,6 +64,7 @@ const LEVELS = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const { session } = useAuth();
+  const [referralOpen, setReferralOpen] = useState(false);
 
   const accounts = loadAccounts();
   const trainingResults = loadTrainingResults();
@@ -70,6 +74,9 @@ export default function Dashboard() {
 
   const displayName = session?.name || repMetrics.repName || "AE User";
   const repCode = session?.repCode || null;
+
+  const myReferrals = session?.email ? getReferralsByEmail(session.email) : [];
+  const pendingBonus = calcPendingBonuses(myReferrals);
 
   const summary = buildDashboardSummary(accounts, trainingResults, repMetrics);
   const prizeWidget = buildPrizeWidget(repMetrics, prizes, simulatorResults);
@@ -501,6 +508,45 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      {/* Refer & Earn */}
+      <div className="referral-card">
+        <div className="referral-card-left">
+          <h3>Refer &amp; Earn</h3>
+          <p className="gd-sub">Know someone great? Send them our way.</p>
+          <div className="referral-card-bonuses">
+            <span className="referral-pill green">$100 when they start</span>
+            <span className="referral-pill gold">$150 after 90 days</span>
+          </div>
+          {myReferrals.length > 0 && (
+            <div className="referral-card-history">
+              {myReferrals.slice(0, 3).map((r) => (
+                <div key={r.id} className="referral-card-row">
+                  <span>{r.candidateName}</span>
+                  <span className="referral-status-dot" style={{ color: STATUS_LABELS[r.status].color }}>
+                    {STATUS_LABELS[r.status].label}
+                  </span>
+                </div>
+              ))}
+              {pendingBonus > 0 && (
+                <p className="referral-card-earned">
+                  Earned so far: <strong style={{ color: "#3ddc97" }}>${pendingBonus}</strong>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+        <button className="btn-primary referral-card-btn" onClick={() => setReferralOpen(true)}>
+          Refer Someone
+        </button>
+      </div>
+
+      <ReferralModal
+        isOpen={referralOpen}
+        onClose={() => setReferralOpen(false)}
+        submitterEmail={session?.email}
+        submitterName={session?.name}
+      />
 
       <GeniusDollarsWidget email={session?.email} name={session?.name} />
     </Layout>

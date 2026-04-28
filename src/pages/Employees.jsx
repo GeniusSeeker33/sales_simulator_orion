@@ -6,12 +6,16 @@ import {
   getEmployeeFullName,
   sortEmployeesByHireDate,
 } from "../data/employees";
+import { useAuth } from "../context/AuthContext";
+import ReferralModal from "../components/ReferralModal";
 
 export default function Employees() {
+  const { session } = useAuth();
   const [apiEmployees, setApiEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCode, setSelectedCode] = useState(null);
   const [sortMode, setSortMode] = useState("hireDateAsc");
+  const [referralOpen, setReferralOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/employees/list")
@@ -115,7 +119,17 @@ export default function Employees() {
                   Orion employee directory with tenure, location, code, and contact details.
                 </p>
               </div>
+              <button className="btn-primary" style={{ whiteSpace: "nowrap" }} onClick={() => setReferralOpen(true)}>
+                + Refer a Candidate
+              </button>
             </div>
+
+            <ReferralModal
+              isOpen={referralOpen}
+              onClose={() => setReferralOpen(false)}
+              submitterEmail={session?.email}
+              submitterName={session?.name}
+            />
 
             <div className="detail-grid" style={{ marginBottom: 16 }}>
               <div className="mini-stat">

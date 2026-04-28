@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { useAuth } from "../context/AuthContext";
+import ShoutoutsBoard from "../components/ShoutoutsBoard";
 import { buildRepCompSummary, formatCurrency } from "../lib/compEngine";
 import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
@@ -382,6 +383,8 @@ export default function Leaderboard() {
           </div>
         </div>
       </section>
+
+      <ShoutoutsBoard email={session?.email} name={session?.name} />
     </Layout>
   );
 }

@@ -5,6 +5,7 @@ import { employees, getEmployeeFullName } from "../data/employees";
 import { loadSimulatorResults } from "../lib/simulatorResultsStore";
 import { formatCurrency, buildRepCompSummary } from "../lib/compEngine";
 import { loadPrizes } from "../lib/prizesStore";
+import { loadReferrals, advanceReferralStatus, STATUS_LABELS, REFERRAL_BONUSES } from "../lib/referralStore";
 
 const BC_DEMO = {
   monthlyRevenue: 2847392,
@@ -75,11 +76,22 @@ export default function AdminView() {
   const navigate = useNavigate();
   const simulatorResults = loadSimulatorResults();
   const prizes = loadPrizes();
+  const [referrals, setReferrals] = useState(() => loadReferrals().referrals);
+
+  function handleAdvance(id) {
+    advanceReferralStatus(id);
+    setReferrals(loadReferrals().referrals);
+  }
 
   const repPerformance = buildRepPerformanceTable(simulatorResults, prizes);
   const commissionLiability = repPerformance.reduce((s, r) => s + r.estMonthlyComp, 0);
   const netContribution = BC_DEMO.grossProfit - commissionLiability;
   const grossMarginPct = Math.round((BC_DEMO.grossProfit / BC_DEMO.monthlyRevenue) * 100);
+  const totalReferralBonuses = referrals.reduce((sum, r) => {
+    if (r.status === "started") return sum + REFERRAL_BONUSES.start;
+    if (r.status === "completed_90") return sum + REFERRAL_BONUSES.start + REFERRAL_BONUSES.ninetyDay;
+    return sum;
+  }, 0);
 
   return (
     <Layout title="Executive Admin View">
@@ -446,6 +458,80 @@ export default function AdminView() {
                 </div>
               </li>
             </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Referral Program */}
+      <section className="dashboard-main-grid" style={{ marginTop: 24 }}>
+        <div className="dashboard-main-stack">
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <h2>Employee Referral Program</h2>
+                <p className="section-subtext">
+                  $100 when a referred hire starts · $150 after 90 days · ${totalReferralBonuses.toLocaleString()} paid out to date
+                </p>
+              </div>
+            </div>
+
+            {referrals.length === 0 ? (
+              <p className="gd-loading">No referrals submitted yet.</p>
+            ) : (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Candidate</th>
+                      <th>Referred By</th>
+                      <th>Position</th>
+                      <th>Submitted</th>
+                      <th>Status</th>
+                      <th>Bonus Owed</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referrals.map((r) => {
+                      const bonusOwed = r.status === "started" ? REFERRAL_BONUSES.start
+                        : r.status === "completed_90" ? REFERRAL_BONUSES.start + REFERRAL_BONUSES.ninetyDay
+                        : 0;
+                      const canAdvance = r.status !== "completed_90";
+                      const nextLabel = r.status === "submitted" ? "Mark Started" : "Mark 90-Day";
+                      return (
+                        <tr key={r.id}>
+                          <td>
+                            <strong>{r.candidateName}</strong>
+                            {r.candidateEmail && <div className="admin-table-sub">{r.candidateEmail}</div>}
+                          </td>
+                          <td>{r.submittedByName}</td>
+                          <td>{r.positionInterest}</td>
+                          <td>{new Date(r.submittedAt).toLocaleDateString()}</td>
+                          <td>
+                            <span className="status-pill" style={{ background: "transparent", border: `1px solid ${STATUS_LABELS[r.status].color}`, color: STATUS_LABELS[r.status].color }}>
+                              {STATUS_LABELS[r.status].label}
+                            </span>
+                          </td>
+                          <td>
+                            {bonusOwed > 0
+                              ? <span style={{ color: "#3ddc97", fontWeight: 600 }}>${bonusOwed}</span>
+                              : <span className="gd-pool-meta">—</span>
+                            }
+                          </td>
+                          <td>
+                            {canAdvance && (
+                              <button className="btn-secondary" style={{ fontSize: "0.78rem", padding: "4px 10px" }} onClick={() => handleAdvance(r.id)}>
+                                {nextLabel}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </section>
