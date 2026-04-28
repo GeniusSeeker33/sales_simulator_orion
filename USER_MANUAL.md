@@ -10,6 +10,8 @@
 2. [Sales Executive (Rep) Guide](#2-sales-executive-rep-guide)
 3. [Manager Guide](#3-manager-guide)
 4. [Admin Guide](#4-admin-guide)
+5. [Connecting Integrations](#5-connecting-integrations)
+6. [Importing Your Customer List from Excel](#6-importing-your-customer-list-from-excel)
 
 ---
 
@@ -53,6 +55,7 @@ Your home base. At a glance you can see:
 - **Level progress** — how close you are to your next advancement tier
 - **Leaderboard preview** — where you stand versus your teammates
 - **GeniusDollars balance** — your earned currency and options to redeem rewards
+- **Refer & Earn** — submit a candidate referral and track your bonus payouts
 
 ---
 
@@ -159,6 +162,8 @@ How you stack up against your teammates. The composite score is built from five 
 
 By default the board shows the top 4 reps plus your own position. Click **Show All Reps** to see the full roster.
 
+**Team Shoutouts** appear at the bottom of this page. You can post a message (up to 160 characters) to congratulate a teammate, light a fire under them, or just talk a little trash. React to posts with 🔥 👏 💪.
+
 ---
 
 ### Prize Leaderboard
@@ -241,6 +246,26 @@ You can combine GeniusDollars with teammates toward a shared reward.
 - Click **Add My Pledge** on any open pool to contribute your GD
 - You can update or remove your pledge at any time before the pool is funded
 - When the pool reaches 100%, any team member can click **Redeem for Team** to submit the request
+
+---
+
+### Refer & Earn
+
+**Located on your Dashboard and on the Employees page**
+
+Know someone who would be a great fit at Orion? Submit a referral and earn cash bonuses when they join and stick around.
+
+**Bonus structure:**
+- **$100** when the candidate is hired and starts their first day
+- **$150** additional after they complete 90 days
+- **$250 total** per successful hire
+
+**How to submit a referral:**
+1. Click **Refer Someone** on your Dashboard (or **+ Refer a Candidate** on the Employees page)
+2. Enter the candidate's name, email, phone, your relationship to them, and the position they're interested in
+3. Click **Submit Referral**
+
+Your Dashboard will show the status of each referral you've submitted (Submitted → Employee Started → 90-Day Complete) and your total earned bonuses.
 
 ---
 
@@ -332,6 +357,8 @@ The full company roster with search and sort.
 
 **Click any employee** to see their full profile: name, rep code, phone, email, location, hire date, and tenure.
 
+The **+ Refer a Candidate** button at the top of this page opens the referral form — convenient when you're looking at the roster and thinking about who else would fit the team.
+
 ---
 
 ## 4. Admin Guide
@@ -357,7 +384,7 @@ Monthly financial snapshot:
 - Total commission liability (estimated pay across all reps)
 - Net contribution after commissions
 
-*This data comes from your Microsoft Business Central integration. If BC is not connected, demo figures are shown.*
+*This data comes from your Microsoft Business Central integration. If BC is not connected, demo figures are shown. See [Section 5](#5-connecting-integrations) for setup instructions.*
 
 ---
 
@@ -371,7 +398,7 @@ Shows whether your three data integrations are active:
 | FedEx | Shipment tracking (pending, in-transit, delivered, exceptions) |
 | RingCentral | Auto-sync call logs |
 
-Each integration shows its current status and what environment variables are needed to connect it. Contact your developer to configure these.
+See [Section 5](#5-connecting-integrations) for step-by-step setup instructions for Business Central and RingCentral.
 
 ---
 
@@ -390,43 +417,342 @@ Tracks the daily cash prizes paid out through the new hire leaderboard program s
 
 ---
 
+#### Employee Referral Program
+
+A table of every candidate referral submitted by your team showing:
+- Candidate name and contact info
+- Who referred them and when
+- Current status (Submitted / Employee Started / 90-Day Complete)
+- Bonus owed to the referring rep
+
+**To advance a referral's status:**
+1. Find the referral in the table
+2. Click **Mark Started** when the candidate's first day arrives (triggers the $100 bonus)
+3. Click **Mark 90-Day** when they complete 90 days (triggers the $150 bonus)
+
+The total bonuses paid to date are shown in the section header.
+
+---
+
 ### Admin Import
 
 **Path: Click the Import Data button on the Admin View page**
 
-Use this to load data into the app. There are four tabs:
+Use this to load data into the app. There are four tabs. See [Section 6](#6-importing-your-customer-list-from-excel) for a detailed guide on importing your customer list from Excel.
 
 ---
 
 #### Employees Tab
 
-Paste a JSON array of employee records. Each record needs: `firstName`, `lastName`, `email`, `code`, `location`, `phone`, `hireDate`.
+Paste a JSON array of employee records to add new hires to the roster.
 
-*Note: The core employee roster is built into the app. Use this only when onboarding a large batch of new hires.*
+Each record needs:
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "email": "jane@orionwholesaleonline.com",
+  "code": "JDO",
+  "location": "IN",
+  "phone": "812-555-0100",
+  "hireDate": "2026-05-01"
+}
+```
+
+*Note: The core employee roster is built into the app. Use this tab when adding new hires after launch.*
 
 ---
 
 #### Contacts Tab
 
-Paste dealer/prospect contact data. These populate the Accounts page. Each record needs: `dealerName`, `primaryBuyer`, `phone`, `email`, `assignedRep`, `territory`, `location`, `lastMonthSales`, `currentMonthTarget`.
+Paste your dealer and prospect data. These records populate the Accounts page for every rep.
+
+Each record needs:
+
+```json
+{
+  "accountName": "ABC Firearms",
+  "contactName": "John Smith",
+  "phone": "8125551234",
+  "email": "john@abc.com",
+  "assignedRep": "CJF",
+  "territory": "IN",
+  "status": "Prospect"
+}
+```
+
+See [Section 6](#6-importing-your-customer-list-from-excel) for how to export this from Excel.
 
 ---
 
 #### Products Tab
 
-Paste your SKU catalog. This gives the AI Simulator product context when reps build orders. Each record needs: `sku`, `name`, `category`, `price`, `unit`.
+Paste your SKU catalog. This gives the AI Simulator product context when reps build orders during practice calls.
+
+Each record needs:
+
+```json
+{
+  "sku": "AMMO-9MM-115",
+  "name": "9mm 115gr FMJ Ammo",
+  "category": "Ammunition",
+  "brand": "Orion Select",
+  "dealerPrice": 12.99,
+  "retailPrice": 17.99,
+  "inventory": 500
+}
+```
 
 ---
 
 #### RingCentral Calls Tab
 
-Paste exported call log data from RingCentral. Each record needs: `repCode`, `direction`, `result`, `duration`, `dealerName`, `date`, `notes`.
+Paste exported call log data from RingCentral. Each record needs:
+
+```json
+{
+  "sessionId": "rc-001",
+  "repCode": "CJF",
+  "repName": "Chase Farmer",
+  "direction": "Outbound",
+  "result": "Connected",
+  "durationSeconds": 245,
+  "dealerName": "ABC Firearms",
+  "contactName": "John Smith",
+  "startedAt": "2026-04-27T10:15:00Z",
+  "notes": "Discussed hunting inventory and next order."
+}
+```
 
 ---
 
 #### Load Demo Data
 
-Click **Load Demo Data** on any tab to populate the app with sample records so you can see how each section looks before entering real data.
+Click **Load Demo Data** on any tab to populate the app with sample records. Use this to preview how each section looks before loading real data.
+
+---
+
+## 5. Connecting Integrations
+
+Both integrations below require someone with access to your company's cloud accounts (Azure for Business Central, RingCentral for call logs). Once the credentials are obtained, they get added to the Vercel project as environment variables — your GeniusSeeker contact can do this in about 5 minutes.
+
+---
+
+### Connecting Microsoft Business Central
+
+Business Central uses **OAuth 2.0** to authenticate. You'll need access to the Azure portal and Business Central admin.
+
+**Step 1 — Register an app in Azure**
+
+1. Go to [portal.azure.com](https://portal.azure.com) and sign in with your Microsoft 365 admin account
+2. Search for **App registrations** and click **New registration**
+3. Name it something like `Orion GeniusSeeker Integration`
+4. Leave redirect URI blank and click **Register**
+5. On the app overview page, copy the **Application (client) ID** — this is your `BC_CLIENT_ID`
+6. Copy the **Directory (tenant) ID** — this is your `BC_TENANT_ID`
+
+**Step 2 — Create a client secret**
+
+1. In the app registration, go to **Certificates & secrets → New client secret**
+2. Give it a description and set an expiration (12 or 24 months recommended)
+3. Click **Add** and immediately copy the **Value** — this is your `BC_CLIENT_SECRET`
+   *(You cannot retrieve it again after leaving this screen)*
+
+**Step 3 — Grant Business Central API permissions**
+
+1. Still in the app registration, go to **API permissions → Add a permission**
+2. Choose **Dynamics 365 Business Central**
+3. Select **Delegated permissions** and check **Financials.ReadWrite.All** (or **API.ReadWrite.All**)
+4. Click **Grant admin consent** so the permission takes effect immediately
+
+**Step 4 — Find your BC environment and company details**
+
+1. Open Business Central and go to **Settings → About Business Central**
+2. Note your **Environment name** (usually `production`) — this is `BC_ENVIRONMENT`
+3. Go to **Settings → Company Information**
+4. In the URL bar, copy the GUID after `/companies/` — this is `BC_COMPANY_ID`
+
+**Step 5 — Add the credentials to Vercel**
+
+Provide these five values to your GeniusSeeker contact to add to the Vercel project:
+
+| Variable | Where to find it |
+|----------|-----------------|
+| `BC_TENANT_ID` | Azure → App registration overview |
+| `BC_CLIENT_ID` | Azure → App registration overview |
+| `BC_CLIENT_SECRET` | Azure → Certificates & secrets |
+| `BC_ENVIRONMENT` | Business Central → About page |
+| `BC_COMPANY_ID` | Business Central URL (GUID after `/companies/`) |
+
+Once added, the Admin View financial section will show live data instead of demo figures. The integration status indicator will turn green.
+
+---
+
+### Connecting RingCentral
+
+RingCentral uses **JWT authentication** for server-to-server calls — no user login required after setup.
+
+**Step 1 — Create a RingCentral app**
+
+1. Go to [developers.ringcentral.com](https://developers.ringcentral.com) and sign in with your RingCentral admin account
+2. Click **Create App**
+3. Select **Server/Bot** as the app type and **No User Interface**
+4. Name it `Orion GeniusSeeker Integration`
+5. Under **OAuth Scopes**, add the following:
+   - `ReadCallLog`
+   - `Analytics`
+   - `ReadAccounts`
+6. Click **Create**
+
+**Step 2 — Get your app credentials**
+
+1. On the app dashboard, copy the **Client ID** — this is `RINGCENTRAL_CLIENT_ID`
+2. Copy the **Client Secret** — this is `RINGCENTRAL_CLIENT_SECRET`
+
+**Step 3 — Generate a JWT credential**
+
+1. Go to **App Settings → Credentials**
+2. Click **Create JWT**
+3. Select your admin account as the associated user
+4. Copy the JWT string — this is `RINGCENTRAL_JWT_TOKEN`
+
+**Step 4 — Find your account ID**
+
+For most accounts this is simply `~` (a tilde), which tells RingCentral to use the main account. Only change this if you have a multi-account setup.
+
+**Step 5 — Add the credentials to Vercel**
+
+Provide these four values to your GeniusSeeker contact:
+
+| Variable | Where to find it |
+|----------|-----------------|
+| `RINGCENTRAL_CLIENT_ID` | RingCentral app dashboard |
+| `RINGCENTRAL_CLIENT_SECRET` | RingCentral app dashboard |
+| `RINGCENTRAL_JWT_TOKEN` | App Settings → Credentials → Create JWT |
+| `RINGCENTRAL_ACCOUNT_ID` | Use `~` unless instructed otherwise |
+
+Once added, the Manager View will auto-sync call logs from RingCentral instead of relying on manual imports. The integration status indicator will update accordingly.
+
+**In the meantime — manual import:**
+You can export call logs from RingCentral as a CSV and convert them to JSON for manual import via the RingCentral Calls tab in Admin Import. See your RingCentral admin portal under **Analytics → Call Log → Export**.
+
+---
+
+## 6. Importing Your Customer List from Excel
+
+The Accounts page is populated from your customer/dealer contact list. Here is how to get your existing Excel data into the app.
+
+---
+
+### Step 1 — Prepare your Excel file
+
+Make sure your spreadsheet has these column headers. The names must match exactly (they are not case-sensitive):
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `accountName` | Dealer or store name | ABC Firearms |
+| `contactName` | Primary buyer's name | John Smith |
+| `phone` | Contact phone number | 8125551234 |
+| `email` | Contact email | john@abc.com |
+| `assignedRep` | Rep's code (3 letters) | CJF |
+| `territory` | State abbreviation | IN |
+| `status` | Account status | Active or Prospect |
+
+**Optional columns** (include if you have them — they will appear in the account detail view):
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `lastMonthSales` | Last month's revenue from this account | 18500 |
+| `currentMonthTarget` | This month's revenue target | 22000 |
+| `location` | City or region | Evansville |
+| `notes` | Any free-form notes | Strong repeat buyer |
+
+---
+
+### Step 2 — Convert your Excel file to JSON
+
+The import tab accepts JSON format. The easiest way to convert:
+
+**Option A — Google Sheets (recommended)**
+1. Open your Excel file in Google Sheets
+2. Click **Extensions → Apps Script**
+3. Paste this script and click Run:
+
+```javascript
+function exportToJson() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function(h, j) { row[h] = data[i][j]; });
+    rows.push(row);
+  }
+  Logger.log(JSON.stringify({ contacts: rows }, null, 2));
+}
+```
+
+4. Open **View → Logs** — your JSON will be there. Copy it.
+
+**Option B — Free online converter**
+Search for "CSV to JSON converter" and use any reputable free tool. Upload your file, download the JSON, then wrap the result in `{ "contacts": [ ... ] }`.
+
+**Option C — Save as CSV and convert manually**
+1. In Excel: **File → Save As → CSV**
+2. Use a tool like Notepad++ or VS Code to view the CSV
+3. Format it manually if your list is small (under 20 accounts)
+
+---
+
+### Step 3 — Paste into the Import Hub
+
+Your JSON should look like this:
+
+```json
+{
+  "contacts": [
+    {
+      "accountName": "ABC Firearms",
+      "contactName": "John Smith",
+      "phone": "8125551234",
+      "email": "john@abc.com",
+      "assignedRep": "CJF",
+      "territory": "IN",
+      "status": "Active",
+      "lastMonthSales": 18500,
+      "currentMonthTarget": 22000
+    },
+    {
+      "accountName": "XYZ Guns",
+      "contactName": "Mike Johnson",
+      "phone": "5025550192",
+      "email": "mike@xyzguns.com",
+      "assignedRep": "JMF",
+      "territory": "IN",
+      "status": "Active",
+      "lastMonthSales": 12000,
+      "currentMonthTarget": 15000
+    }
+  ]
+}
+```
+
+1. Go to **Admin View → Import Data → Contacts tab**
+2. Paste your JSON into the text area
+3. Click **Import contacts**
+4. The app will confirm how many records were imported
+5. Go to the **Accounts** page — your dealers will now appear in the list
+
+---
+
+### Tips
+
+- **Rep codes must match exactly.** If a rep code in your spreadsheet doesn't match a code in the system (e.g., `CJF` vs `cjf`), the account will still import but won't filter correctly by rep. Check your codes in the Employees page.
+- **Importing again replaces existing records.** If you import a second time, the new records are merged with the existing ones — duplicates may appear. Contact your GeniusSeeker admin if you need to reset the account list.
+- **Phone numbers don't need formatting.** Plain digits work fine: `8125551234` or `(812) 555-1234` both import correctly.
+- **Large lists import fine.** There is no row limit — if you have 500 accounts, paste the full JSON and import it all at once.
 
 ---
 
@@ -449,14 +775,20 @@ Click **Load Demo Data** on any tab to populate the app with sample records so y
 | Complete a written training | Training |
 | Update a dealer's growth plan | Accounts |
 | See where I rank on the team | Leaderboard |
+| Post a shoutout to teammates | Leaderboard → Team Shoutouts |
 | Check my prize earnings | Prize Leaderboard |
 | View my level and what's next | Level Progress |
 | Redeem or pool GeniusDollars | Dashboard → GeniusDollars section |
+| Refer a candidate | Dashboard → Refer & Earn, or Employees page |
+| Track my referral bonuses | Dashboard → Refer & Earn card |
 | See my team's coaching alerts | Manager View |
 | Review a rep's simulator sessions | Manager View → Simulator Activity |
 | Record today's prize winners | Prize Leaderboard or Manager View |
+| Advance a referral status | Admin View → Referral Program |
 | See company financials | Admin View |
-| Import data | Admin View → Import Data |
+| Import customer data | Admin View → Import Data → Contacts |
+| Connect Business Central | Section 5 of this manual |
+| Connect RingCentral | Section 5 of this manual |
 
 ---
 
