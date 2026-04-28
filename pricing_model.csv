@@ -1,0 +1,61 @@
+SECTION 1: COMPETITIVE BENCHMARK
+Tool,Price ($/seat/mo),Minimum Seats,Annual Contract,Implementation Fee,AI Roleplay,Industry-Specific,Backend Persistence,Notes
+Mindtickle,$50–100,50+,Yes,$10k–50k+,Yes,No,Yes,"Full platform: content + coaching + readiness + CRM integration"
+Second Nature,$30–50,10+,Yes,$5k–15k,Yes,No,Yes,"Closest direct competitor; AI roleplay with manager review"
+Hyperbound,$30–50,10+,Yes,$3k–10k,Yes,No,Yes,"Outbound/SDR focus; voice-first; different use case"
+Quantified AI,$40–60,20+,Yes,$5k–20k,Yes,No,Yes,"Video-based; enterprise; more validated scoring"
+Allego,$40–80,25+,Yes,$10k–30k,Yes,No,Yes,"Video coaching + training library; Salesforce-native"
+Brainshark,$30–50,25+,Yes,$5k–15k,Yes,No,Yes,"Content-first; coaching secondary; established"
+Highspot (training),$40–60,50+,Yes,$15k–50k+,No,No,Yes,"Content enablement with training module; training is secondary"
+SalesSimulator Orion (current state),$0 (not yet priced),N/A,No,$0,Yes,No,No,"AI loop works; no backend; no firearms-specific content; voice mode unverified"
+
+SECTION 2: PRICE POINTS WITH RATIONALE
+Tier,Price ($/seat/mo),Annual Rev at 40 seats,Annual Rev at 100 seats,Annual Rev at 500 seats,Requirements to Justify,Achievable When
+Floor,$15,$7200,$18000,$90000,"Fix API calls; product works reliably","Today — after bug fix"
+Conservative Target,$25,$12000,$30000,$150000,"Real backend; real product catalog; 1 paying customer","3–4 months post-fix"
+Market Target,$35,$16800,$42000,$210000,"Backend + product catalog + 1 customer case study","6–9 months"
+Premium,$50,$24000,$60000,$300000,"ATF/FFL compliance module; validated scoring; 3+ customers","12–18 months"
+Ceiling,$75,$36000,$90000,$450000,"Third-party validation; call recording integration; measurable ramp improvement","18–24 months"
+
+SECTION 3: SENSITIVITY MODEL — MONTHLY RECURRING REVENUE
+Scenario,Seats,Price/Seat/Mo,Monthly Rev,Annual Rev,Notes
+Orion pilot only (unpaid),40,$0,$0,$0,"Current realistic state"
+Orion converts to paid (floor),40,$15,$600,$7200,"First revenue milestone"
+Orion converts to paid (target),40,$30,$1200,$14400,"Original pricing assumption"
+Orion + 1 distributor (floor),80,$15,$1200,$14400,"Two customers"
+Orion + 1 distributor (target),80,$30,$2400,$28800,"Two customers at target"
+Orion + 2 distributors (target),120,$30,$3600,$43200,"Three customers"
+1 spirits distributor license (500 seats),500,$20,$10000,$120000,"Single enterprise licensing deal"
+Full firearms vertical (20% penetration),500,$30,$15000,$180000,"Realistic ceiling for firearms-only"
+Firearms + one adjacent vertical,1000,$30,$30000,$360000,"Requires adjacent vertical product work"
+Full licensing play (3 verticals),3000,$25,$75000,$900000,"Platform business; requires capital"
+
+SECTION 4: WHAT $30/SEAT/MONTH CURRENTLY BUYS VS. COMPETITORS
+Capability,SalesSimulator Orion (Today),Second Nature (at $30+),Hyperbound (at $30+)
+AI roleplay conversations,Yes (works — uses OpenAI Responses API),Yes (working),Yes (working)
+Call scoring,Yes (works — AI scores on 5 dimensions),Yes,Yes
+Voice mode,Uncertain (untested endpoint),Yes,Yes (native)
+Manager dashboard,Yes (seeded data),Yes (real data),Yes (real data)
+Rep progress tracking,Browser-only localStorage,Persistent cloud,Persistent cloud
+Admin controls / user management,Hardcoded credentials,Real admin panel,Real admin panel
+Custom scenario creation,No,Yes,Yes
+CRM integration,No,Yes (Salesforce/HubSpot),Limited
+Industry-specific content,No,No,No
+Firearms/regulatory content,No,No,No
+Backend database,No,Yes,Yes
+SSO / enterprise auth,No,Yes,Yes
+Mobile support,No,Yes,Partial
+Data export / reporting,No,Yes,Limited
+
+VERDICT: At $30/seat/month today SalesSimulator is overpriced relative to working alternatives.
+At $30/seat/month with a real backend and real product catalog it is competitive.
+At $30/seat/month with an ATF/FFL compliance module it is underpriced.
+
+SECTION 5: BUILD INVESTMENT VS. PRICE UNLOCK
+Feature to Build,Est. Dev Time,Est. Cost (contractor),Price Unlock,ARR Impact at 40 seats
+Fix broken API calls,2 hours,<$500,$15/seat enabled,$7200/yr
+Real database (Supabase),2–3 weeks,$3000–$6000,$25/seat enabled,$12000/yr
+Real product catalog integration,1–2 weeks,$2000–$4000,"$30/seat enabled, better retention",$14400/yr
+ATF/FFL compliance module,2–3 months (needs SME),$20000–$40000,$50/seat enabled,$24000/yr
+Call recording integration (RingCentral),3–4 weeks,$5000–$10000,"$60/seat enabled, closes ROI loop",$28800/yr
+Validated scoring + calibration,2–3 months,$15000–$30000,$75/seat enabled,$36000/yr
