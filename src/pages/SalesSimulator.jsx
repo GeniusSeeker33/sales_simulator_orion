@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import ControlPanel from "../components/simulator/ControlPanel";
 import { addSimulatorResult } from "../lib/simulatorResultsStore";
 import { loadProducts } from "../lib/productStore";
+import { calcGlcd, logGlcd } from "../lib/geniusDollars";
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
 import ScorePanel from "../components/simulator/ScorePanel";
@@ -16,6 +18,7 @@ import RealtimeVoicePanel from "../components/simulator/RealtimeVoicePanel";
 
 export default function SalesSimulator() {
   const location = useLocation();
+  const { session } = useAuth();
   const account = location.state?.account || null;
 
   const products = useMemo(() => loadProducts(), []);
@@ -52,6 +55,7 @@ export default function SalesSimulator() {
   const [orderItems, setOrderItems] = useState([]);
   const [objections, setObjections] = useState([]);
   const [score, setScore] = useState(null);
+  const [glcdEarned, setGlcdEarned] = useState(null);
   const [isScoring, setIsScoring] = useState(false);
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
   const [repLastMessageTime, setRepLastMessageTime] = useState(null);
@@ -168,6 +172,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     setOrderItems([]);
     setObjections([]);
     setScore(null);
+    setGlcdEarned(null);
     setIsScoring(false);
     setIsCustomerThinking(false);
     setRepLastMessageTime(Date.now());
@@ -351,6 +356,18 @@ ${inventoryContext || "- No imported inventory available yet."}`,
 
       setScore(finalScore);
       saveSimulatorSession(finalScore);
+
+      if (session?.email && finalScore.overall > 0) {
+        const earned = calcGlcd(finalScore.overall, difficulty);
+        setGlcdEarned(earned);
+        logGlcd({
+          actor: session.email,
+          amount: earned,
+          overallScore: finalScore.overall,
+          difficulty,
+          sessionRef: `orion-sim-${Date.now()}`,
+        });
+      }
     } catch (error) {
       console.error(error);
 
@@ -513,7 +530,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         </section>
       )}
 
-      {score && <ScorePanel score={score} />}
+      {score && <ScorePanel score={score} glcdEarned={glcdEarned} />}
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import Layout from "../components/layout/Layout";
+import GeniusDollarsWidget from "../components/GeniusDollarsWidget";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -500,6 +501,8 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      <GeniusDollarsWidget email={session?.email} />
     </Layout>
   );
 }

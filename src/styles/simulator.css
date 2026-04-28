@@ -263,3 +263,30 @@
   background-color: #13241c;
   color: #f4fff8;
 }
+
+/* ── GeniusDollars earned banner (ScorePanel) ── */
+.glcd-earned-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+.glcd-coin {
+  font-size: 1.6rem;
+  color: #c9a84c;
+  flex-shrink: 0;
+}
+.glcd-earned-banner strong {
+  color: #c9a84c;
+  font-size: 1.05rem;
+  display: block;
+}
+.glcd-sub {
+  font-size: 0.8rem;
+  color: #97a3c6;
+  display: block;
+}
