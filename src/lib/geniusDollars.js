@@ -1,5 +1,5 @@
-const IDENTITY_SERVICE_URL =
-  import.meta.env.VITE_IDENTITY_SERVICE_URL || "https://identity.geniusseeker.com";
+// Empty string = same origin (Vercel deployment). Override via VITE_IDENTITY_SERVICE_URL for local dev.
+const IDENTITY_SERVICE_URL = import.meta.env.VITE_IDENTITY_SERVICE_URL ?? "";
 
 export function calcGlcd(overallScore, difficulty) {
   let base = 50;
