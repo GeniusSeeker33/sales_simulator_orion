@@ -945,3 +945,191 @@ button:hover {
   color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
+
+/* Pool Section */
+.gd-pool-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.gd-pool-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.gd-pool-toggle-btn {
+  white-space: nowrap;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+}
+.gd-pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.gd-pool-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gd-pool-card.funded {
+  border-color: rgba(61, 220, 151, 0.4);
+  background: rgba(61, 220, 151, 0.04);
+}
+.gd-pool-card.redeemed {
+  opacity: 0.55;
+  padding: 10px 14px;
+}
+.gd-pool-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.gd-pool-reward-name {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 2px;
+}
+.gd-pool-meta {
+  font-size: 0.78rem;
+  color: #97a3c6;
+}
+.gd-pool-cost-badge {
+  font-size: 0.78rem;
+  color: #c9a84c;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.gd-pool-note {
+  font-size: 0.82rem;
+  color: #97a3c6;
+  font-style: italic;
+  margin: 0;
+}
+.gd-pool-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.gd-pool-bar-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gd-pool-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c9a84c, #e2c06e);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.gd-pool-card.funded .gd-pool-bar-fill {
+  background: linear-gradient(90deg, #3ddc97, #6ee7b7);
+}
+.gd-pool-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #97a3c6;
+}
+.gd-funded-label {
+  color: #3ddc97;
+  font-weight: 600;
+}
+.gd-pool-pledges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gd-pledge-chip {
+  font-size: 0.76rem;
+  background: rgba(201, 168, 76, 0.08);
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  border-radius: 20px;
+  padding: 3px 10px;
+  color: #c9a84c;
+}
+.gd-pool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+.gd-pool-pledge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.gd-pool-cancel-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+  margin-left: auto;
+}
+.gd-pool-cancel-btn:hover {
+  color: #ef4444;
+}
+.gd-pool-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.gd-pool-label {
+  font-size: 0.78rem;
+  color: #97a3c6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gd-pool-select,
+.gd-pool-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #f4fff8;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  width: 100%;
+}
+.gd-pool-select:focus,
+.gd-pool-input:focus {
+  outline: none;
+  border-color: rgba(201, 168, 76, 0.5);
+}
+.gd-pool-select option {
+  background: #1e2a3a;
+  color: #f4fff8;
+}
+.gd-pool-input-sm {
+  width: 110px;
+  padding: 6px 10px;
+}
+.gd-pool-redeemed-section {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}

@@ -502,7 +502,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <GeniusDollarsWidget email={session?.email} />
+      <GeniusDollarsWidget email={session?.email} name={session?.name} />
     </Layout>
   );
 }
