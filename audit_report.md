@@ -1,7 +1,7 @@
 # Technical Audit Report — Sales Simulator Orion
 **Date:** 2026-04-27  
 **Auditor:** Claude Code (Senior Technical Review)  
-**Purpose:** Executive pitch readiness — $30/user/month deal with Orion leadership
+**Purpose:** Executive pitch readiness — $30/user/month deal
 
 ---
 

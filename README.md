@@ -1,16 +1,29 @@
-# React + Vite
+# GeniusSeeker Sales Simulator — Orion Edition
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI-powered sales training simulator for Orion Sales Executives.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### 1. Install dependencies
+npm install
 
-## React Compiler
+### 2. Configure environment
+Create a `.env` file:
+OPENAI_API_KEY=your-openai-api-key-here
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 3. Run locally (with API functions)
+npm install -g vercel
+vercel link
+vercel dev
 
-## Expanding the ESLint configuration
+### 4. Deploy to Vercel
+vercel deploy --prod
+# Add OPENAI_API_KEY in Vercel Dashboard → Settings → Environment Variables
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Features
+- AI customer simulation (text + voice) using GPT-4.1-mini
+- 8 customer personas × 4 difficulty levels
+- AI-powered call scoring on 5 dimensions
+- Manager view with RingCentral integration
+- Rep progression levels (L1–L5)
+- Bulk import: employees, contacts, products, call logs
