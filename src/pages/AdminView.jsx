@@ -83,8 +83,12 @@ export default function AdminView() {
     setReferrals(loadReferrals().referrals);
   }
 
-  const repPerformance = buildRepPerformanceTable(simulatorResults, prizes);
+  const repPerformance = buildRepPerformanceTable(simulatorResults);
   const commissionLiability = repPerformance.reduce((s, r) => s + r.estMonthlyComp, 0);
+  const rampCount = repPerformance.filter((r) => r.kpiStatus === "ramp").length;
+  const onTrackCount = repPerformance.filter((r) => r.kpiStatus === "on-track").length;
+  const atRiskCount = repPerformance.filter((r) => r.kpiStatus === "at-risk").length;
+  const kpiActiveCount = onTrackCount + atRiskCount;
   const netContribution = BC_DEMO.grossProfit - commissionLiability;
   const grossMarginPct = Math.round((BC_DEMO.grossProfit / BC_DEMO.monthlyRevenue) * 100);
   const totalReferralBonuses = referrals.reduce((sum, r) => {
@@ -153,7 +157,87 @@ export default function AdminView() {
         </div>
       </section>
 
-      <section className="dashboard-main-grid">
+      <section style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="section-header">
+            <div>
+              <h2>Rep Fleet Status</h2>
+              <p className="section-subtext">
+                KPI readiness across {repPerformance.length} active reps — estimated from available data
+              </p>
+            </div>
+            <button className="btn-secondary" onClick={() => navigate("/employees")}>
+              View All Employees
+            </button>
+          </div>
+
+          <div className="detail-grid" style={{ marginBottom: 20 }}>
+            <div className="mini-stat">
+              <span>Total Reps</span>
+              <strong>{repPerformance.length}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>In Ramp Period</span>
+              <strong style={{ color: "#97a3c6" }}>{rampCount}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>KPI Active</span>
+              <strong>{kpiActiveCount}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>On Track</span>
+              <strong style={{ color: "#3ddc97" }}>{onTrackCount}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>At Risk</span>
+              <strong style={{ color: "#f87171" }}>{atRiskCount}</strong>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table className="accounts-table">
+              <thead>
+                <tr>
+                  <th>Rep</th>
+                  <th>Code</th>
+                  <th>KPI Status</th>
+                  <th>Measured Mo</th>
+                  <th>Est. Revenue</th>
+                  <th>Est. Monthly Comp</th>
+                  <th>Simulator Sessions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {repPerformance.map((rep) => (
+                  <tr key={rep.code}>
+                    <td><strong>{rep.name}</strong></td>
+                    <td style={{ opacity: 0.7 }}>{rep.code}</td>
+                    <td>
+                      {rep.kpiStatus === "ramp" && (
+                        <span className="status-pill status-neutral">Ramp Period</span>
+                      )}
+                      {rep.kpiStatus === "on-track" && (
+                        <span className="status-pill status-positive">On Track</span>
+                      )}
+                      {rep.kpiStatus === "at-risk" && (
+                        <span className="status-pill status-risk">At Risk</span>
+                      )}
+                    </td>
+                    <td style={{ opacity: 0.7 }}>
+                      {rep.kpiMeasurementActive ? `Month ${rep.measuredMonth}` : "—"}
+                    </td>
+                    <td style={{ color: "#3ddc97" }}>{formatCurrency(rep.estRevenue)}</td>
+                    <td style={{ color: "#f59e0b" }}>{formatCurrency(rep.estMonthlyComp)}</td>
+                    <td>{rep.simSessions}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-main-grid" style={{ marginTop: 16 }}>
         <div className="dashboard-main-stack">
           <div className="card">
             <div className="section-header">
@@ -218,46 +302,6 @@ export default function AdminView() {
                           )}
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="section-header">
-              <div>
-                <h2>Rep Revenue & Commission Summary</h2>
-                <p className="section-subtext">
-                  Company-wide performance view — revenue contribution, estimated commission, and training investment per rep.
-                </p>
-              </div>
-            </div>
-
-            <div className="table-wrap">
-              <table className="accounts-table">
-                <thead>
-                  <tr>
-                    <th>Rep</th>
-                    <th>Code</th>
-                    <th>Months Employed</th>
-                    <th>Est. Revenue (BC)</th>
-                    <th>Simulator Sessions</th>
-                    <th>Est. Monthly Comp</th>
-                    <th>Commission Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {repPerformance.map((rep) => (
-                    <tr key={rep.code}>
-                      <td><strong>{rep.name}</strong></td>
-                      <td style={{ opacity: 0.7 }}>{rep.code}</td>
-                      <td>{rep.tenureMonths} mo</td>
-                      <td style={{ color: "#3ddc97" }}>{formatCurrency(rep.estRevenue)}</td>
-                      <td>{rep.simSessions}</td>
-                      <td style={{ color: "#f59e0b" }}>{formatCurrency(rep.estMonthlyComp)}</td>
-                      <td style={{ opacity: 0.7 }}>{rep.commissionRate}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -539,7 +583,7 @@ export default function AdminView() {
   );
 }
 
-function buildRepPerformanceTable(simulatorResults, prizes) {
+function buildRepPerformanceTable(simulatorResults) {
   const today = new Date();
 
   return employees.map((emp) => {
@@ -554,13 +598,21 @@ function buildRepPerformanceTable(simulatorResults, prizes) {
 
     const hash = emp.code.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 1);
     const estRevenue = 40000 + (Math.abs(hash) % 300000);
+    const estCaptures = 10 + (Math.abs(hash) % 15);
+    const estCustomersSold = 20 + (Math.abs(hash) % 80);
 
     const compSummary = buildRepCompSummary({
       startDate: emp.hireDate,
       revenue: estRevenue,
-      captures: 10 + (Math.abs(hash) % 15),
-      customersSold: 20 + (Math.abs(hash) % 80),
+      captures: estCaptures,
+      customersSold: estCustomersSold,
     });
+
+    const kpiStatus = !compSummary.kpiMeasurementActive
+      ? "ramp"
+      : compSummary.hitAllKpis
+      ? "on-track"
+      : "at-risk";
 
     return {
       code: emp.code,
@@ -570,6 +622,10 @@ function buildRepPerformanceTable(simulatorResults, prizes) {
       estRevenue,
       estMonthlyComp: compSummary.totalEstimatedCompensation,
       commissionRate: compSummary.revenueCommissionRateLabel || "—",
+      kpiStatus,
+      measuredMonth: compSummary.measuredMonth,
+      kpiMeasurementActive: compSummary.kpiMeasurementActive,
+      hitAllKpis: compSummary.hitAllKpis,
     };
   }).sort((a, b) => b.estRevenue - a.estRevenue);
 }
