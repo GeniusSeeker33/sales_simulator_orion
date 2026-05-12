@@ -43,6 +43,7 @@ export default function ManagerView() {
   const [repFilter, setRepFilter] = useState("ALL");
   const [dealerFilter, setDealerFilter] = useState("ALL");
   const [sortMode, setSortMode] = useState("newest");
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
 
   const liveRep = loadRepProfile();
   const liveTrainingResults = loadTrainingResults();
@@ -170,6 +171,14 @@ export default function ManagerView() {
 
     return list;
   }, [simulatorResults, repFilter, dealerFilter, sortMode]);
+
+  const selectedSession = useMemo(() => {
+    if (filteredSimulatorResults.length === 0) return null;
+    const found = filteredSimulatorResults.find(
+      (r) => r.id === selectedSessionId
+    );
+    return found || filteredSimulatorResults[0];
+  }, [filteredSimulatorResults, selectedSessionId]);
 
   const filteredRingCentralCalls = useMemo(() => {
     let list = [...ringCentralCalls];
@@ -479,7 +488,7 @@ export default function ManagerView() {
               <div>
                 <h2>Simulator Activity</h2>
                 <p className="section-subtext">
-                  Filter real AI practice calls by rep, dealer, score, and coaching risk.
+                  Filter real AI practice calls by rep, dealer, score, and coaching risk. Click any row to drill into the full session detail below.
                 </p>
               </div>
             </div>
@@ -527,9 +536,14 @@ export default function ManagerView() {
                   {filteredSimulatorResults.map((result) => {
                     const score = Number(result.score?.overall ?? 0);
                     const alert = getCoachingAlert(score, result.error);
+                    const isSelected = result.id === selectedSession?.id;
 
                     return (
-                      <tr key={result.id}>
+                      <tr
+                        key={result.id}
+                        className={isSelected ? "row-active" : ""}
+                        onClick={() => setSelectedSessionId(result.id)}
+                      >
                         <td>
                           <span className={`status-pill ${alert.tone}`}>{alert.label}</span>
                         </td>
@@ -555,6 +569,10 @@ export default function ManagerView() {
               )}
             </div>
           </div>
+
+          {selectedSession && (
+            <SessionDetailCard session={selectedSession} />
+          )}
 
           <div className="card">
             <div className="section-header">
@@ -844,25 +862,29 @@ export default function ManagerView() {
           </div>
 
           <div className="card">
-            <h2>Simulator Coaching Snapshot</h2>
-            {filteredSimulatorResults.length ? (
+            <h2>Selected Simulator Session</h2>
+            {selectedSession ? (
               <>
                 <div className="feedback-row">
-                  <span>Most Recent Dealer</span>
-                  <strong>{filteredSimulatorResults[0]?.dealerName || "—"}</strong>
+                  <span>Dealer</span>
+                  <strong>{selectedSession.dealerName || "—"}</strong>
                 </div>
                 <div className="feedback-row">
-                  <span>Most Recent Score</span>
-                  <strong>{filteredSimulatorResults[0]?.score?.overall ?? 0}/100</strong>
+                  <span>Score</span>
+                  <strong>{selectedSession.score?.overall ?? 0}/100</strong>
                 </div>
                 <div className="feedback-row">
                   <span>Assigned Rep</span>
-                  <strong>{filteredSimulatorResults[0]?.assignedRep || "—"}</strong>
+                  <strong>{selectedSession.assignedRep || "—"}</strong>
+                </div>
+                <div className="feedback-row">
+                  <span>Date</span>
+                  <strong>{formatDate(selectedSession.createdAt)}</strong>
                 </div>
                 <p className="coach-text">
-                  {filteredSimulatorResults[0]?.score?.coachingNote ||
-                    filteredSimulatorResults[0]?.error ||
-                    "Recent simulator activity is available for manager review."}
+                  {selectedSession.score?.coachingNote ||
+                    selectedSession.error ||
+                    "Click any row in the Simulator Activity table to drill into a different session."}
                 </p>
               </>
             ) : (
@@ -909,6 +931,224 @@ export default function ManagerView() {
         </div>
       </section>
     </Layout>
+  );
+}
+
+function SessionDetailCard({ session }) {
+  const score = session.score || {};
+  const transcript = Array.isArray(session.transcript) ? session.transcript : [];
+  const orderItems = Array.isArray(session.orderItems) ? session.orderItems : [];
+  const objections = Array.isArray(session.objections) ? session.objections : [];
+  const strengths = Array.isArray(score.strengths) ? score.strengths : [];
+  const missed = Array.isArray(score.missedOpportunities)
+    ? score.missedOpportunities
+    : [];
+  const betterPhrases = Array.isArray(score.betterPhrases)
+    ? score.betterPhrases
+    : [];
+
+  return (
+    <div className="card">
+      <div className="section-header">
+        <div>
+          <h2>Session Detail</h2>
+          <p className="section-subtext">
+            {session.assignedRep || "Unassigned rep"} •{" "}
+            {session.dealerName || "General Scenario"} •{" "}
+            {formatDate(session.createdAt)} • Difficulty:{" "}
+            {session.difficulty || "—"} • Customer:{" "}
+            {session.customerType || "—"}
+          </p>
+        </div>
+      </div>
+
+      <div className="detail-grid" style={{ marginBottom: 16 }}>
+        <div className="mini-stat">
+          <span>Overall</span>
+          <strong>{score.overall ?? 0}/100</strong>
+        </div>
+        <div className="mini-stat">
+          <span>Discovery</span>
+          <strong>{score.discovery ?? 0}/100</strong>
+        </div>
+        <div className="mini-stat">
+          <span>Order Building</span>
+          <strong>{score.orderBuilding ?? 0}/100</strong>
+        </div>
+        <div className="mini-stat">
+          <span>Objection Handling</span>
+          <strong>{score.objectionHandling ?? 0}/100</strong>
+        </div>
+        <div className="mini-stat">
+          <span>Closing</span>
+          <strong>{score.closing ?? 0}/100</strong>
+        </div>
+      </div>
+
+      {score.coachingNote && (
+        <div className="insight-box" style={{ marginBottom: 16 }}>
+          <div className="card-label">Coach Note</div>
+          <p className="coach-text" style={{ marginTop: 6 }}>
+            {score.coachingNote}
+          </p>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div className="card-label">Strengths</div>
+          {strengths.length ? (
+            <ul style={{ paddingLeft: 18, marginTop: 6 }}>
+              {strengths.map((s, i) => (
+                <li key={i} className="coach-text">
+                  {s}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="coach-text">—</p>
+          )}
+        </div>
+
+        <div>
+          <div className="card-label">Missed Opportunities</div>
+          {missed.length ? (
+            <ul style={{ paddingLeft: 18, marginTop: 6 }}>
+              {missed.map((m, i) => (
+                <li key={i} className="coach-text">
+                  {m}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="coach-text">—</p>
+          )}
+        </div>
+      </div>
+
+      {betterPhrases.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="card-label">Suggested Better Phrases</div>
+          <ul style={{ paddingLeft: 18, marginTop: 6 }}>
+            {betterPhrases.map((b, i) => (
+              <li key={i} className="coach-text">
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div className="card-label">
+            Order Built ({orderItems.length})
+          </div>
+          {orderItems.length ? (
+            <div className="table-wrap">
+              <table className="accounts-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderItems.map((item, i) => (
+                    <tr key={item.id || i}>
+                      <td>{item.sku || "—"}</td>
+                      <td>{item.name || "—"}</td>
+                      <td>{item.quantity ?? 1}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="coach-text">No order items built in this session.</p>
+          )}
+        </div>
+
+        <div>
+          <div className="card-label">
+            Objections Raised ({objections.length})
+          </div>
+          {objections.length ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 6,
+              }}
+            >
+              {objections.map((o, i) => (
+                <span key={i} className="status-pill status-neutral">
+                  {o}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="coach-text">No objections logged.</p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="card-label">Transcript ({transcript.length} turns)</div>
+        {transcript.length ? (
+          <div
+            style={{
+              maxHeight: 360,
+              overflowY: "auto",
+              marginTop: 8,
+              padding: 12,
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: 8,
+            }}
+          >
+            {transcript.map((msg, i) => (
+              <div key={i} style={{ marginBottom: 10 }}>
+                <strong
+                  style={{
+                    color:
+                      msg.speaker === "Sales Rep"
+                        ? "#4ade80"
+                        : msg.speaker === "AI Customer"
+                        ? "#818cf8"
+                        : "inherit",
+                  }}
+                >
+                  {msg.speaker || "—"}:
+                </strong>{" "}
+                <span className="coach-text" style={{ display: "inline" }}>
+                  {msg.text || ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="coach-text">
+            No transcript captured for this session.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
