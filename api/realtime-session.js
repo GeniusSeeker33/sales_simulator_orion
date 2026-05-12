@@ -27,6 +27,14 @@ export default async function handler(req, res) {
         ? "echo"
         : customerType === "angry-customer"
         ? "verse"
+        : customerType === "indecisive-buyer"
+        ? "shimmer"
+        : customerType === "defer-to-partner"
+        ? "ballad"
+        : customerType === "ffl-compliance-dealer"
+        ? "ash"
+        : customerType === "loyal-to-competitor"
+        ? "verse"
         : "alloy";
 
     const instructions = `

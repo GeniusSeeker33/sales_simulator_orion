@@ -128,6 +128,14 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         return "onyx";
       case "price-shopper":
         return "echo";
+      case "indecisive-buyer":
+        return "shimmer";
+      case "defer-to-partner":
+        return "ballad";
+      case "ffl-compliance-dealer":
+        return "ash";
+      case "loyal-to-competitor":
+        return "verse";
       default:
         return "alloy";
     }

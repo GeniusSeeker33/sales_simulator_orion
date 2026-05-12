@@ -39,6 +39,26 @@ export const customerTypes = [
     label: "Angry / Frustrated Customer",
     description: "Has a complaint and needs the rep to de-escalate before selling.",
   },
+  {
+    id: "indecisive-buyer",
+    label: "Indecisive Buyer",
+    description: "Hedges every decision and asks the rep to choose for them. Trains confident recommending.",
+  },
+  {
+    id: "defer-to-partner",
+    label: "Defer-to-Partner Buyer",
+    description: "\"I need to check with my partner / store manager.\" Trains reps to surface the real decision-maker early.",
+  },
+  {
+    id: "ffl-compliance-dealer",
+    label: "FFL Compliance-Focused Dealer",
+    description: "Worried about ATF paperwork, transfer delays, and audit risk. Trains regulatory fluency.",
+  },
+  {
+    id: "loyal-to-competitor",
+    label: "Loyal-to-Competitor Dealer",
+    description: "Long-standing relationship with another distributor. Trains wedge-selling and displacement.",
+  },
 ];
 
 export const difficultyLevels = [
@@ -74,6 +94,10 @@ export const scenarioGoals = [
   "Build a hunting-season bundle",
   "Build a women’s self-defense package",
   "Build an optics/accessories add-on order",
+  "Displace a competitor distributor",
+  "Walk through a compliance-sensitive order",
+  "Re-engage a deferring buyer with a firm next step",
+  "Lead an indecisive buyer to a clear order",
 ];
 
 export const customerScenarios = {
@@ -258,6 +282,115 @@ export const customerScenarios = {
       "What are you going to do differently this time?",
       "I might be open to talking, but I’m not placing a big order today.",
       "Give me a small next step that rebuilds confidence.",
+    ],
+  },
+
+  "indecisive-buyer": {
+    opener:
+      "Honestly, I keep going back and forth on this. What do you think I should do?",
+    hiddenNeed:
+      "Wants the rep to lead with one clear recommendation, not a menu. Will commit if the rep is confident and ties the choice to a specific business reason.",
+    budget: "$1,500–$3,000",
+    likelyObjections: [
+      "analysis paralysis",
+      "fear of wrong choice",
+      "too many options",
+    ],
+    buyingSignals: [
+      "Asks the rep to choose for them",
+      "Asks what other dealers are doing",
+      "Echoes back the rep’s confidence",
+    ],
+    successCondition:
+      "Rep avoids stacking options, makes one specific recommendation backed by a clear reason (turn rate, margin, demand), and asks for the commitment directly.",
+    replies: [
+      "I’m not sure. What would you do in my shoes?",
+      "There are too many options. Just tell me which one.",
+      "If I pick wrong, I’m stuck with dead inventory.",
+      "What are other stores like mine doing?",
+      "Okay, I trust you on this. Build it.",
+    ],
+  },
+
+  "defer-to-partner": {
+    opener:
+      "I like what I’m hearing, but I’ll need to run this by my partner before I commit to anything.",
+    hiddenNeed:
+      "‘Checking with my partner’ is often a stall. Needs the rep to surface the real decision-maker early and either loop them in now or lock in a firm, specific follow-up before the call ends.",
+    budget: "$2,000–$4,000",
+    likelyObjections: [
+      "absent decision-maker",
+      "need to check first",
+      "soft commitment",
+    ],
+    buyingSignals: [
+      "Mentions partner / spouse / manager early",
+      "Asks the rep to send details for later review",
+      "Softens when the rep includes the partner in the plan",
+    ],
+    successCondition:
+      "Rep identifies who else needs to weigh in, loops them in by phone/email or sets a specific follow-up day and time, and leaves the call with a concrete next step rather than ‘think about it.’",
+    replies: [
+      "I’ll need to talk this over with my partner first.",
+      "Can you send me the details so I can show my manager?",
+      "My business partner handles the inventory side. I’d hate to commit without him.",
+      "Let me think about it and get back to you next week.",
+      "Okay, but I’m not putting this through until I check with them.",
+    ],
+  },
+
+  "ffl-compliance-dealer": {
+    opener:
+      "Before we get into product, I want to know how you handle compliance. My last ATF audit was rough and I had a distributor that did not have their paperwork tight.",
+    hiddenNeed:
+      "Needs reassurance that the distributor’s compliance is solid — 4473 handling on transfers, eForm 3 turnaround, serialized inventory tracking — before any product conversation. Once compliance fears are addressed, becomes a high-value, repeat buyer.",
+    budget: "$3,000–$6,000",
+    likelyObjections: [
+      "compliance risk",
+      "paperwork errors",
+      "audit history",
+      "transfer delays",
+    ],
+    buyingSignals: [
+      "Asks about compliance contacts or process",
+      "Mentions past audit findings",
+      "Asks for documentation in writing",
+    ],
+    successCondition:
+      "Rep demonstrates real working knowledge of FFL transfers, ATF requirements, and the distributor’s compliance backbone, then ties product recommendations to clean, well-documented SKUs and a smooth transfer process.",
+    replies: [
+      "Walk me through how your eForm 3 transfers work. How fast are they usually processed?",
+      "I do not want serialized inventory showing up without a clean paper trail.",
+      "My last distributor missed a detail on a 4473 and I caught hell from ATF. What do you do differently?",
+      "Is there a real compliance contact I can call if something goes sideways?",
+      "Okay, if compliance is solid, then let’s talk product.",
+    ],
+  },
+
+  "loyal-to-competitor": {
+    opener:
+      "I’ve been with my current distributor for twelve years. They take care of me. What could you possibly offer that they don’t?",
+    hiddenNeed:
+      "The loyalty is mostly inertia plus a few dependable contacts. Needs the rep to surface a specific weakness — a stockout, a slow ship, a missing SKU, a rep turnover — and offer a low-risk way to test Orion on that gap, without bashing the competitor.",
+    budget: "$1,500–$3,500 test order if a real wedge is found",
+    likelyObjections: [
+      "existing relationship",
+      "inertia",
+      "no reason to switch",
+    ],
+    buyingSignals: [
+      "Mentions a recent stockout or backorder from current distributor",
+      "Complains about a rep change or service drop-off",
+      "Asks about a SKU the competitor does not carry",
+    ],
+    successCondition:
+      "Rep asks open-ended discovery questions, surfaces a specific weakness at the competitor, offers a small low-risk test order around that gap, and does not attack the competitor directly.",
+    replies: [
+      "Why would I move my business? They have not given me a reason to leave.",
+      "Their rep knows my store inside and out. You do not.",
+      "Last time I tried a second distributor, I just had more paperwork to deal with.",
+      "What do you carry that they don’t?",
+      "Okay, I’ll try one small order on a SKU they kept backordering. Prove yourselves.",
     ],
   },
 };
