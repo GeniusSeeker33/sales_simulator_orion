@@ -20,9 +20,9 @@ export default async function handler(req, res) {
 
     const voice =
       customerType === "friendly-repeat-buyer"
-        ? "nova"
+        ? "coral"
         : customerType === "expert-buyer"
-        ? "onyx"
+        ? "sage"
         : customerType === "price-shopper"
         ? "echo"
         : customerType === "angry-customer"

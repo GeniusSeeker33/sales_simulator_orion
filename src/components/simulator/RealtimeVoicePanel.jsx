@@ -99,7 +99,7 @@ export default function RealtimeVoicePanel({
       await peerConnection.setLocalDescription(offer);
 
       const realtimeResponse = await fetch(
-        "https://api.openai.com/v1/realtime/calls?model=gpt-realtime",
+        "https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
         {
           method: "POST",
           headers: {
