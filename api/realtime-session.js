@@ -74,6 +74,11 @@ Rules:
             model: "gpt-realtime",
             instructions,
             audio: {
+              input: {
+                transcription: {
+                  model: "whisper-1",
+                },
+              },
               output: {
                 voice,
               },

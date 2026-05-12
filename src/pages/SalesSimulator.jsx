@@ -311,8 +311,12 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     });
   }
 
-  async function endSession() {
+  async function endSession(overrideTranscript = null) {
     if (currentAudio) currentAudio.pause();
+
+    const transcriptToScore = Array.isArray(overrideTranscript)
+      ? overrideTranscript
+      : messages;
 
     setIsLive(false);
     setIsEnded(true);
@@ -327,7 +331,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          transcript: messages,
+          transcript: transcriptToScore,
           orderItems,
           objections,
           customerType,
@@ -506,6 +510,8 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         customerType={customerType}
         difficulty={difficulty}
         scenario={scenario}
+        addMessage={addMessage}
+        onCallEnded={endSession}
       />
 
       <section className="simulator-workspace">

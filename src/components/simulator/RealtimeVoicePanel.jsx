@@ -4,6 +4,8 @@ export default function RealtimeVoicePanel({
   customerType,
   difficulty,
   scenario,
+  addMessage,
+  onCallEnded,
 }) {
   const [isConnected, setIsConnected] = useState(false);
   const [status, setStatus] = useState("Ready for live voice.");
@@ -15,12 +17,14 @@ export default function RealtimeVoicePanel({
   const remoteAudioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  const transcriptRef = useRef([]);
 
   async function startRealtimeCall() {
     try {
       setStatus("Creating live AI customer session...");
       setRecordingUrl(null);
       recordedChunksRef.current = [];
+      transcriptRef.current = [];
 
       const sessionResponse = await fetch("/api/realtime-session", {
         method: "POST",
@@ -89,6 +93,32 @@ export default function RealtimeVoicePanel({
       dataChannel.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+
+          if (
+            message.type ===
+              "conversation.item.input_audio_transcription.completed" &&
+            message.transcript
+          ) {
+            const item = {
+              speaker: "Sales Rep",
+              text: message.transcript,
+              timestamp: new Date().toISOString(),
+            };
+            transcriptRef.current.push(item);
+            addMessage?.("Sales Rep", message.transcript);
+          } else if (
+            message.type === "response.audio_transcript.done" &&
+            message.transcript
+          ) {
+            const item = {
+              speaker: "AI Customer",
+              text: message.transcript,
+              timestamp: new Date().toISOString(),
+            };
+            transcriptRef.current.push(item);
+            addMessage?.("AI Customer", message.transcript);
+          }
+
           console.log("Realtime event:", message);
         } catch {
           console.log("Realtime message:", event.data);
@@ -180,6 +210,9 @@ export default function RealtimeVoicePanel({
   }
 
   function stopRealtimeCall() {
+    const wasConnected = isConnected;
+    const finalTranscript = transcriptRef.current.slice();
+
     stopRecording();
 
     dataChannelRef.current?.close();
@@ -199,7 +232,13 @@ export default function RealtimeVoicePanel({
     mediaRecorderRef.current = null;
 
     setIsConnected(false);
-    setStatus("Live voice stopped.");
+
+    if (wasConnected && finalTranscript.length > 0 && onCallEnded) {
+      setStatus("Live voice stopped. Scoring your call...");
+      onCallEnded(finalTranscript);
+    } else {
+      setStatus("Live voice stopped.");
+    }
   }
 
   return (
