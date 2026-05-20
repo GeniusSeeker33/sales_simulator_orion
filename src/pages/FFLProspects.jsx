@@ -10,6 +10,7 @@ import {
   searchFFL,
 } from "../lib/fflStore";
 import { loadAccounts, saveAccounts } from "../lib/accountStore";
+import { loadClaims, setClaim, clearClaim } from "../lib/fflClaimsStore";
 import {
   employees,
   getEmployeeByCode,
@@ -35,9 +36,25 @@ export default function FFLProspects() {
 
   const [totalFFLs, setTotalFFLs] = useState(null);
   const [stateCounts, setStateCounts] = useState([]);
-  const [importedIds, setImportedIds] = useState(() =>
-    new Set(loadAccounts().map((a) => a.id))
+  const [accountsSnapshot, setAccountsSnapshot] = useState(() => loadAccounts());
+  const [claims, setClaims] = useState(() => loadClaims());
+  // Track which row is open in inline-edit mode so only one dropdown shows at a time.
+  const [editingFflId, setEditingFflId] = useState(null);
+  const importedIds = useMemo(
+    () => new Set(accountsSnapshot.map((a) => a.id)),
+    [accountsSnapshot]
   );
+  // Normalized dealer-name → assignedRep code, built once from the Orion account book.
+  // Used to answer "does an Orion rep already own this FFL?" by name match (no shared key exists).
+  const ownerByName = useMemo(() => {
+    const map = new Map();
+    for (const a of accountsSnapshot) {
+      if (!a.assignedRep) continue;
+      const key = normalizeDealerName(a.dealerName);
+      if (key && !map.has(key)) map.set(key, { repCode: a.assignedRep, dealerName: a.dealerName });
+    }
+    return map;
+  }, [accountsSnapshot]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -115,8 +132,9 @@ export default function FFLProspects() {
     const newAccount = fflToAccount(ffl, {
       assignedRepCode: assignRep || null,
     });
-    saveAccounts([newAccount, ...accounts]);
-    setImportedIds(new Set([...importedIds, accountId]));
+    const next = [newAccount, ...accounts];
+    saveAccounts(next);
+    setAccountsSnapshot(next);
     const repEmp = assignRep ? getEmployeeByCode(assignRep) : null;
     const repName = repEmp ? `${getEmployeeFullName(repEmp)} (${assignRep})` : assignRep;
     showToast(
@@ -124,6 +142,21 @@ export default function FFLProspects() {
         ? `Added "${newAccount.dealerName}" → ${repName}`
         : `Added "${newAccount.dealerName}" to Accounts`
     );
+  };
+
+  const handleClaim = (ffl, repCode) => {
+    const next = setClaim(ffl.id, repCode);
+    setClaims(next);
+    setEditingFflId(null);
+    const repLabel = repLabelFor(repCode);
+    showToast(`Claimed "${ffl.businessName || ffl.licenseeName}" → ${repLabel}`);
+  };
+
+  const handleClearClaim = (ffl) => {
+    const next = clearClaim(ffl.id);
+    setClaims(next);
+    setEditingFflId(null);
+    showToast("Cleared claim", "neutral");
   };
 
   const handlePracticeCall = (ffl) => {
@@ -303,6 +336,7 @@ export default function FFLProspects() {
                 <th>State</th>
                 <th>Phone</th>
                 <th>Type</th>
+                <th>Rep Owner</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -310,6 +344,7 @@ export default function FFLProspects() {
               {rows.map((ffl) => {
                 const accountId = `ffl-${ffl.id}`;
                 const alreadyImported = importedIds.has(accountId);
+                const owner = lookupOwner(ffl, ownerByName, claims);
                 return (
                   <tr key={ffl.id}>
                     <td>
@@ -328,6 +363,18 @@ export default function FFLProspects() {
                     <td>{ffl.premiseState || "—"}</td>
                     <td>{ffl.phone || "—"}</td>
                     <td>{ffl.licenseType}</td>
+                    <td>
+                      <RepOwnerCell
+                        ffl={ffl}
+                        owner={owner}
+                        isEditing={editingFflId === ffl.id}
+                        repOptions={repOptions}
+                        onStartEdit={() => setEditingFflId(ffl.id)}
+                        onCancelEdit={() => setEditingFflId(null)}
+                        onClaim={(repCode) => handleClaim(ffl, repCode)}
+                        onClear={() => handleClearClaim(ffl)}
+                      />
+                    </td>
                     <td>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button
@@ -418,6 +465,172 @@ export default function FFLProspects() {
         </section>
       )}
     </Layout>
+  );
+}
+
+// Strip suffixes, punctuation, and casing so "VELOCITY AMMUNITION SALES LLC"
+// and "Velocity Ammunition Sales, LLC" collapse to the same key.
+function normalizeDealerName(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(the|llc|inc|incorporated|co|company|corp|corporation|lp|llp|pllc|ltd|limited|dba|usa)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function repLabelFor(repCode) {
+  if (!repCode) return null;
+  const emp = getEmployeeByCode(repCode);
+  return emp ? `${getEmployeeFullName(emp)} (${repCode})` : repCode;
+}
+
+// Resolve ownership for one FFL. Explicit claims always win over name matches
+// so reps can correct false negatives (DBAs, parent-LLC names) and false positives.
+function lookupOwner(ffl, ownerByName, claims) {
+  const claim = claims?.[ffl.id];
+  if (claim?.repCode) {
+    return {
+      source: "claim",
+      repCode: claim.repCode,
+      repLabel: repLabelFor(claim.repCode),
+      dealerName: null,
+    };
+  }
+  const candidates = [ffl.businessName, ffl.licenseeName].filter(Boolean);
+  for (const name of candidates) {
+    const hit = ownerByName.get(normalizeDealerName(name));
+    if (hit) {
+      return {
+        source: "match",
+        repCode: hit.repCode,
+        repLabel: repLabelFor(hit.repCode),
+        dealerName: hit.dealerName,
+      };
+    }
+  }
+  return null;
+}
+
+function RepOwnerCell({
+  ffl,
+  owner,
+  isEditing,
+  repOptions,
+  onStartEdit,
+  onCancelEdit,
+  onClaim,
+  onClear,
+}) {
+  if (isEditing) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <select
+          autoFocus
+          defaultValue={owner?.repCode || ""}
+          onChange={(e) => {
+            if (e.target.value) onClaim(e.target.value);
+          }}
+          style={{ minWidth: 200, fontSize: "0.82rem" }}
+        >
+          <option value="">Select rep…</option>
+          {repOptions.map((r) => (
+            <option key={r.code} value={r.code}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+        {owner?.source === "claim" && (
+          <button
+            className="btn-secondary"
+            onClick={onClear}
+            style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+            title="Remove the manual claim — name match (if any) will be restored"
+          >
+            Clear
+          </button>
+        )}
+        <button
+          className="btn-secondary"
+          onClick={onCancelEdit}
+          style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  if (owner) {
+    const isClaim = owner.source === "claim";
+    return (
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span
+          title={
+            isClaim
+              ? "Manually claimed by a rep — overrides name matching"
+              : `Matched on dealer name "${owner.dealerName}" from the Orion account book`
+          }
+          style={{
+            display: "inline-block",
+            padding: "3px 8px",
+            borderRadius: 6,
+            background: isClaim
+              ? "rgba(129,140,248,0.15)"
+              : "rgba(61,220,151,0.12)",
+            border: `1px solid ${
+              isClaim ? "rgba(129,140,248,0.4)" : "rgba(61,220,151,0.3)"
+            }`,
+            color: isClaim ? "#a5b4fc" : "#3ddc97",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isClaim ? "★ " : ""}
+          {owner.repLabel}
+        </span>
+        <button
+          onClick={onStartEdit}
+          title="Change ownership"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#97a3c6",
+            cursor: "pointer",
+            fontSize: "0.85rem",
+            padding: "2px 4px",
+          }}
+        >
+          ✎
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <span style={{ color: "#97a3c6", fontSize: "0.82rem", fontStyle: "italic" }}>
+        Prospect
+      </span>
+      <button
+        onClick={onStartEdit}
+        style={{
+          background: "transparent",
+          border: "1px solid rgba(129,140,248,0.3)",
+          borderRadius: 6,
+          color: "#a5b4fc",
+          cursor: "pointer",
+          fontSize: "0.72rem",
+          padding: "2px 8px",
+          fontWeight: 600,
+        }}
+      >
+        Claim
+      </button>
+    </div>
   );
 }
 
