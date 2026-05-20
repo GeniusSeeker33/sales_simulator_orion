@@ -1,25 +1,31 @@
 import { accounts as seedAccounts } from "../data/accounts";
+import { accountsLive } from "../data/accountsLive";
 
-export const ACCOUNTS_STORAGE_KEY = "sales-simulator-orion-accounts-v1";
+// Bumped from v1 to v2 when the real Orion dealer book was imported (5,240 accounts).
+export const ACCOUNTS_STORAGE_KEY = "sales-simulator-orion-accounts-v2";
+
+function baseAccounts() {
+  return [...seedAccounts, ...accountsLive];
+}
 
 export function loadAccounts() {
   try {
     const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
 
     if (!raw) {
-      return seedAccounts.map((account) => normalizeAccount(account));
+      return baseAccounts().map((account) => normalizeAccount(account));
     }
 
     const parsed = JSON.parse(raw);
 
     if (!Array.isArray(parsed)) {
-      return seedAccounts.map((account) => normalizeAccount(account));
+      return baseAccounts().map((account) => normalizeAccount(account));
     }
 
     return parsed.map((account) => normalizeAccount(account));
   } catch (error) {
     console.error("Failed to load accounts:", error);
-    return seedAccounts.map((account) => normalizeAccount(account));
+    return baseAccounts().map((account) => normalizeAccount(account));
   }
 }
 
@@ -27,12 +33,14 @@ export function saveAccounts(accounts) {
   try {
     localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
   } catch (error) {
+    // Quota errors are expected if the user has lots of local data — silently fall back
+    // so the page still renders. The next load will hydrate from the bundled seed/live data.
     console.error("Failed to save accounts:", error);
   }
 }
 
 export function resetAccounts() {
-  const resetData = seedAccounts.map((account) => normalizeAccount(account));
+  const resetData = baseAccounts().map((account) => normalizeAccount(account));
   saveAccounts(resetData);
   return resetData;
 }

@@ -12,6 +12,7 @@ import {
   getEmployeeByCode,
   getEmployeeFullName,
 } from "../data/employees";
+import { useAuth } from "../context/AuthContext";
 
 function repLabel(code) {
   if (!code) return "—";
@@ -31,11 +32,15 @@ function loadImportedContacts() {
 export default function Accounts() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { session } = useAuth();
   const requestedDealerName = location.state?.dealerName;
 
   const [accounts, setAccounts] = useState(() => loadAccounts());
   const [apiContacts, setApiContacts] = useState(() => loadImportedContacts());
-  const [currentRep, setCurrentRep] = useState("ALL");
+  // Reps default to their own book; managers/admins (no repCode) default to ALL.
+  const [currentRep, setCurrentRep] = useState(
+    session?.role === "rep" && session?.repCode ? session.repCode : "ALL"
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [draftPlan, setDraftPlan] = useState(null);
 
