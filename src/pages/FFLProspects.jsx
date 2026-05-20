@@ -307,7 +307,10 @@ export default function FFLProspects() {
                 return (
                   <tr key={ffl.id}>
                     <td>
-                      <strong>{ffl.businessName || "—"}</strong>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <strong>{ffl.businessName || "—"}</strong>
+                        <LookupLinks ffl={ffl} />
+                      </div>
                       {ffl.premiseStreet && (
                         <div style={{ color: "#97a3c6", fontSize: "0.78rem", marginTop: 2 }}>
                           {ffl.premiseStreet}, {ffl.premiseZip}
@@ -373,6 +376,21 @@ export default function FFLProspects() {
         </div>
       </section>
 
+      {/* Lookup helper info banner */}
+      <div
+        className="insight-box"
+        style={{
+          marginTop: 16,
+          background: "rgba(129,140,248,0.06)",
+          borderColor: "rgba(129,140,248,0.25)",
+        }}
+      >
+        <div className="card-label">Verify Before You Dial</div>
+        <p className="coach-text">
+          Use the <strong>🔎 Search</strong> and <strong>🗺️ Maps</strong> icons next to each business name to confirm the dealer is still operating and has a real storefront or website before committing to a call. Watch for the "Permanently closed" tag in Google Maps and missing or empty Google Business listings — both are signs the FFL is dormant.
+        </p>
+      </div>
+
       {stateCounts.length > 0 && (
         <section className="card" style={{ marginTop: 16 }}>
           <div className="section-header">
@@ -394,5 +412,62 @@ export default function FFLProspects() {
         </section>
       )}
     </Layout>
+  );
+}
+
+function LookupLinks({ ffl }) {
+  const name = (ffl.businessName || ffl.licenseeName || "").trim();
+  if (!name) return null;
+
+  const locationParts = [ffl.premiseCity, ffl.premiseState].filter(Boolean).join(" ");
+  const searchQuery = encodeURIComponent(
+    `"${name}" ${locationParts} firearms dealer`
+  );
+  const mapsQuery = encodeURIComponent(`${name} ${locationParts}`);
+
+  const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+
+  const iconStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#a5b4fc",
+    fontSize: "0.85rem",
+    textDecoration: "none",
+    cursor: "pointer",
+    transition: "background 0.15s",
+  };
+
+  const stop = (e) => e.stopPropagation();
+
+  return (
+    <span style={{ display: "inline-flex", gap: 4 }}>
+      <a
+        href={searchUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={stop}
+        title="Open Google Search for this business — check for website, reviews, and 'Permanently closed' status"
+        style={iconStyle}
+      >
+        🔎
+      </a>
+      <a
+        href={mapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={stop}
+        title="Open Google Maps — see storefront photos, hours, and current status"
+        style={iconStyle}
+      >
+        🗺️
+      </a>
+    </span>
   );
 }
