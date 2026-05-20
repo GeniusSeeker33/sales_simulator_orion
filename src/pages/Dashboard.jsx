@@ -34,6 +34,9 @@ import {
   buildRemoteStatusMessage,
   simulateRemoteRepMetrics,
 } from "../lib/remoteCompEngine";
+import { PACE_REPORT_ROWS, PACE_REPORT_META } from "../data/paceReport";
+import { COMMISSION_REP_ROWS } from "../data/commissionReportLive";
+import { PRODUCT_MIX_REP_ROWS } from "../data/productMixLive";
 
 const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
@@ -161,6 +164,8 @@ export default function Dashboard() {
         </Link>
       </div>
     </div>
+
+    {repCode && <LiveOrionNumbersCard repCode={repCode} />}
 
     <section className="kpi-grid">
       {summary.kpis.map((kpi) => (
@@ -1204,6 +1209,126 @@ function fallbackSpotlight() {
     aeActionRequired: "Load account data to begin planning",
     howWeGetThere: "Open Accounts and update a dealer plan.",
   };
+}
+
+function LiveOrionNumbersCard({ repCode }) {
+  const paceRow = PACE_REPORT_ROWS.find((r) => r.repCode === repCode);
+  const commissionRow = COMMISSION_REP_ROWS.find((r) => r.repCode === repCode);
+  const mixRow = PRODUCT_MIX_REP_ROWS.find((r) => r.repCode === repCode);
+
+  if (!paceRow && !commissionRow) return null;
+
+  const ptg = paceRow?.paceToGoal || 0;
+  const statusLabel =
+    ptg >= 1 ? "On Pace" : ptg >= 0.85 ? "Watch" : ptg > 0 ? "Behind" : "—";
+  const statusCls =
+    ptg >= 1
+      ? "status-positive"
+      : ptg >= 0.85
+      ? "status-neutral"
+      : ptg > 0
+      ? "status-risk"
+      : "status-neutral";
+
+  const fmt = (n) =>
+    n == null
+      ? "—"
+      : n.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        });
+
+  return (
+    <section
+      className="card"
+      style={{
+        margin: "12px 0",
+        background:
+          "linear-gradient(135deg, rgba(61,220,151,0.06), rgba(95,179,255,0.06))",
+        border: "1px solid rgba(61,220,151,0.18)",
+      }}
+    >
+      <div
+        className="section-header"
+        style={{ alignItems: "center", flexWrap: "wrap", gap: 12 }}
+      >
+        <div>
+          <h2 style={{ margin: 0 }}>Your Live Numbers</h2>
+          <p
+            className="section-subtext"
+            style={{ margin: "4px 0 0", fontSize: "0.85rem" }}
+          >
+            Pulled live from Orion's Pace Report
+            {commissionRow ? " and Commission Report" : ""}
+            {mixRow ? " and Product Mix" : ""}. Shipping Day{" "}
+            {PACE_REPORT_META.shippingDay} of{" "}
+            {PACE_REPORT_META.totalShippingDaysInMonth}.
+          </p>
+        </div>
+        {paceRow && (
+          <span className={`status-pill ${statusCls}`}>
+            {statusLabel}
+            {ptg > 0 && ` · ${(ptg * 100).toFixed(0)}%`}
+          </span>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+          gap: 10,
+          marginTop: 12,
+        }}
+      >
+        {paceRow && (
+          <>
+            <div className="mini-stat">
+              <span>Total Sales (MTD)</span>
+              <strong>{fmt(paceRow.totalSales)}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>Pace (Projected)</span>
+              <strong>{fmt(paceRow.pace)}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>Personal Goal</span>
+              <strong>{fmt(paceRow.personalGoal)}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>Daily Revenue Needed</span>
+              <strong>{fmt(paceRow.dailyRevenueNeeded)}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>Sold-To / Goal</span>
+              <strong>
+                {paceRow.soldToTotal} / {paceRow.soldToGoal}
+              </strong>
+            </div>
+            <div className="mini-stat">
+              <span>Captures / Goal</span>
+              <strong>
+                {paceRow.captureTotal} / {paceRow.captureGoal}
+              </strong>
+            </div>
+          </>
+        )}
+        {commissionRow && (
+          <div className="mini-stat">
+            <span>YTD Net Invoiced</span>
+            <strong>{fmt(commissionRow.ytdNet)}</strong>
+          </div>
+        )}
+        {mixRow && (
+          <div className="mini-stat">
+            <span>YTD GP Margin</span>
+            <strong>{(mixRow.gpMargin * 100).toFixed(1)}%</strong>
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function buildPrizeWidget(repMetrics, prizes, simulatorResults) {

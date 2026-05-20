@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Orion source data exports — real customer/revenue; never commit
+*.xlsx

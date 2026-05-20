@@ -18,6 +18,9 @@ const REP_NAV = [
 const MANAGER_NAV = [
   ...REP_NAV,
   { to: "/manager-view", label: "Manager View", divider: true },
+  { to: "/pace-report", label: "Pace Report" },
+  { to: "/commission-report", label: "Commission Report" },
+  { to: "/product-mix", label: "Product Mix" },
   { to: "/employees", label: "Employees" },
 ];
 
@@ -27,7 +30,7 @@ const ADMIN_NAV = [
   { to: "/admin/import", label: "Import Data" },
 ];
 
-const PROTECTED_PATHS = ["/manager-view", "/employees", "/admin-view", "/admin/import"];
+const PROTECTED_PATHS = ["/manager-view", "/pace-report", "/commission-report", "/product-mix", "/employees", "/admin-view", "/admin/import"];
 
 function getNavItems(role) {
   let items;
