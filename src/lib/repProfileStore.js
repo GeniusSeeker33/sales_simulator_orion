@@ -1,3 +1,6 @@
+import { PACE_REPORT_ROWS } from "../data/paceReport";
+import { getEmployeeFullName } from "../data/employees";
+
 const REP_METRICS_STORAGE_KEY = "sales-simulator-orion-rep-metrics-v1";
 
 export const defaultRepProfile = {
@@ -7,6 +10,31 @@ export const defaultRepProfile = {
   captures: 17,
   customersSold: 30,
 };
+
+/**
+ * Build a rep profile from live Orion data (Pace Report + employee hire date)
+ * when the session has a real rep code. Returns null if no live row exists
+ * for this rep, so callers can fall back to loadRepProfile().
+ */
+export function buildLiveRepProfile(repCode, employee) {
+  if (!repCode) return null;
+  const paceRow = PACE_REPORT_ROWS.find((r) => r.repCode === repCode);
+  if (!paceRow) return null;
+
+  const repName = employee ? getEmployeeFullName(employee) : paceRow.name;
+  const startDate = normalizeStartDate(
+    employee?.hireDate || defaultRepProfile.startDate
+  );
+
+  return {
+    repName,
+    startDate,
+    revenue: Number(paceRow.totalSales || 0),
+    captures: Number(paceRow.captureTotal || 0),
+    customersSold: Number(paceRow.soldToTotal || 0),
+    source: "pace-report-live",
+  };
+}
 
 export function loadRepProfile() {
   try {

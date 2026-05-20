@@ -11,7 +11,7 @@ import {
   buildLeadershipCompBreakdown,
   formatCurrency,
 } from "../lib/compEngine";
-import { loadRepProfile } from "../lib/repProfileStore";
+import { loadRepProfile, buildLiveRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
 import { loadPrizes, getTodayWinners, getRepEarnings, isNewHireEligible, generateDailyScore, calcTenureMonths, PRIZE_TIERS } from "../lib/prizesStore";
@@ -87,13 +87,17 @@ export default function Dashboard() {
 
   const accounts = loadAccounts();
   const trainingResults = loadTrainingResults();
-  const repMetrics = loadRepProfile();
   const prizes = loadPrizes();
   const simulatorResults = loadSimulatorResults();
 
-  const displayName = session?.name || repMetrics.repName || "AE User";
   const repCode = session?.repCode || null;
   const sessionEmployee = repCode ? getEmployeeByCode(repCode) : null;
+  // Prefer live Pace Report numbers when the logged-in rep maps to a real row;
+  // otherwise fall back to the demo profile in localStorage (admins, unmapped users).
+  const liveRepMetrics = buildLiveRepProfile(repCode, sessionEmployee);
+  const repMetrics = liveRepMetrics || loadRepProfile();
+
+  const displayName = session?.name || repMetrics.repName || "AE User";
   const isRSA = isRemoteSalesAssociate(sessionEmployee);
   const roleLabel = sessionEmployee
     ? getEmployeeRoleLabel(sessionEmployee)
@@ -108,8 +112,9 @@ export default function Dashboard() {
         trainingResults,
         repMetrics,
         employee: sessionEmployee,
+        currentRepCode: repCode,
       })
-    : buildDashboardSummary(accounts, trainingResults, repMetrics);
+    : buildDashboardSummary(accounts, trainingResults, repMetrics, repCode);
   const prizeWidget = buildPrizeWidget(repMetrics, prizes, simulatorResults);
 
   return (
@@ -675,7 +680,7 @@ export default function Dashboard() {
   );
 }
 
-function buildDashboardSummary(accounts, trainingResults, repMetrics) {
+function buildDashboardSummary(accounts, trainingResults, repMetrics, currentRepCode) {
   const totalPipeline = accounts.reduce(
     (sum, account) => sum + Number(account.currentMonthTarget ?? 0),
     0
@@ -889,27 +894,7 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
         "Review plan and launch a growth mission practice call.",
     },
 
-    leaderboardPreview: [
-      {
-        rank: 1,
-        name: repMetrics.repName,
-        revenue: formatCurrency(currentRevenue),
-      },
-      {
-        rank: 2,
-        name: "Target Attainment",
-        revenue: `${
-          accounts.length
-            ? Math.round((currentRevenue / Math.max(totalPipeline, 1)) * 100)
-            : 0
-        }%`,
-      },
-      {
-        rank: 3,
-        name: "Comp Potential",
-        revenue: formatCurrency(compOpportunity.actual.totalEstimatedCompensation),
-      },
-    ],
+    leaderboardPreview: buildRealLeaderboardPreview(currentRepCode),
 
     levelSnapshot: {
       currentLevel: `Level ${levelData.current.level} — ${levelData.current.title}`,
@@ -935,7 +920,7 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
   };
 }
 
-function buildRsaDashboardSummary({ accounts, trainingResults, repMetrics, employee }) {
+function buildRsaDashboardSummary({ accounts, trainingResults, repMetrics, employee, currentRepCode }) {
   const startDate = employee?.hireDate || repMetrics.startDate;
   const repCode = employee?.code || "RSA";
 
@@ -1063,23 +1048,7 @@ function buildRsaDashboardSummary({ accounts, trainingResults, repMetrics, emplo
         "Queue a discovery dial and rehearse the pitch in the simulator first.",
     },
 
-    leaderboardPreview: [
-      {
-        rank: 1,
-        name: repMetrics.repName || (employee ? getEmployeeFullName(employee) : "Remote Rep"),
-        revenue: formatCurrency(remoteSummary.totalEstimatedCompensation),
-      },
-      {
-        rank: 2,
-        name: "Score Tier",
-        revenue: `${tier.label} ${tier.multiplier.toFixed(1)}x`,
-      },
-      {
-        rank: 3,
-        name: "Calls / Day",
-        revenue: `${Math.round(dailyCallRate)}`,
-      },
-    ],
+    leaderboardPreview: buildRealLeaderboardPreview(currentRepCode),
 
     levelSnapshot: {
       currentLevel: `Level ${levelData.current.level} — ${levelData.current.title}`,
@@ -1194,6 +1163,24 @@ function buildTrainingRecommendation(trainingCount, averageTrainingScore) {
   }
 
   return "Strong performance. You are ready for more advanced leadership-facing simulations.";
+}
+
+// Real top-3 reps by MTD Total Sales from the live Pace Report.
+// If the logged-in rep is in the top 3, mark them with "(you)".
+function buildRealLeaderboardPreview(currentRepCode) {
+  const sorted = [...PACE_REPORT_ROWS]
+    .filter((r) => Number(r.totalSales) > 0)
+    .sort((a, b) => Number(b.totalSales) - Number(a.totalSales))
+    .slice(0, 3);
+
+  return sorted.map((row, idx) => {
+    const isYou = currentRepCode && row.repCode === currentRepCode;
+    return {
+      rank: idx + 1,
+      name: isYou ? `${row.name} (you)` : row.name,
+      revenue: formatCurrency(row.totalSales),
+    };
+  });
 }
 
 function fallbackSpotlight() {
