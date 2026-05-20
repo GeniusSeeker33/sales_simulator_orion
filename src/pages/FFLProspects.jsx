@@ -10,7 +10,11 @@ import {
   searchFFL,
 } from "../lib/fflStore";
 import { loadAccounts, saveAccounts } from "../lib/accountStore";
-import { employees } from "../data/employees";
+import {
+  employees,
+  getEmployeeByCode,
+  getEmployeeFullName,
+} from "../data/employees";
 
 const PAGE_SIZE = 25;
 
@@ -113,9 +117,11 @@ export default function FFLProspects() {
     });
     saveAccounts([newAccount, ...accounts]);
     setImportedIds(new Set([...importedIds, accountId]));
+    const repEmp = assignRep ? getEmployeeByCode(assignRep) : null;
+    const repName = repEmp ? `${getEmployeeFullName(repEmp)} (${assignRep})` : assignRep;
     showToast(
       assignRep
-        ? `Added "${newAccount.dealerName}" → ${assignRep}`
+        ? `Added "${newAccount.dealerName}" → ${repName}`
         : `Added "${newAccount.dealerName}" to Accounts`
     );
   };

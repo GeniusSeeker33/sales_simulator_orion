@@ -7,6 +7,18 @@ import {
   resetAccounts,
   normalizeAccount,
 } from "../lib/accountStore";
+import {
+  employees,
+  getEmployeeByCode,
+  getEmployeeFullName,
+} from "../data/employees";
+
+function repLabel(code) {
+  if (!code) return "—";
+  const emp = getEmployeeByCode(code);
+  if (!emp) return code;
+  return `${getEmployeeFullName(emp)} (${code})`;
+}
 
 function loadImportedContacts() {
   try {
@@ -77,12 +89,23 @@ export default function Accounts() {
   }, [apiContacts]);
 
   const repOptions = useMemo(() => {
-    const reps = [...importedAccounts, ...accounts]
+    const accountReps = [...importedAccounts, ...accounts]
       .map((account) => account.assignedRep)
       .filter(Boolean);
 
-    return ["ALL", ...Array.from(new Set(reps))];
+    return ["ALL", ...Array.from(new Set(accountReps))];
   }, [accounts, importedAccounts]);
+
+  const allRepChoices = useMemo(
+    () =>
+      [...employees]
+        .sort((a, b) => a.lastName.localeCompare(b.lastName))
+        .map((e) => ({
+          code: e.code,
+          label: `${getEmployeeFullName(e)} (${e.code})`,
+        })),
+    []
+  );
 
   const displayAccounts = useMemo(() => {
     const existingIds = new Set(accounts.map((account) => account.id));
@@ -187,6 +210,20 @@ export default function Accounts() {
     setDraftPlan(null);
   }
 
+  function handleAssignRep(accountId, newCode) {
+    setAccounts((prev) =>
+      prev.map((account) =>
+        account.id === accountId
+          ? normalizeAccount({
+              ...account,
+              assignedRep: newCode || null,
+              updatedAt: new Date().toISOString(),
+            })
+          : account
+      )
+    );
+  }
+
   if (!selectedAccount) {
     return (
       <Layout title="Accounts">
@@ -234,7 +271,7 @@ export default function Accounts() {
               >
                 {repOptions.map((rep) => (
                   <option key={rep} value={rep}>
-                    {rep === "ALL" ? "All Reps" : rep}
+                    {rep === "ALL" ? "All Reps" : repLabel(rep)}
                   </option>
                 ))}
               </select>
@@ -272,7 +309,7 @@ export default function Accounts() {
                   >
                     <td>{account.dealerName}</td>
                     <td>{account.primaryBuyer}</td>
-                    <td>{account.assignedRep || "—"}</td>
+                    <td>{repLabel(account.assignedRep)}</td>
                     <td>{account.phone || "—"}</td>
                     <td>{formatCurrency(account.lastMonthSales)}</td>
                     <td>{formatCurrency(account.currentMonthTarget)}</td>
@@ -351,7 +388,34 @@ export default function Accounts() {
 
             <div className="feedback-row">
               <span>Assigned Rep</span>
-              <strong>{selectedAccount.assignedRep || "—"}</strong>
+              <select
+                value={selectedAccount.assignedRep || ""}
+                onChange={(e) =>
+                  handleAssignRep(selectedAccount.id, e.target.value)
+                }
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#eef2ff",
+                  minWidth: 220,
+                  fontSize: "0.88rem",
+                }}
+                disabled={String(selectedAccount.id).startsWith("imported-")}
+                title={
+                  String(selectedAccount.id).startsWith("imported-")
+                    ? "Imported contacts are managed by the import source"
+                    : ""
+                }
+              >
+                <option value="">Unassigned</option>
+                {allRepChoices.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="feedback-row">
