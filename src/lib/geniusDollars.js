@@ -2,14 +2,20 @@
 const IDENTITY_SERVICE_URL = import.meta.env.VITE_IDENTITY_SERVICE_URL ?? "";
 
 export function calcGlcd(overallScore, difficulty) {
-  let base = 50;
+  const score = Number(overallScore) || 0;
 
-  if (overallScore >= 90) base += 100;
-  else if (overallScore >= 80) base += 50;
-  else if (overallScore >= 70) base += 25;
+  // No reward for failed calls
+  if (score < 50) return 0;
+
+  let base;
+  if (score >= 90) base = 10;        // Elite
+  else if (score >= 80) base = 7.5;  // Strong
+  else if (score >= 70) base = 5;    // Good
+  else if (score >= 60) base = 2.5;  // Developing
+  else base = 1;                     // Weak (50-59)
 
   const multiplier = difficulty === "hard" ? 2 : difficulty === "medium" ? 1.5 : 1;
-  return Math.round(base * multiplier);
+  return base * multiplier;
 }
 
 export async function logGlcd({ actor, amount, overallScore, difficulty, sessionRef }) {
