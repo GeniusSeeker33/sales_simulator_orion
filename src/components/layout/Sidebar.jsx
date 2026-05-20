@@ -11,6 +11,7 @@ import {
   UserCog,
   Gamepad2,
   Medal,
+  Crosshair,
 } from "lucide-react";
 
 const navItems = [
@@ -18,6 +19,7 @@ const navItems = [
   { to: "/sales-simulator", label: "AI Sales Simulator", icon: Gamepad2 },
   { to: "/training", label: "Training", icon: GraduationCap },
   { to: "/accounts", label: "Accounts", icon: Building2 },
+  { to: "/ffl-prospects", label: "FFL Prospect Hub", icon: Crosshair },
   { to: "/activity", label: "Activity", icon: Phone },
   { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { to: "/training-leaderboard", label: "Prize Leaderboard", icon: Medal },

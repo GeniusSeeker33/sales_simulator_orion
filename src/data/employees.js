@@ -349,7 +349,79 @@ export const employees = [
     location: "IN",
     hireDate: "2026-04-13",
   },
+  {
+    firstName: "Marcus",
+    lastName: "Reed",
+    preferredName: "",
+    phone: "512-555-2014",
+    email: "MarcusR@orionwholesaleonline.com",
+    code: "MRR",
+    location: "Remote-TX",
+    hireDate: "2025-02-10",
+    role: "RSA",
+  },
+  {
+    firstName: "Jasmine",
+    lastName: "Walker",
+    preferredName: "Jaz",
+    phone: "904-555-7732",
+    email: "JasmineW@orionwholesaleonline.com",
+    code: "JNW",
+    location: "Remote-FL",
+    hireDate: "2025-10-06",
+    role: "RSA",
+  },
+  {
+    firstName: "Devon",
+    lastName: "Carter",
+    preferredName: "",
+    phone: "623-555-4108",
+    email: "DevonC@orionwholesaleonline.com",
+    code: "DKC",
+    location: "Remote-AZ",
+    hireDate: "2026-01-19",
+    role: "RSA",
+  },
+  {
+    firstName: "Riley",
+    lastName: "Brennan",
+    preferredName: "",
+    phone: "208-555-3391",
+    email: "RileyB@orionwholesaleonline.com",
+    code: "RPB",
+    location: "Remote-ID",
+    hireDate: "2026-04-27",
+    role: "RSA",
+  },
+  {
+    firstName: "Tasha",
+    lastName: "Nguyen",
+    preferredName: "",
+    phone: "919-555-6620",
+    email: "TashaN@orionwholesaleonline.com",
+    code: "TQN",
+    location: "Remote-NC",
+    hireDate: "2024-09-09",
+    role: "RSA",
+  },
 ];
+
+export const EMPLOYEE_ROLES = {
+  AE: "Account Executive",
+  RSA: "Remote Sales Associate",
+};
+
+export function getEmployeeRole(employee) {
+  return employee?.role || "AE";
+}
+
+export function isRemoteSalesAssociate(employee) {
+  return getEmployeeRole(employee) === "RSA";
+}
+
+export function getEmployeeRoleLabel(employee) {
+  return EMPLOYEE_ROLES[getEmployeeRole(employee)] || "Account Executive";
+}
 
 export function getEmployeeDisplayName(employee) {
   const preferred = employee.preferredName?.trim();

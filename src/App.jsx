@@ -16,6 +16,7 @@ import ManagerView from "./pages/ManagerView";
 import SalesSimulator from "./pages/SalesSimulator";
 import Employees from "./pages/Employees";
 import AdminView from "./pages/AdminView";
+import FFLProspects from "./pages/FFLProspects";
 
 function RootRedirect() {
   const { session } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
       <Route path="/training-leaderboard" element={<ProtectedRoute><TrainingLeaderboard /></ProtectedRoute>} />
       <Route path="/levels" element={<ProtectedRoute><Levels /></ProtectedRoute>} />
       <Route path="/rep-metrics" element={<ProtectedRoute><RepMetrics /></ProtectedRoute>} />
+      <Route path="/ffl-prospects" element={<ProtectedRoute><FFLProspects /></ProtectedRoute>} />
 
       <Route path="/manager-view" element={<ProtectedRoute roles={["manager", "admin"]}><ManagerView /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute roles={["manager", "admin"]}><Employees /></ProtectedRoute>} />

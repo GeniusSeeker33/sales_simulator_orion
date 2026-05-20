@@ -15,9 +15,25 @@ import { loadRepProfile } from "../lib/repProfileStore";
 import { loadAccounts } from "../lib/accountStore";
 import { loadTrainingResults } from "../lib/trainingStore";
 import { loadPrizes, getTodayWinners, getRepEarnings, isNewHireEligible, generateDailyScore, calcTenureMonths, PRIZE_TIERS } from "../lib/prizesStore";
-import { employees, getEmployeeFullName } from "../data/employees";
+import {
+  employees,
+  getEmployeeByCode,
+  getEmployeeFullName,
+  getEmployeeRoleLabel,
+  isRemoteSalesAssociate,
+} from "../data/employees";
 import { loadSimulatorResults } from "../lib/simulatorResultsStore";
 import { getReferralsByEmail, calcPendingBonuses, STATUS_LABELS } from "../lib/referralStore";
+import {
+  REMOTE_COMP_PLAN,
+  buildRemoteCoachMessage,
+  buildRemoteCompBreakdown,
+  buildRemoteCompKpiCards,
+  buildRemoteMissions,
+  buildRemoteRepCompSummary,
+  buildRemoteStatusMessage,
+  simulateRemoteRepMetrics,
+} from "../lib/remoteCompEngine";
 
 const MEDAL_ICONS = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
@@ -74,11 +90,23 @@ export default function Dashboard() {
 
   const displayName = session?.name || repMetrics.repName || "AE User";
   const repCode = session?.repCode || null;
+  const sessionEmployee = repCode ? getEmployeeByCode(repCode) : null;
+  const isRSA = isRemoteSalesAssociate(sessionEmployee);
+  const roleLabel = sessionEmployee
+    ? getEmployeeRoleLabel(sessionEmployee)
+    : "Account Executive";
 
   const myReferrals = session?.email ? getReferralsByEmail(session.email) : [];
   const pendingBonus = calcPendingBonuses(myReferrals);
 
-  const summary = buildDashboardSummary(accounts, trainingResults, repMetrics);
+  const summary = isRSA
+    ? buildRsaDashboardSummary({
+        accounts,
+        trainingResults,
+        repMetrics,
+        employee: sessionEmployee,
+      })
+    : buildDashboardSummary(accounts, trainingResults, repMetrics);
   const prizeWidget = buildPrizeWidget(repMetrics, prizes, simulatorResults);
 
   return (
@@ -105,6 +133,24 @@ export default function Dashboard() {
         <span style={{ color: "#97a3c6", marginLeft: 8, fontSize: "0.88rem" }}>
           {repCode ? `Rep Code: ${repCode}` : ""}
         </span>
+        {sessionEmployee && (
+          <span
+            style={{
+              marginLeft: 10,
+              padding: "2px 10px",
+              borderRadius: 999,
+              background: isRSA ? "rgba(129,140,248,0.15)" : "rgba(61,220,151,0.15)",
+              border: `1px solid ${isRSA ? "rgba(129,140,248,0.35)" : "rgba(61,220,151,0.35)"}`,
+              color: isRSA ? "#a5b4fc" : "#3ddc97",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+            }}
+          >
+            {isRSA ? "Remote Rep" : roleLabel}
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", gap: 10 }}>
         <Link to="/training-leaderboard" style={{ color: "#818cf8", fontSize: "0.85rem" }}>
@@ -199,7 +245,9 @@ export default function Dashboard() {
               <div>
                 <h2>Compensation Status</h2>
                 <p className="section-subtext">
-                  Current monthly pay picture based on KPI qualification.
+                  {summary.roleVariant === "RSA"
+                    ? "Remote rep pay picture — activity, quality, and engagement."
+                    : "Current monthly pay picture based on KPI qualification."}
                 </p>
               </div>
 
@@ -208,73 +256,142 @@ export default function Dashboard() {
               </span>
             </div>
 
-            <div className="detail-grid">
-              <div className="mini-stat">
-                <span>Employment Month</span>
-                <strong>{summary.compStatus.employmentMonth}</strong>
-              </div>
+            {summary.roleVariant === "RSA" ? (
+              <>
+                <div className="detail-grid">
+                  <div className="mini-stat">
+                    <span>Employment Month</span>
+                    <strong>{summary.compStatus.employmentMonth}</strong>
+                  </div>
 
-              <div className="mini-stat">
-                <span>Measured KPI Month</span>
-                <strong>
-                  {summary.compStatus.kpiMeasurementActive
-                    ? summary.compStatus.measuredMonth
-                    : "Not active"}
-                </strong>
-              </div>
+                  <div className="mini-stat">
+                    <span>Calls Completed</span>
+                    <strong>{summary.compStatus.callsCompleted.toLocaleString()}</strong>
+                  </div>
 
-              <div className="mini-stat">
-                <span>Revenue</span>
-                <strong>{formatCurrency(summary.compStatus.revenue)}</strong>
-              </div>
+                  <div className="mini-stat">
+                    <span>Avg AI Call Score</span>
+                    <strong>{Math.round(summary.compStatus.averageCallScore)}/100</strong>
+                  </div>
 
-              <div className="mini-stat">
-                <span>Captures</span>
-                <strong>{summary.compStatus.captures}</strong>
-              </div>
-
-              <div className="mini-stat">
-                <span>Customers Sold</span>
-                <strong>{summary.compStatus.customersSold}</strong>
-              </div>
-
-              <div className="mini-stat">
-                <span>Commission Rate</span>
-                <strong>{summary.compStatus.commissionRateLabel}</strong>
-              </div>
-
-              <div className="mini-stat">
-                <span>Capture Goal</span>
-                <strong>
-                  {summary.compStatus.captureTarget == null
-                    ? "Not set"
-                    : summary.compStatus.captureTarget}
-                </strong>
-              </div>
-
-              <div className="mini-stat">
-                <span>Total Estimated Comp</span>
-                <strong>
-                  {formatCurrency(summary.compStatus.totalEstimatedCompensation)}
-                </strong>
-              </div>
-            </div>
-
-            <p className="coach-text">{summary.compStatus.statusMessage}</p>
-
-            {!summary.compStatus.isPreMeasurement &&
-              !summary.compStatus.hitAllKpis && (
-                <div className="insight-box">
-                  <div className="card-label">Missed Upside</div>
-                  <p className="coach-text">
-                    This rep is currently leaving{" "}
+                  <div className="mini-stat">
+                    <span>Score Tier</span>
                     <strong>
-                      {formatCurrency(summary.compStatus.missedCompensation)}
-                    </strong>{" "}
-                    on the table this month by missing KPI qualification.
-                  </p>
+                      {summary.compStatus.scoreTierLabel}{" "}
+                      <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                        ({summary.compStatus.scoreMultiplier.toFixed(1)}x)
+                      </span>
+                    </strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Effective Per-Call Rate</span>
+                    <strong>${summary.compStatus.effectivePerCallRate.toFixed(2)}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Qualified Engagements</span>
+                    <strong>{summary.compStatus.dealerEngagements}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>New Captures</span>
+                    <strong>{summary.compStatus.captures}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Total Estimated Comp</span>
+                    <strong>
+                      {formatCurrency(summary.compStatus.totalEstimatedCompensation)}
+                    </strong>
+                  </div>
                 </div>
-              )}
+
+                <p className="coach-text">{summary.compStatus.statusMessage}</p>
+
+                {summary.compStatus.scoreUpside > 0 && (
+                  <div className="insight-box">
+                    <div className="card-label">+10 Score Upside</div>
+                    <p className="coach-text">
+                      Lifting average AI score to{" "}
+                      <strong>{summary.compStatus.boostedScore}</strong> would add{" "}
+                      <strong>{formatCurrency(summary.compStatus.scoreUpside)}</strong>{" "}
+                      to this month's pay.
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="detail-grid">
+                  <div className="mini-stat">
+                    <span>Employment Month</span>
+                    <strong>{summary.compStatus.employmentMonth}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Measured KPI Month</span>
+                    <strong>
+                      {summary.compStatus.kpiMeasurementActive
+                        ? summary.compStatus.measuredMonth
+                        : "Not active"}
+                    </strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Revenue</span>
+                    <strong>{formatCurrency(summary.compStatus.revenue)}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Captures</span>
+                    <strong>{summary.compStatus.captures}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Customers Sold</span>
+                    <strong>{summary.compStatus.customersSold}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Commission Rate</span>
+                    <strong>{summary.compStatus.commissionRateLabel}</strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Capture Goal</span>
+                    <strong>
+                      {summary.compStatus.captureTarget == null
+                        ? "Not set"
+                        : summary.compStatus.captureTarget}
+                    </strong>
+                  </div>
+
+                  <div className="mini-stat">
+                    <span>Total Estimated Comp</span>
+                    <strong>
+                      {formatCurrency(summary.compStatus.totalEstimatedCompensation)}
+                    </strong>
+                  </div>
+                </div>
+
+                <p className="coach-text">{summary.compStatus.statusMessage}</p>
+
+                {!summary.compStatus.isPreMeasurement &&
+                  !summary.compStatus.hitAllKpis && (
+                    <div className="insight-box">
+                      <div className="card-label">Missed Upside</div>
+                      <p className="coach-text">
+                        This rep is currently leaving{" "}
+                        <strong>
+                          {formatCurrency(summary.compStatus.missedCompensation)}
+                        </strong>{" "}
+                        on the table this month by missing KPI qualification.
+                      </p>
+                    </div>
+                  )}
+              </>
+            )}
           </div>
 
           <div className="card">
@@ -667,6 +784,7 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
   };
 
   return {
+    roleVariant: "AE",
     kpis: [
       {
         id: "kpi-1",
@@ -808,6 +926,174 @@ function buildDashboardSummary(accounts, trainingResults, repMetrics) {
         : "Base tier active",
       weeklyBonusAvailable:
         completedMissions >= 3 ? "Unlocked" : `${3 - completedMissions} action(s) remaining`,
+    },
+  };
+}
+
+function buildRsaDashboardSummary({ accounts, trainingResults, repMetrics, employee }) {
+  const startDate = employee?.hireDate || repMetrics.startDate;
+  const repCode = employee?.code || "RSA";
+
+  const metrics = simulateRemoteRepMetrics({ repCode, startDate });
+  const remoteSummary = buildRemoteRepCompSummary({ startDate, ...metrics });
+
+  const averageTrainingScore = trainingResults.length
+    ? Math.round(
+        trainingResults.reduce(
+          (sum, entry) => sum + Number(entry.totalScore ?? entry.score ?? 0),
+          0
+        ) / trainingResults.length
+      )
+    : 0;
+
+  const scenarioCounts = trainingResults.reduce((acc, entry) => {
+    const key = entry.scenarioType || "Unknown";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const primaryScenario =
+    Object.entries(scenarioCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+    "Outbound Prospect";
+
+  const levelData = getLevelData(trainingResults.length, averageTrainingScore);
+
+  const spotlightDealer =
+    [...accounts].sort((a, b) => Number(b.growthGap) - Number(a.growthGap))[0] ??
+    fallbackSpotlight();
+
+  const compKpis = buildRemoteCompKpiCards(remoteSummary);
+  const missions = buildRemoteMissions(remoteSummary);
+  const compBreakdown = buildRemoteCompBreakdown(remoteSummary);
+  const statusMessage = buildRemoteStatusMessage(remoteSummary);
+  const coachMessage = buildRemoteCoachMessage(remoteSummary);
+
+  const tier = remoteSummary.tier;
+  const statusTone = tier.tone || "status-neutral";
+  const statusLabel = remoteSummary.isInRampBuffer
+    ? "Ramp Period"
+    : `${tier.label} Tier`;
+
+  const dailyCallRate = remoteSummary.callsCompleted /
+    Math.max(1, Math.round(remoteSummary.daysEmployed * (22 / 30)));
+
+  return {
+    roleVariant: "RSA",
+
+    kpis: [
+      {
+        id: "rsa-kpi-calls",
+        label: "Calls Completed",
+        value: remoteSummary.callsCompleted.toLocaleString(),
+        note: `~${Math.round(dailyCallRate)} per working day`,
+      },
+      {
+        id: "rsa-kpi-score",
+        label: "Average AI Score",
+        value: `${Math.round(remoteSummary.averageCallScore)}/100`,
+        note: `${tier.label} — ${tier.multiplier.toFixed(1)}x multiplier`,
+      },
+      {
+        id: "rsa-kpi-engagements",
+        label: "Qualified Engagements",
+        value: remoteSummary.dealerEngagements,
+        note: `$${REMOTE_COMP_PLAN.engagementBonusPerQualifiedConversation} per qualified conversation`,
+      },
+      {
+        id: "rsa-kpi-captures",
+        label: "New Dealer Captures",
+        value: remoteSummary.captures,
+        note: `$${REMOTE_COMP_PLAN.captureBonusPerCapture} per capture`,
+      },
+    ],
+
+    compKpis,
+
+    missions,
+
+    aiCoachMessage: coachMessage,
+
+    trainingSnapshot: {
+      primaryScenario,
+      averageScore: trainingResults.length
+        ? `${averageTrainingScore}/100`
+        : "No score yet",
+      recommendation: buildTrainingRecommendation(
+        trainingResults.length,
+        averageTrainingScore
+      ),
+    },
+
+    compStatus: {
+      employmentMonth: remoteSummary.employmentMonth,
+      callsCompleted: remoteSummary.callsCompleted,
+      averageCallScore: remoteSummary.averageCallScore,
+      scoreTierLabel: tier.label,
+      scoreMultiplier: tier.multiplier,
+      effectivePerCallRate: remoteSummary.effectivePerCallRate,
+      dealerEngagements: remoteSummary.dealerEngagements,
+      captures: remoteSummary.captures,
+      totalEstimatedCompensation: remoteSummary.totalEstimatedCompensation,
+      statusLabel,
+      statusTone,
+      statusMessage,
+      scoreUpside: remoteSummary.upside.extraMonthlyPay,
+      boostedScore: remoteSummary.upside.boostedScore,
+    },
+
+    compBreakdown,
+
+    dealerSpotlight: {
+      id: spotlightDealer.id,
+      dealerName: spotlightDealer.dealerName,
+      growthGap: spotlightDealer.growthGap,
+      currentSales: spotlightDealer.lastMonthSales,
+      targetSales: spotlightDealer.currentMonthTarget,
+      categoryToExpand: spotlightDealer.categoryToExpand || "Opportunity review",
+      barrier: spotlightDealer.barrier || "Dealer hesitation",
+      progressPercent: spotlightDealer.progressPercent,
+      nextMove:
+        spotlightDealer.aeActionRequired ||
+        spotlightDealer.howWeGetThere ||
+        "Queue a discovery dial and rehearse the pitch in the simulator first.",
+    },
+
+    leaderboardPreview: [
+      {
+        rank: 1,
+        name: repMetrics.repName || (employee ? getEmployeeFullName(employee) : "Remote Rep"),
+        revenue: formatCurrency(remoteSummary.totalEstimatedCompensation),
+      },
+      {
+        rank: 2,
+        name: "Score Tier",
+        revenue: `${tier.label} ${tier.multiplier.toFixed(1)}x`,
+      },
+      {
+        rank: 3,
+        name: "Calls / Day",
+        revenue: `${Math.round(dailyCallRate)}`,
+      },
+    ],
+
+    levelSnapshot: {
+      currentLevel: `Level ${levelData.current.level} — ${levelData.current.title}`,
+      nextLevel: levelData.next
+        ? `Level ${levelData.next.level} — ${levelData.next.title}`
+        : "Max level reached",
+      progressPercent: levelData.progressPercent,
+      requirementSummary: levelData.requirementSummary,
+      nextReward: levelData.current.nextReward,
+    },
+
+    user: {
+      name: repMetrics.repName || (employee ? getEmployeeFullName(employee) : "Remote Rep"),
+      levelTitle: tier.label + " Remote Rep",
+      commissionBoost: `${tier.multiplier.toFixed(1)}x call multiplier`,
+      weeklyBonusAvailable:
+        missions.filter((m) => m.complete).length >= 3
+          ? "Unlocked"
+          : `${3 - missions.filter((m) => m.complete).length} action(s) remaining`,
     },
   };
 }

@@ -44,6 +44,21 @@ The sidebar on the left gives you access to all your pages. The links you see de
 
 ## 2. Sales Executive (Rep) Guide
 
+### Rep Role Types
+
+Orion supports two rep role types. The Dashboard, KPIs, missions, and compensation panel adapt automatically to whichever role you are.
+
+| Role | Who It's For | Comp Model |
+|------|-------------|------------|
+| **Account Executive (AE)** | In-office reps managing dealer books | Base salary + revenue commission + capture/customer-sold bonuses, gated by monthly KPI minimums |
+| **Remote Sales Associate (RSA)** | Nationwide, work-from-home outbound reps | Pay per completed call, multiplied by AI call score, plus engagement/capture bonuses and revenue participation |
+
+You'll see a colored pill next to your name on the Dashboard ("Account Executive" or "Remote Rep") confirming which role you're logged in as.
+
+The rest of this section covers the AE experience by default. RSA-specific differences are called out under [Remote Sales Associate (RSA) Role](#remote-sales-associate-rsa-role) below.
+
+---
+
 ### Dashboard
 
 Your home base. At a glance you can see:
@@ -56,6 +71,8 @@ Your home base. At a glance you can see:
 - **Leaderboard preview** — where you stand versus your teammates
 - **GeniusDollars balance** — your earned currency and options to redeem rewards
 - **Refer & Earn** — submit a candidate referral and track your bonus payouts
+
+*If you're logged in as a Remote Sales Associate, the KPI cards, missions, and compensation panel switch to the remote model — see the section below for details.*
 
 ---
 
@@ -86,6 +103,63 @@ You'll also see your strengths, missed opportunities, a coaching note, and sugge
 **Tips:**
 - Hard mode doubles your GeniusDollars earnings if you score well
 - Sessions are saved and visible to your manager for coaching conversations
+
+#### Cold Call Mode (from FFL Prospect Hub)
+
+You can launch the simulator preloaded with a real FFL dealer from the national database. This is **cold call practice** — the AI customer has never heard of Orion and behaves like a real, busy dealer being called by a stranger.
+
+**How to start a cold call session:**
+1. Go to **FFL Prospect Hub** in the sidebar
+2. Filter to the state and license type you want to practice against
+3. Find a dealer in the results table
+4. Click **🎯 Practice Cold Call**
+5. The simulator opens with a red "Cold FFL Prospect" panel showing the dealer's business name, licensee, location, and phone
+6. Click **Start Call** as usual
+
+**What's different in cold call mode:**
+- The AI customer does **not** know who you are or who Orion is
+- They are busy, slightly guarded, and may push back with things like "Who is this?", "What's this about?", or "I already have a wholesaler"
+- You have to earn their attention before pitching anything
+- Discovery questions and tone matter more than product pitches in the first 60 seconds
+- The AI will not agree to a follow-up unless you clearly earn it
+
+This is the same cold-call dynamic Remote Sales Associates face every day. Use it before live dial blocks to warm up.
+
+---
+
+### FFL Prospect Hub
+
+**Path: FFL Prospect Hub in the sidebar**
+
+This is your live connection to the national federal firearms license (FFL) database — every active FFL holder in the country, searchable from one screen. Use it to find new dealer prospects, plan territory expansion, and feed your outbound calling list.
+
+**What you can do:**
+
+- **Filter the national database** by state, license type, business name, and city
+- **See total FFL counts by state** at the top of the page (Indiana, Michigan, Ohio, and other growth states)
+- **Convert any FFL to an Account** — adds the dealer to your Accounts page with one click, optionally pre-assigned to a specific rep
+- **Launch a Cold Call Practice session** — opens the AI Sales Simulator preloaded with that FFL as the customer (see the Cold Call section below)
+
+**Filter options:**
+
+| Filter | What It Does |
+|--------|-------------|
+| State | Restricts results to a single state (e.g., IN, MI, TX) |
+| License Type | Limits to dealers (01), pawnbrokers (02), manufacturers (07), etc. Type 01 is Orion's primary prospect target. |
+| Business / Licensee Name | Fuzzy text search across both fields |
+| City | City-level filter on the dealer's premises |
+| Assign to… | Optional rep selector. When set, "Convert to Account" auto-assigns the dealer to that rep. |
+
+**The two action buttons on each row:**
+
+- **🎯 Practice Cold Call** — opens the AI Sales Simulator with this FFL preloaded as a true cold prospect. The AI customer doesn't know who you are.
+- **+ Convert to Account** — copies the FFL into your Accounts list. Button flips to "✓ In Accounts" once added so you can't accidentally add the same dealer twice.
+
+**Tips:**
+
+- The "Assign to…" dropdown applies to **Convert to Account** only — not to Practice Cold Call. Pick a rep before clicking convert if you want the new account routed to a specific RSA or AE.
+- Pagination is 25 results per page. Use filters to narrow the list before browsing — there are ~77,000 FFLs in the active database.
+- The "Territory Overview" card at the bottom of the page shows FFL counts across Orion's growth states for territory planning.
 
 ---
 
@@ -266,6 +340,106 @@ Know someone who would be a great fit at Orion? Submit a referral and earn cash 
 3. Click **Submit Referral**
 
 Your Dashboard will show the status of each referral you've submitted (Submitted → Employee Started → 90-Day Complete) and your total earned bonuses.
+
+---
+
+### Remote Sales Associate (RSA) Role
+
+If your role in the directory is set to **Remote Sales Associate (RSA)**, your Dashboard and Employees profile use the remote compensation model instead of the standard AE plan.
+
+**Who this is for**
+
+RSAs are high-volume outbound reps working from anywhere in the country. The role rewards activity, AI-graded call quality, dealer relationship-building, captures, and long-term revenue participation — not just hours worked.
+
+**Login**
+
+Same as any other rep. Your email is in the company directory; your default password is `{RepCode}@Orion` (e.g., `MRR@Orion`).
+
+---
+
+#### Your Dashboard KPIs
+
+| Card | What It Tracks |
+|------|---------------|
+| Calls Completed | Connected outbound calls this month, with an average per-working-day rate |
+| Average AI Score | The AI's rolling average of your call quality (0–100) plus your tier label and multiplier |
+| Qualified Engagements | Conversations where the dealer asked for pricing, requested follow-up, discussed inventory, etc. |
+| New Dealer Captures | New accounts won this month |
+
+---
+
+#### How Your Comp Is Calculated
+
+Your monthly pay is the sum of four pillars:
+
+| Pillar | Formula |
+|--------|---------|
+| **Call Pay** | `Calls × Base per-call rate × Score Multiplier` |
+| **Engagement Bonus** | `Qualified conversations × $6` |
+| **Capture Bonus** | `New dealer accounts × $30` |
+| **Revenue Participation** | `Paid invoiced revenue × 0.15%` |
+
+The base per-call rate is **$0.75**. Your AI-graded call score determines a multiplier on top of that:
+
+| Score | Tier | Multiplier | Effective Per-Call Rate |
+|-------|------|------------|------------------------|
+| 50–59 | Weak | 0.8x | $0.60 |
+| 60–69 | Developing | 1.0x | $0.75 |
+| 70–79 | Good | 1.2x | $0.90 |
+| 80–89 | Strong | 1.5x | $1.13 |
+| 90–100 | Elite | 2.0x | $1.50 |
+
+*Translation:* lifting your average AI score by ten points can effectively double the value of every single call you complete.
+
+---
+
+#### Daily and Monthly Targets
+
+| Metric | Target |
+|--------|--------|
+| Daily calls | 90 |
+| Monthly calls | 1,980 (~22 working days) |
+| Average AI score | 80+ (Strong tier) |
+| Qualified engagements | 75/month |
+| New dealer captures | 12/month |
+
+Hitting these isn't required to earn — every call pays — but they unlock leaderboard recognition, advancement, and the larger comp tiers.
+
+---
+
+#### Compensation Status Panel
+
+The Compensation Status card on your Dashboard shows:
+
+- **Employment Month** — how long you've been at Orion
+- **Calls Completed** and **Average AI Score**
+- **Score Tier** and the **Effective Per-Call Rate** that tier earns you
+- **Qualified Engagements** and **New Captures**
+- **Total Estimated Comp** for the current month
+- **+10 Score Upside** — exactly how much additional pay you'd earn by raising your average AI score by ten points
+
+The status pill (Elite / Strong / Good / Developing / Weak) reflects which multiplier tier you're currently earning.
+
+---
+
+#### Example Monthly Earnings
+
+| Profile | Calls | Avg Score | Engagements | Captures | Revenue | Total |
+|---------|-------|-----------|-------------|----------|---------|-------|
+| Entry-Level | 1,800 | 72 | 42 | 7 | $120K | ~$2,250/mo |
+| Strong Rep | 2,100 | 88 | 108 | 17 | $565K | ~$4,362/mo |
+| Elite National Rep | 2,200 | 95 | 200 | 34 | $1.67M | ~$8,000/mo |
+
+The single biggest lever is your AI call score — practice in the simulator before live dials.
+
+---
+
+#### How to Improve Your Tier
+
+1. **Run AI Simulator sessions before your dial blocks.** This is the fastest path to a higher AI score, which immediately raises your per-call rate.
+2. **Convert connected calls into qualified conversations.** Pricing asks, follow-up commitments, inventory discussions — each one is worth $6.
+3. **Push for new dealer captures.** Each capture is worth $30 immediately, plus long-tail revenue participation.
+4. **Build a book.** The 0.15% revenue participation rewards reps who nurture dealers into repeat customers.
 
 ---
 
@@ -760,7 +934,8 @@ Your JSON should look like this:
 
 | Role | Email Format | Password Format |
 |------|-------------|----------------|
-| Sales Executive | Listed in company directory | `{RepCode}@Orion` (e.g., `JMF@Orion`) |
+| Account Executive (AE) | Listed in company directory | `{RepCode}@Orion` (e.g., `JMF@Orion`) |
+| Remote Sales Associate (RSA) | Listed in company directory | `{RepCode}@Orion` (e.g., `MRR@Orion`) |
 | Manager | Your work email | Provided by admin |
 | Admin | Your work email | Provided by admin |
 
@@ -770,7 +945,11 @@ Your JSON should look like this:
 
 | I want to… | Go to… |
 |-----------|--------|
+| Understand how my role's comp model works | Dashboard → Compensation Status (or [RSA section](#remote-sales-associate-rsa-role) for remote reps) |
 | See my compensation status | Dashboard or Rep Metrics |
+| Search the national FFL database | FFL Prospect Hub |
+| Add a new dealer prospect to my Accounts | FFL Prospect Hub → Convert to Account |
+| Practice a cold call against a real FFL | FFL Prospect Hub → 🎯 Practice Cold Call |
 | Practice a sales call | AI Sales Simulator |
 | Complete a written training | Training |
 | Update a dealer's growth plan | Accounts |

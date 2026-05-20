@@ -4,11 +4,17 @@ import {
   employees as staticEmployees,
   getEmployeeDisplayName,
   getEmployeeFullName,
+  getEmployeeRoleLabel,
+  isRemoteSalesAssociate,
   sortEmployeesByHireDate,
 } from "../data/employees";
 import { useAuth } from "../context/AuthContext";
 import ReferralModal from "../components/ReferralModal";
 import { buildRepCompSummary, formatCurrency } from "../lib/compEngine";
+import {
+  buildRemoteRepCompSummary,
+  simulateRemoteRepMetrics,
+} from "../lib/remoteCompEngine";
 import { loadSimulatorResults } from "../lib/simulatorResultsStore";
 
 export default function Employees() {
@@ -109,6 +115,11 @@ export default function Employees() {
     }, {});
   }, [sourceEmployees]);
 
+  const remoteCount = useMemo(
+    () => sourceEmployees.filter((e) => isRemoteSalesAssociate(e)).length,
+    [sourceEmployees]
+  );
+
   const repStats = useMemo(() => {
     if (!selectedEmployee) return null;
     const simulatorResults = loadSimulatorResults();
@@ -119,6 +130,23 @@ export default function Employees() {
     const avgScore = simSessions.length
       ? Math.round(simSessions.reduce((s, r) => s + (r.score ?? 0), 0) / simSessions.length)
       : null;
+
+    if (isRemoteSalesAssociate(selectedEmployee)) {
+      const metrics = simulateRemoteRepMetrics({
+        repCode: selectedEmployee.code,
+        startDate: selectedEmployee.hireDate,
+      });
+      const remoteComp = buildRemoteRepCompSummary({
+        startDate: selectedEmployee.hireDate,
+        ...metrics,
+      });
+      return {
+        role: "RSA",
+        remoteComp,
+        simSessions: simSessions.length,
+        avgScore,
+      };
+    }
 
     const hash = selectedEmployee.code.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 1);
     const estRevenue = 40000 + (Math.abs(hash) % 300000);
@@ -132,7 +160,7 @@ export default function Employees() {
       customersSold: estCustomersSold,
     });
 
-    return { comp, simSessions: simSessions.length, avgScore, estRevenue, estCaptures, estCustomersSold };
+    return { role: "AE", comp, simSessions: simSessions.length, avgScore, estRevenue, estCaptures, estCustomersSold };
   }, [selectedEmployee]);
 
   return (
@@ -176,11 +204,8 @@ export default function Employees() {
               </div>
 
               <div className="mini-stat">
-                <span>Remote</span>
-                <strong>
-                  {(locationCounts["Remote-NH"] ?? 0) +
-                    (locationCounts["Remote SC"] ?? 0)}
-                </strong>
+                <span>Remote Reps (RSA)</span>
+                <strong>{remoteCount}</strong>
               </div>
             </div>
 
@@ -265,6 +290,19 @@ export default function Employees() {
                 </div>
 
                 <div className="feedback-row">
+                  <span>Role</span>
+                  <strong
+                    style={{
+                      color: isRemoteSalesAssociate(selectedEmployee)
+                        ? "#a5b4fc"
+                        : "#3ddc97",
+                    }}
+                  >
+                    {getEmployeeRoleLabel(selectedEmployee)}
+                  </strong>
+                </div>
+
+                <div className="feedback-row">
                   <span>Location</span>
                   <strong>{selectedEmployee.location}</strong>
                 </div>
@@ -304,7 +342,106 @@ export default function Employees() {
                 </div>
               </div>
 
-              {repStats && (
+              {repStats && repStats.role === "RSA" && (
+                <div className="card">
+                  <div className="section-header" style={{ marginBottom: 12 }}>
+                    <div>
+                      <h2>Remote Comp Plan Status</h2>
+                      <p className="section-subtext">Activity × Quality × Engagement × Revenue</p>
+                    </div>
+                    <span className={`status-pill ${repStats.remoteComp.tier.tone}`}>
+                      {repStats.remoteComp.tier.label} Tier
+                    </span>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Employment Month</span>
+                    <strong>{repStats.remoteComp.employmentMonth}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Calls Completed</span>
+                    <strong>{repStats.remoteComp.callsCompleted.toLocaleString()}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Avg AI Score</span>
+                    <strong>
+                      {Math.round(repStats.remoteComp.averageCallScore)}/100{" "}
+                      <span style={{ opacity: 0.6, fontSize: "0.85em" }}>
+                        ({repStats.remoteComp.tier.multiplier.toFixed(1)}x)
+                      </span>
+                    </strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Effective Per-Call Rate</span>
+                    <strong>${repStats.remoteComp.effectivePerCallRate.toFixed(2)}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Qualified Engagements</span>
+                    <strong>{repStats.remoteComp.dealerEngagements}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>New Captures</span>
+                    <strong>{repStats.remoteComp.captures}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Revenue Generated</span>
+                    <strong>{formatCurrency(repStats.remoteComp.revenueGenerated)}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Est. Monthly Comp</span>
+                    <strong style={{ color: "#f59e0b" }}>
+                      {formatCurrency(repStats.remoteComp.totalEstimatedCompensation)}
+                    </strong>
+                  </div>
+
+                  <div style={{ marginTop: 14, marginBottom: 6 }}>
+                    <div className="card-label">Comp Components</div>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Call Pay</span>
+                    <strong>{formatCurrency(repStats.remoteComp.callCompensation)}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Engagement Bonus</span>
+                    <strong>{formatCurrency(repStats.remoteComp.engagementBonus)}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Capture Bonus</span>
+                    <strong>{formatCurrency(repStats.remoteComp.captureBonus)}</strong>
+                  </div>
+
+                  <div className="feedback-row">
+                    <span>Revenue Participation</span>
+                    <strong>{formatCurrency(repStats.remoteComp.revenueParticipation)}</strong>
+                  </div>
+
+                  {repStats.remoteComp.upside.extraMonthlyPay > 0 && (
+                    <div className="insight-box" style={{ marginTop: 12 }}>
+                      <div className="card-label">+10 Score Upside</div>
+                      <p className="coach-text">
+                        Lifting average AI score to{" "}
+                        <strong>{repStats.remoteComp.upside.boostedScore}</strong> adds{" "}
+                        <strong>
+                          {formatCurrency(repStats.remoteComp.upside.extraMonthlyPay)}
+                        </strong>{" "}
+                        this month.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {repStats && repStats.role === "AE" && (
                 <div className="card">
                   <div className="section-header" style={{ marginBottom: 12 }}>
                     <div>

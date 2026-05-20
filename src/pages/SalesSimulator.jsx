@@ -20,6 +20,9 @@ export default function SalesSimulator() {
   const location = useLocation();
   const { session } = useAuth();
   const account = location.state?.account || null;
+  const isColdCall =
+    Boolean(location.state?.isColdCall) ||
+    account?.source === "FFL Prospect Hub";
 
   const products = useMemo(() => loadProducts(), []);
 
@@ -75,12 +78,41 @@ export default function SalesSimulator() {
     )
     .join("\n");
 
-  const scenario = account
-    ? {
-        ...baseScenario,
-        opener: `You are ${account.primaryBuyer || "the buyer"} from ${
-          account.dealerName || "this dealer account"
-        }. You are speaking with your sales rep.
+  const scenario =
+    account && isColdCall
+      ? {
+          ...baseScenario,
+          opener: `You are ${account.primaryBuyer || "the licensee"} at ${
+            account.dealerName || "this FFL dealer"
+          } located in ${account.location || "your store"}.
+
+You are running your store when the phone rings. You have NEVER spoken to this caller before. You are an FFL holder and you get cold sales calls from wholesalers all the time. You did not ask for this call. You are busy.
+
+FFL Profile:
+- Business: ${account.dealerName || "Unknown"}
+- Licensee Contact: ${account.primaryBuyer || "Unknown"}
+- Location: ${account.location || "Unknown"}
+- State/Territory: ${account.territory || "Unknown"}
+- License Details (compliance, for context only — don't lecture): ${account.notes || ""}
+
+Available Inventory the Caller May Reference:
+${inventoryContext || "- No imported inventory available yet."}
+
+Personality (cold-call mode):
+- You don't know who Orion is. The rep has to earn your attention.
+- Be skeptical but human. Don't be hostile — be busy and slightly guarded.
+- Ask things like: "Who is this?", "What's this about?", "I already have a wholesaler", "How did you get my number?"
+- If the rep does great discovery and offers something genuinely interesting, soften and engage.
+- Push back on price, margin, minimum orders, and shipping policies before committing to anything.
+- Do not agree to a follow-up unless the rep has clearly earned it.
+- Do NOT make the call easy. Cold calls should feel like cold calls.`,
+        }
+      : account
+      ? {
+          ...baseScenario,
+          opener: `You are ${account.primaryBuyer || "the buyer"} from ${
+            account.dealerName || "this dealer account"
+          }. You are speaking with your sales rep.
 
 Current Situation:
 - Dealer: ${account.dealerName || "Unknown"}
@@ -96,14 +128,14 @@ ${inventoryContext || "- No imported inventory available yet."}
 
 Personality:
 Act like a real buyer. Be skeptical but realistic. Ask questions about margin, sell-through, inventory risk, price, and why this product makes sense for your store. Do not make the call too easy.`,
-      }
-    : {
-        ...baseScenario,
-        opener: `${baseScenario.opener}
+        }
+      : {
+          ...baseScenario,
+          opener: `${baseScenario.opener}
 
 Available Inventory:
 ${inventoryContext || "- No imported inventory available yet."}`,
-      };
+        };
 
   function addMessage(speaker, text) {
     const newMessage = {
@@ -407,8 +439,17 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     <main className="simulator-shell">
       <section className="simulator-hero">
         <div>
-          <p className="simulator-eyebrow">Orion Sales Training Lab</p>
-          <h1>AI Customer Sales Simulator</h1>
+          <p className="simulator-eyebrow">
+            {isColdCall ? "Cold Call Practice — FFL Prospect" : "Orion Sales Training Lab"}
+          </p>
+          <h1>
+            {isColdCall ? "🎯 Cold Call Simulator" : "AI Customer Sales Simulator"}
+          </h1>
+          {isColdCall && (
+            <p className="coach-text" style={{ maxWidth: 600 }}>
+              You're calling <strong>{account?.dealerName || "this FFL dealer"}</strong> for the first time. The customer doesn't know you. Earn their attention before pitching anything.
+            </p>
+          )}
         </div>
 
         <div className="simulator-status-card">
@@ -431,7 +472,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         </div>
       </section>
 
-      {account && (
+      {account && !isColdCall && (
         <section className="simulator-panel">
           <h3>Live Account Context</h3>
           <p>
@@ -448,6 +489,33 @@ ${inventoryContext || "- No imported inventory available yet."}`,
           </p>
           <p>
             <strong>Barrier:</strong> {account.barrier || "—"}
+          </p>
+        </section>
+      )}
+
+      {account && isColdCall && (
+        <section
+          className="simulator-panel"
+          style={{
+            borderColor: "rgba(248,113,113,0.35)",
+            background: "rgba(248,113,113,0.06)",
+          }}
+        >
+          <h3>🎯 Cold FFL Prospect</h3>
+          <p>
+            <strong>Business:</strong> {account.dealerName || "—"}
+          </p>
+          <p>
+            <strong>Licensee:</strong> {account.primaryBuyer || "—"}
+          </p>
+          <p>
+            <strong>Location:</strong> {account.location || "—"}
+          </p>
+          <p>
+            <strong>Phone:</strong> {account.phone || "—"}
+          </p>
+          <p className="coach-text" style={{ marginTop: 8 }}>
+            This is a true cold call. The customer has never heard of Orion. Lead with discovery, not a pitch. Earn the right to ask for the order.
           </p>
         </section>
       )}
