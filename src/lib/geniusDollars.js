@@ -15,7 +15,7 @@ export function calcGlcd(overallScore, difficulty) {
   else base = 1;                     // Weak (50-59)
 
   const multiplier = difficulty === "hard" ? 2 : difficulty === "medium" ? 1.5 : 1;
-  return base * multiplier;
+  return Math.round(base * multiplier);
 }
 
 export async function logGlcd({ actor, amount, overallScore, difficulty, sessionRef }) {
