@@ -62,6 +62,7 @@ export default function SalesSimulator() {
   const [isScoring, setIsScoring] = useState(false);
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
   const [repLastMessageTime, setRepLastMessageTime] = useState(null);
+  const [isVoiceConnected, setIsVoiceConnected] = useState(false);
 
   const baseScenario = getScenario(customerType);
 
@@ -175,6 +176,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
 
   async function speakCustomerReply(text) {
     if (!text) return;
+    if (isVoiceConnected) return;
 
     try {
       if (currentAudio) currentAudio.pause();
@@ -316,7 +318,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
   }
 
   useEffect(() => {
-    if (!isLive) return;
+    if (!isLive || isVoiceConnected) return;
 
     const interval = setInterval(() => {
       if (!repLastMessageTime || isCustomerThinking) return;
@@ -331,7 +333,13 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isLive, repLastMessageTime, isCustomerThinking]);
+  }, [isLive, repLastMessageTime, isCustomerThinking, isVoiceConnected]);
+
+  useEffect(() => {
+    if (isVoiceConnected && currentAudio) {
+      currentAudio.pause();
+    }
+  }, [isVoiceConnected, currentAudio]);
 
   function saveSimulatorSession(finalScore, error = null) {
     addSimulatorResult({
@@ -588,6 +596,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         scenario={scenario}
         addMessage={addMessage}
         onCallEnded={endSession}
+        onConnectedChange={setIsVoiceConnected}
       />
 
       <section className="simulator-workspace">

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function RealtimeVoicePanel({
   customerType,
@@ -6,10 +6,15 @@ export default function RealtimeVoicePanel({
   scenario,
   addMessage,
   onCallEnded,
+  onConnectedChange,
 }) {
   const [isConnected, setIsConnected] = useState(false);
   const [status, setStatus] = useState("Ready for live voice.");
   const [recordingUrl, setRecordingUrl] = useState(null);
+
+  useEffect(() => {
+    onConnectedChange?.(isConnected);
+  }, [isConnected, onConnectedChange]);
 
   const peerConnectionRef = useRef(null);
   const dataChannelRef = useRef(null);
