@@ -173,13 +173,19 @@ export default function Dashboard() {
     {repCode && <LiveOrionNumbersCard repCode={repCode} />}
 
     <section className="kpi-grid">
-      {summary.kpis.map((kpi) => (
-        <div key={kpi.id} className="card">
-          <div className="card-label">{kpi.label}</div>
-          <div className="card-value">{kpi.value}</div>
-          <div className="card-note">{kpi.note}</div>
-        </div>
-      ))}
+      {summary.kpis
+        .filter((kpi) =>
+          session?.role === "rep"
+            ? !["kpi-1", "kpi-2", "kpi-3"].includes(kpi.id)
+            : true
+        )
+        .map((kpi) => (
+          <div key={kpi.id} className="card">
+            <div className="card-label">{kpi.label}</div>
+            <div className="card-value">{kpi.value}</div>
+            <div className="card-note">{kpi.note}</div>
+          </div>
+        ))}
     </section>
 
       <section className="kpi-grid" style={{ marginTop: 16 }}>
