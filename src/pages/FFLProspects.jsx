@@ -440,7 +440,7 @@ export default function FFLProspects() {
       >
         <div className="card-label">Verify Before You Dial</div>
         <p className="coach-text">
-          Use the <strong>🔎 Search</strong> and <strong>🗺️ Maps</strong> icons next to each business name to confirm the dealer is still operating and has a real storefront or website before committing to a call. Watch for the "Permanently closed" tag in Google Maps and missing or empty Google Business listings — both are signs the FFL is dormant.
+          Use the <strong>🔎 Search</strong>, <strong>🗺️ Maps</strong>, and <strong>⭐ Reviews</strong> icons next to each business name to confirm the dealer is still operating and gauge customer sentiment before committing to a call. Watch for the "Permanently closed" tag in Google Maps, missing Google Business listings, or low review counts — all signs the FFL is dormant or low-volume.
         </p>
       </div>
 
@@ -643,9 +643,11 @@ function LookupLinks({ ffl }) {
     `"${name}" ${locationParts} firearms dealer`
   );
   const mapsQuery = encodeURIComponent(`${name} ${locationParts}`);
+  const reviewsQuery = encodeURIComponent(`${name} ${locationParts} reviews`);
 
   const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+  const reviewsUrl = `https://www.google.com/search?q=${reviewsQuery}`;
 
   const iconStyle = {
     display: "inline-flex",
@@ -686,6 +688,16 @@ function LookupLinks({ ffl }) {
         style={iconStyle}
       >
         🗺️
+      </a>
+      <a
+        href={reviewsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={stop}
+        title="Open Google Reviews — check star rating, review count, and customer sentiment before dialing"
+        style={iconStyle}
+      >
+        ⭐
       </a>
     </span>
   );
