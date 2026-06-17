@@ -33,6 +33,37 @@ const SECTIONS = [
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+// The in-progress issue is a "living draft": new hires, birthdays, anniversaries
+// and the issue name/date are kept in localStorage so they survive a refresh and
+// only clear once the issue is generated. (Reviews/shout-outs/updates already
+// persist in Supabase, so they're not duplicated here.) localStorage is
+// per-browser, so the draft lives on the machine it was edited from.
+const DRAFT_KEY = "orion_newsletter_draft";
+
+function readDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveDraft(draft) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* storage full or unavailable — draft just won't persist this session */
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 const inputCls =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none";
 const labelCls = "block text-sm font-semibold text-slate-700 mb-1";
@@ -52,11 +83,14 @@ export default function NewsletterAdmin() {
   const [shoutouts, setShoutouts] = useState([]);
   const [updates, setUpdates] = useState([]);
 
-  // Issue setup
+  // Issue setup — seeded from the saved draft (if any) so a refresh doesn't
+  // wipe in-progress work.
   const [issueName, setIssueName] = useState(
-    `Orion Insider — ${todayISO()}`
+    () => readDraft().issueName ?? `Orion Insider — ${todayISO()}`
   );
-  const [issueDate, setIssueDate] = useState(todayISO());
+  const [issueDate, setIssueDate] = useState(
+    () => readDraft().issueDate ?? todayISO()
+  );
   const [joke, setJoke] = useState(FALLBACK_JOKES[0]);
 
   // Joke pool from newsletter_jokes (least-used first); jokeId tracks the
@@ -64,17 +98,24 @@ export default function NewsletterAdmin() {
   const [jokes, setJokes] = useState([]);
   const [jokeId, setJokeId] = useState(null);
 
-  // New hires selected for this issue (snapshot stored in newsletter_issues)
-  const [newHires, setNewHires] = useState([]);
-
-  // Birthdays & work anniversaries for this issue (snapshot, same as hires)
-  const [birthdays, setBirthdays] = useState([]);
-  const [anniversaries, setAnniversaries] = useState([]);
+  // New hires, birthdays and anniversaries for this issue. Seeded from the
+  // saved draft so they persist across refreshes until the issue is generated.
+  const [newHires, setNewHires] = useState(() => readDraft().newHires ?? []);
+  const [birthdays, setBirthdays] = useState(() => readDraft().birthdays ?? []);
+  const [anniversaries, setAnniversaries] = useState(
+    () => readDraft().anniversaries ?? []
+  );
 
   useEffect(() => {
     loadPool();
     loadJokes();
   }, []);
+
+  // Keep the living draft in sync with the editable issue fields. Runs on every
+  // change so a refresh restores exactly what was on screen; cleared on Generate.
+  useEffect(() => {
+    saveDraft({ issueName, issueDate, newHires, birthdays, anniversaries });
+  }, [issueName, issueDate, newHires, birthdays, anniversaries]);
 
   async function loadJokes() {
     const { data } = await supabase
@@ -397,7 +438,9 @@ export default function NewsletterAdmin() {
     }
 
     flash("Issue generated & saved ✓ — live at /newsletter");
-    // Items in this issue are now "published"; clear the desk for the next cycle.
+    // Items in this issue are now "published"; clear the desk (and the saved
+    // draft) for the next cycle.
+    clearDraft();
     setNewHires([]);
     setBirthdays([]);
     setAnniversaries([]);
