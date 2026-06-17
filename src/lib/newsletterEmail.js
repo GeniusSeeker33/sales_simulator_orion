@@ -196,18 +196,20 @@ function buildShoutouts(shoutouts) {
 }
 
 function buildReferral() {
-  const pill = (bg, text) =>
-    `<span style="display:inline-block;margin:0 6px 6px 0;padding:6px 12px;border-radius:999px;background:${bg};color:#ffffff;font:600 13px/1 ${FONT};">${text}</span>`;
+  // Light pills: tinted background with matching dark text, so they stay
+  // readable even if a client strips text colors (white-on-color would vanish).
+  const pill = (bg, color, text) =>
+    `<span style="display:inline-block;margin:0 6px 6px 0;padding:6px 12px;border-radius:999px;background:${bg};color:${color};font:600 13px/1 ${FONT};">${text}</span>`;
   const inner = `
-    <p style="margin:0;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:3px;color:${AMBER};">Grow The Team</p>
-    <h2 style="margin:6px 0 0;font:800 26px/1.2 ${FONT};color:#ffffff;">Employee Referral Program</h2>
+    <p style="margin:0;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:3px;color:${AMBER_DARK};">Grow The Team</p>
+    <h2 style="margin:6px 0 0;font:800 26px/1.2 ${FONT};color:${INK};">Employee Referral Program</h2>
     <div style="width:48px;height:2px;background:${AMBER};margin:12px 0 18px;"></div>
-    <p style="margin:0 0 16px;font:400 15px/1.6 ${FONT};color:#cbd5e1;max-width:520px;">Great people know great people. Help us build the best team in the industry by referring qualified candidates to Orion Wholesale, Taylor Customs, and our warehouse operations.</p>
-    ${pill("#16a34a", "$100 when they start")}${pill(AMBER, "$150 after 90 days")}${pill("#7c3aed", "$250 total")}
+    <p style="margin:0 0 16px;font:400 15px/1.6 ${FONT};color:${SLATE_600};max-width:520px;">Great people know great people. Help us build the best team in the industry by referring qualified candidates to Orion Wholesale, Taylor Customs, and our warehouse operations.</p>
+    ${pill("#dcfce7", "#166534", "$100 when they start")}${pill("#fef3c7", AMBER_DARK, "$150 after 90 days")}${pill("#ede9fe", "#6d28d9", "$250 total")}
     <div style="margin-top:18px;">
       <a href="https://join-orion.com/careers" style="display:inline-block;padding:11px 22px;border-radius:8px;background:${AMBER};color:${INK};font:700 14px/1 ${FONT};text-decoration:none;">View Careers</a>
     </div>`;
-  return `<tr><td style="padding:36px 40px;background:${INK};">${inner}</td></tr>`;
+  return `<tr><td style="padding:36px 40px;background:${SLATE_50};border-top:1px solid ${SLATE_200};">${inner}</td></tr>`;
 }
 
 const DEFAULT_JOKE =
@@ -224,12 +226,16 @@ export function buildNewsletterEmailHTML({
   shoutouts = [],
   departments = [],
 } = {}) {
+  // Light masthead: dark text on white. Email clients (notably Gmail's paste
+  // sanitizer) often strip light text colors while keeping dark backgrounds,
+  // which would render white-on-black text invisible — so we avoid that entirely
+  // and lean on a heavy amber rule for brand presence.
   const masthead = `
     <tr>
-      <td style="padding:44px 40px;background:${INK};border-top:4px solid ${AMBER};">
-        <p style="margin:0;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:5px;color:${AMBER};">Orion Wholesale</p>
-        <h1 style="margin:14px 0 0;font:800 40px/1.1 ${FONT};color:#ffffff;letter-spacing:-1px;">Orion Insider</h1>
-        <p style="margin:16px 0 0;padding-top:14px;border-top:1px solid rgba(255,255,255,0.12);font:400 13px/1.4 ${FONT};text-transform:uppercase;letter-spacing:2px;color:${SLATE_400};">${esc(issueName)}</p>
+      <td style="padding:40px 40px 32px;background:#ffffff;border-top:6px solid ${AMBER};border-bottom:1px solid ${SLATE_200};">
+        <p style="margin:0;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:5px;color:${AMBER_DARK};">Orion Wholesale</p>
+        <h1 style="margin:14px 0 0;font:800 40px/1.1 ${FONT};color:${INK};letter-spacing:-1px;">Orion Insider</h1>
+        <p style="margin:16px 0 0;padding-top:14px;border-top:1px solid ${SLATE_200};font:400 13px/1.4 ${FONT};text-transform:uppercase;letter-spacing:2px;color:${SLATE_500};">${esc(issueName)}</p>
       </td>
     </tr>`;
 
