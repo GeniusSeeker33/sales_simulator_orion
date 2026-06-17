@@ -4,6 +4,10 @@ import { useAuth } from "../context/AuthContext";
 import { employees, getEmployeeFullName } from "../data/employees";
 import NewsletterContent from "../components/NewsletterContent";
 import { NEW_HIRE_DEPARTMENTS, REVIEW_SOURCES } from "../lib/newsletter";
+import {
+  buildNewsletterEmailHTML,
+  buildNewsletterEmailText,
+} from "../lib/newsletterEmail";
 import Layout from "../components/layout/Layout";
 
 // Fallback jokes used only if the newsletter_jokes table can't be reached.
@@ -420,6 +424,46 @@ export default function NewsletterAdmin() {
     window.location.href = `mailto:?bcc=${recipients}&subject=${subject}&body=${body}`;
   }
 
+  // Copy an email-safe version of the newsletter to the clipboard as rich HTML
+  // so it can be pasted straight into a Gmail/Outlook compose window. We write
+  // both an HTML and a plain-text flavor; clients that ignore HTML get the text.
+  async function copyForEmail() {
+    const html = buildNewsletterEmailHTML({
+      issueName,
+      joke,
+      updates,
+      reviews,
+      newHires,
+      birthdays,
+      anniversaries,
+      shoutouts,
+      departments: NEW_HIRE_DEPARTMENTS,
+    });
+    const text = buildNewsletterEmailText({
+      issueName,
+      joke,
+      link: `${window.location.origin}/newsletter`,
+    });
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([text], { type: "text/plain" }),
+        }),
+      ]);
+      setStatus("Newsletter copied — paste into a Gmail/Outlook compose window.");
+    } catch (err) {
+      // Older browsers (or insecure origins) lack ClipboardItem; fall back to
+      // copying the plain text so the action still does something useful.
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("Copied as plain text — rich formatting needs Chrome/Edge/Safari.");
+      } catch {
+        setStatus("Couldn't access the clipboard. Try again or use Export PDF.");
+      }
+    }
+  }
+
   return (
     <Layout title="Newsletter">
       {/* Toolbar — hidden when printing */}
@@ -448,6 +492,9 @@ export default function NewsletterAdmin() {
             </button>
             <button onClick={exportPDF} className={btnGhost}>
               Export PDF
+            </button>
+            <button onClick={copyForEmail} className={btnGhost}>
+              Copy for Email
             </button>
             <button onClick={emailNewsletter} className={btnGhost}>
               Email to Employees
