@@ -58,26 +58,45 @@ export default function NewsletterAdmin() {
   }, []);
 
   async function loadPool() {
-    const [{ data: r }, { data: s }, { data: u }] = await Promise.all([
-      supabase
-        .from("newsletter_reviews")
-        .select("*")
-        .eq("approved", true)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("newsletter_shoutouts")
-        .select("*")
-        .eq("approved", true)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("newsletter_updates")
-        .select("*")
-        .eq("approved", true)
-        .order("update_date", { ascending: false }),
-    ]);
-    setReviews(r || []);
-    setShoutouts(s || []);
-    setUpdates(u || []);
+    const [{ data: r }, { data: s }, { data: u }, { data: issues }] =
+      await Promise.all([
+        supabase
+          .from("newsletter_reviews")
+          .select("*")
+          .eq("approved", true)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("newsletter_shoutouts")
+          .select("*")
+          .eq("approved", true)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("newsletter_updates")
+          .select("*")
+          .eq("approved", true)
+          .order("update_date", { ascending: false }),
+        supabase.from("newsletter_issues").select("generated_content"),
+      ]);
+
+    // Collect IDs already published in a prior issue so each new cycle starts
+    // with only the items added since the last "Generate".
+    const usedReviewIds = new Set();
+    const usedShoutoutIds = new Set();
+    const usedUpdateIds = new Set();
+    for (const issue of issues || []) {
+      try {
+        const snap = JSON.parse(issue.generated_content || "{}");
+        (snap.reviewIds || []).forEach((id) => usedReviewIds.add(id));
+        (snap.shoutoutIds || []).forEach((id) => usedShoutoutIds.add(id));
+        (snap.updateIds || []).forEach((id) => usedUpdateIds.add(id));
+      } catch {
+        /* skip malformed snapshot */
+      }
+    }
+
+    setReviews((r || []).filter((row) => !usedReviewIds.has(row.id)));
+    setShoutouts((s || []).filter((row) => !usedShoutoutIds.has(row.id)));
+    setUpdates((u || []).filter((row) => !usedUpdateIds.has(row.id)));
   }
 
   function flash(msg) {
@@ -235,6 +254,9 @@ export default function NewsletterAdmin() {
     setGenerating(false);
     if (error) return flash(`Error saving issue: ${error.message}`);
     flash("Issue generated & saved ✓ — live at /newsletter");
+    // Items in this issue are now "published"; clear the desk for the next cycle.
+    setNewHires([]);
+    loadPool();
   }
 
   /* ---------------- Export PDF ---------------- */
@@ -653,9 +675,11 @@ export default function NewsletterAdmin() {
 
           <p className="text-xs text-slate-400">
             Reviews, shout-outs and updates save to Supabase instantly and
-            appear in the preview. Click <strong>Generate</strong> to save this
-            issue (joke + new hires) and publish it to{" "}
-            <code>/newsletter</code>.
+            appear in the preview. Click <strong>Generate</strong> to publish
+            the current set (joke + new hires + everything in this preview) to{" "}
+            <code>/newsletter</code>. Published items are tied to that issue, so
+            the next time you open this page you start fresh with only the new
+            content for the next cycle.
           </p>
         </div>
 
