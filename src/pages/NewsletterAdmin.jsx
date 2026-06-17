@@ -1,0 +1,677 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext";
+import { employees, getEmployeeFullName } from "../data/employees";
+import NewsletterContent from "../components/NewsletterContent";
+import { NEW_HIRE_DEPARTMENTS, REVIEW_SOURCES } from "../lib/newsletter";
+import Layout from "../components/layout/Layout";
+
+const JOKES = [
+  "Why did the sales rep bring a ladder to work? Because leadership said it was time to take performance to the next level.",
+  "I told my manager I needed a raise because three other companies were after me. He asked which ones. I said the electric, gas, and water company.",
+  "Why don't salespeople play hide and seek? Because good luck hiding when quota always finds you.",
+  "Our forecast is like a weather forecast — confident, detailed, and occasionally completely wrong.",
+  "Why did the CRM go to therapy? Too many unresolved leads.",
+];
+
+const SECTIONS = [
+  { key: "setup", label: "Issue Setup" },
+  { key: "review", label: "Add Review" },
+  { key: "shoutout", label: "Add Shout-Out" },
+  { key: "update", label: "Add Company Update" },
+  { key: "hires", label: "New Hires" },
+];
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const inputCls =
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none";
+const labelCls = "block text-sm font-semibold text-slate-700 mb-1";
+const btnPrimary =
+  "rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-amber-400 disabled:opacity-50";
+const btnGhost =
+  "rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50";
+
+export default function NewsletterAdmin() {
+  const { session } = useAuth();
+
+  const [activeSection, setActiveSection] = useState("setup");
+  const [status, setStatus] = useState("");
+
+  // Content pool (pulled from Supabase)
+  const [reviews, setReviews] = useState([]);
+  const [shoutouts, setShoutouts] = useState([]);
+  const [updates, setUpdates] = useState([]);
+
+  // Issue setup
+  const [issueName, setIssueName] = useState(
+    `Orion Insider — ${todayISO()}`
+  );
+  const [issueDate, setIssueDate] = useState(todayISO());
+  const [joke, setJoke] = useState(JOKES[0]);
+
+  // New hires selected for this issue (snapshot stored in newsletter_issues)
+  const [newHires, setNewHires] = useState([]);
+
+  useEffect(() => {
+    loadPool();
+  }, []);
+
+  async function loadPool() {
+    const [{ data: r }, { data: s }, { data: u }] = await Promise.all([
+      supabase
+        .from("newsletter_reviews")
+        .select("*")
+        .eq("approved", true)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("newsletter_shoutouts")
+        .select("*")
+        .eq("approved", true)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("newsletter_updates")
+        .select("*")
+        .eq("approved", true)
+        .order("update_date", { ascending: false }),
+    ]);
+    setReviews(r || []);
+    setShoutouts(s || []);
+    setUpdates(u || []);
+  }
+
+  function flash(msg) {
+    setStatus(msg);
+    setTimeout(() => setStatus(""), 3000);
+  }
+
+  /* ---------------- Add Review ---------------- */
+  const [reviewForm, setReviewForm] = useState({
+    source: "Google",
+    rating: 5,
+    reviewer_name: "",
+    review_text: "",
+    review_date: todayISO(),
+  });
+
+  async function addReview(e) {
+    e.preventDefault();
+    if (!reviewForm.review_text.trim()) return flash("Review text is required.");
+    const { error } = await supabase.from("newsletter_reviews").insert([
+      { ...reviewForm, rating: Number(reviewForm.rating), approved: true },
+    ]);
+    if (error) return flash(`Error: ${error.message}`);
+    setReviewForm({
+      source: "Google",
+      rating: 5,
+      reviewer_name: "",
+      review_text: "",
+      review_date: todayISO(),
+    });
+    flash("Review added ✓");
+    loadPool();
+  }
+
+  /* ---------------- Add Shout-Out ---------------- */
+  const [shoutForm, setShoutForm] = useState({
+    employee_name: "",
+    department: "Sales",
+    submitted_by: session?.name || "Leadership",
+    shoutout_text: "",
+  });
+
+  async function addShoutout(e) {
+    e.preventDefault();
+    if (!shoutForm.employee_name.trim() || !shoutForm.shoutout_text.trim())
+      return flash("Employee name and shout-out text are required.");
+    const { error } = await supabase
+      .from("newsletter_shoutouts")
+      .insert([{ ...shoutForm, approved: true }]);
+    if (error) return flash(`Error: ${error.message}`);
+    setShoutForm({
+      employee_name: "",
+      department: "Sales",
+      submitted_by: session?.name || "Leadership",
+      shoutout_text: "",
+    });
+    flash("Shout-out added ✓");
+    loadPool();
+  }
+
+  /* ---------------- Add Company Update ---------------- */
+  const [updateForm, setUpdateForm] = useState({
+    title: "",
+    description: "",
+    category: "Company",
+    update_date: todayISO(),
+  });
+
+  async function addUpdate(e) {
+    e.preventDefault();
+    if (!updateForm.title.trim() || !updateForm.description.trim())
+      return flash("Title and description are required.");
+    const { error } = await supabase
+      .from("newsletter_updates")
+      .insert([{ ...updateForm, approved: true }]);
+    if (error) return flash(`Error: ${error.message}`);
+    setUpdateForm({
+      title: "",
+      description: "",
+      category: "Company",
+      update_date: todayISO(),
+    });
+    flash("Update added ✓");
+    loadPool();
+  }
+
+  /* ---------------- New Hires ---------------- */
+  const [hireForm, setHireForm] = useState({
+    name: "",
+    department: "Sales",
+    title: "",
+    start_date: todayISO(),
+  });
+
+  // Recent roster hires, newest first, to quick-add from
+  const recentRoster = useMemo(
+    () =>
+      [...employees]
+        .filter((e) => e.hireDate)
+        .sort((a, b) => (a.hireDate < b.hireDate ? 1 : -1))
+        .slice(0, 12),
+    []
+  );
+
+  function addHire() {
+    if (!hireForm.name.trim()) return flash("New hire name is required.");
+    setNewHires((prev) => [
+      ...prev,
+      { ...hireForm, id: `${hireForm.name}-${prev.length}` },
+    ]);
+    setHireForm({
+      name: "",
+      department: "Sales",
+      title: "",
+      start_date: todayISO(),
+    });
+  }
+
+  function quickAddFromRoster(emp) {
+    setNewHires((prev) => [
+      ...prev,
+      {
+        id: `${emp.code}-${prev.length}`,
+        name: getEmployeeFullName(emp),
+        department: "Sales",
+        title: "Sales Executive",
+        start_date: emp.hireDate || todayISO(),
+      },
+    ]);
+  }
+
+  function removeHire(id) {
+    setNewHires((prev) => prev.filter((h) => h.id !== id));
+  }
+
+  /* ---------------- Generate (save issue snapshot) ---------------- */
+  const [generating, setGenerating] = useState(false);
+
+  async function generateIssue() {
+    setGenerating(true);
+    const generated_content = JSON.stringify({
+      newHires,
+      reviewIds: reviews.map((r) => r.id),
+      shoutoutIds: shoutouts.map((s) => s.id),
+      updateIds: updates.map((u) => u.id),
+    });
+    const { error } = await supabase.from("newsletter_issues").insert([
+      {
+        issue_name: issueName,
+        issue_date: issueDate,
+        joke,
+        generated_content,
+      },
+    ]);
+    setGenerating(false);
+    if (error) return flash(`Error saving issue: ${error.message}`);
+    flash("Issue generated & saved ✓ — live at /newsletter");
+  }
+
+  /* ---------------- Export PDF ---------------- */
+  function exportPDF() {
+    window.print();
+  }
+
+  /* ---------------- Email Distribution ---------------- */
+  function emailNewsletter() {
+    const recipients = employees
+      .map((e) => e.email)
+      .filter(Boolean)
+      .join(",");
+    const link = `${window.location.origin}/newsletter`;
+    const subject = encodeURIComponent(issueName);
+    const body = encodeURIComponent(
+      `Team,\n\nThe latest issue of the Orion Insider is out. Read it here:\n${link}\n\n${joke}\n\n— Orion Wholesale`
+    );
+    window.location.href = `mailto:?bcc=${recipients}&subject=${subject}&body=${body}`;
+  }
+
+  return (
+    <Layout title="Newsletter">
+      {/* Toolbar — hidden when printing */}
+      <div className="no-print sticky top-0 z-10 border-b bg-white px-6 py-4 shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">
+              Newsletter Dashboard
+            </h1>
+            <p className="text-sm text-slate-500">
+              Forms → Preview → Export / Send
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {status && (
+              <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                {status}
+              </span>
+            )}
+            <button
+              onClick={generateIssue}
+              disabled={generating}
+              className={btnPrimary}
+            >
+              {generating ? "Generating…" : "Generate"}
+            </button>
+            <button onClick={exportPDF} className={btnGhost}>
+              Export PDF
+            </button>
+            <button onClick={emailNewsletter} className={btnGhost}>
+              Email to Employees
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[420px_1fr]">
+        {/* ---------- Left: data forms ---------- */}
+        <div className="no-print space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setActiveSection(s.key)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  activeSection === s.key
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-600 border border-slate-200"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            {/* Issue setup */}
+            {activeSection === "setup" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold">Issue Setup</h2>
+                <div>
+                  <label className={labelCls}>Issue Name</label>
+                  <input
+                    className={inputCls}
+                    value={issueName}
+                    onChange={(e) => setIssueName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Issue Date</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Opening Joke</label>
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    value={joke}
+                    onChange={(e) => setJoke(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setJoke(JOKES[(JOKES.indexOf(joke) + 1) % JOKES.length])
+                    }
+                    className="mt-2 text-sm font-semibold text-amber-600 hover:underline"
+                  >
+                    🎲 Shuffle joke
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Add review */}
+            {activeSection === "review" && (
+              <form onSubmit={addReview} className="space-y-4">
+                <h2 className="text-lg font-bold">Add Review</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Source</label>
+                    <select
+                      className={inputCls}
+                      value={reviewForm.source}
+                      onChange={(e) =>
+                        setReviewForm({ ...reviewForm, source: e.target.value })
+                      }
+                    >
+                      {REVIEW_SOURCES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Rating</label>
+                    <select
+                      className={inputCls}
+                      value={reviewForm.rating}
+                      onChange={(e) =>
+                        setReviewForm({ ...reviewForm, rating: e.target.value })
+                      }
+                    >
+                      {[5, 4, 3, 2, 1].map((n) => (
+                        <option key={n} value={n}>
+                          {n} ★
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Reviewer Name</label>
+                  <input
+                    className={inputCls}
+                    value={reviewForm.reviewer_name}
+                    onChange={(e) =>
+                      setReviewForm({
+                        ...reviewForm,
+                        reviewer_name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Review Text *</label>
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    value={reviewForm.review_text}
+                    onChange={(e) =>
+                      setReviewForm({
+                        ...reviewForm,
+                        review_text: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <button className={btnPrimary}>Add Review</button>
+              </form>
+            )}
+
+            {/* Add shout-out */}
+            {activeSection === "shoutout" && (
+              <form onSubmit={addShoutout} className="space-y-4">
+                <h2 className="text-lg font-bold">Add Shout-Out</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Employee Name *</label>
+                    <input
+                      className={inputCls}
+                      value={shoutForm.employee_name}
+                      onChange={(e) =>
+                        setShoutForm({
+                          ...shoutForm,
+                          employee_name: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Department</label>
+                    <select
+                      className={inputCls}
+                      value={shoutForm.department}
+                      onChange={(e) =>
+                        setShoutForm({
+                          ...shoutForm,
+                          department: e.target.value,
+                        })
+                      }
+                    >
+                      {NEW_HIRE_DEPARTMENTS.map((d) => (
+                        <option key={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Submitted By</label>
+                  <input
+                    className={inputCls}
+                    value={shoutForm.submitted_by}
+                    onChange={(e) =>
+                      setShoutForm({
+                        ...shoutForm,
+                        submitted_by: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Shout-Out Text *</label>
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    value={shoutForm.shoutout_text}
+                    onChange={(e) =>
+                      setShoutForm({
+                        ...shoutForm,
+                        shoutout_text: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <button className={btnPrimary}>Add Shout-Out</button>
+              </form>
+            )}
+
+            {/* Add update */}
+            {activeSection === "update" && (
+              <form onSubmit={addUpdate} className="space-y-4">
+                <h2 className="text-lg font-bold">Add Company Update</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Category</label>
+                    <input
+                      className={inputCls}
+                      value={updateForm.category}
+                      onChange={(e) =>
+                        setUpdateForm({
+                          ...updateForm,
+                          category: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Date</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={updateForm.update_date}
+                      onChange={(e) =>
+                        setUpdateForm({
+                          ...updateForm,
+                          update_date: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Title *</label>
+                  <input
+                    className={inputCls}
+                    value={updateForm.title}
+                    onChange={(e) =>
+                      setUpdateForm({ ...updateForm, title: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Description *</label>
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    value={updateForm.description}
+                    onChange={(e) =>
+                      setUpdateForm({
+                        ...updateForm,
+                        description: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <button className={btnPrimary}>Add Update</button>
+              </form>
+            )}
+
+            {/* New hires */}
+            {activeSection === "hires" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold">New Hires</h2>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className={labelCls}>Name *</label>
+                    <input
+                      className={inputCls}
+                      value={hireForm.name}
+                      onChange={(e) =>
+                        setHireForm({ ...hireForm, name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Department</label>
+                    <select
+                      className={inputCls}
+                      value={hireForm.department}
+                      onChange={(e) =>
+                        setHireForm({ ...hireForm, department: e.target.value })
+                      }
+                    >
+                      {NEW_HIRE_DEPARTMENTS.map((d) => (
+                        <option key={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Start Date</label>
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={hireForm.start_date}
+                      onChange={(e) =>
+                        setHireForm({ ...hireForm, start_date: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className={labelCls}>Title / Role</label>
+                    <input
+                      className={inputCls}
+                      value={hireForm.title}
+                      onChange={(e) =>
+                        setHireForm({ ...hireForm, title: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <button type="button" onClick={addHire} className={btnPrimary}>
+                  Add Hire
+                </button>
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-slate-600">
+                    Quick-add from roster
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {recentRoster.map((emp) => (
+                      <button
+                        key={emp.code}
+                        type="button"
+                        onClick={() => quickAddFromRoster(emp)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                      >
+                        + {getEmployeeFullName(emp)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {newHires.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-600">
+                      Selected this issue ({newHires.length})
+                    </p>
+                    {newHires.map((h) => (
+                      <div
+                        key={h.id}
+                        className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                      >
+                        <span>
+                          {h.name}{" "}
+                          <span className="text-slate-400">· {h.department}</span>
+                        </span>
+                        <button
+                          onClick={() => removeHire(h.id)}
+                          className="text-rose-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-400">
+            Reviews, shout-outs and updates save to Supabase instantly and
+            appear in the preview. Click <strong>Generate</strong> to save this
+            issue (joke + new hires) and publish it to{" "}
+            <code>/newsletter</code>.
+          </p>
+        </div>
+
+        {/* ---------- Right: live preview ---------- */}
+        <div id="newsletter-print">
+          <NewsletterContent
+            issueName={issueName}
+            joke={joke}
+            updates={updates}
+            reviews={reviews}
+            newHires={newHires}
+            shoutouts={shoutouts}
+            session={session}
+          />
+        </div>
+      </div>
+    </Layout>
+  );
+}

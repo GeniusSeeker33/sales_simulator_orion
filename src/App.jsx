@@ -20,6 +20,8 @@ import FFLProspects from "./pages/FFLProspects";
 import PaceReport from "./pages/PaceReport";
 import CommissionReport from "./pages/CommissionReport";
 import ProductMix from "./pages/ProductMix";
+import Newsletter from "./pages/Newsletter.jsx";
+import NewsletterAdmin from "./pages/NewsletterAdmin.jsx";
 
 function RootRedirect() {
   const { session } = useAuth();
@@ -45,6 +47,8 @@ export default function App() {
       <Route path="/levels" element={<ProtectedRoute><Levels /></ProtectedRoute>} />
       <Route path="/rep-metrics" element={<ProtectedRoute><RepMetrics /></ProtectedRoute>} />
       <Route path="/ffl-prospects" element={<ProtectedRoute><FFLProspects /></ProtectedRoute>} />
+      <Route path="/newsletter" element={<Newsletter />} />
+      <Route path="/newsletter-admin" element={<ProtectedRoute roles={["manager", "admin"]}><NewsletterAdmin /></ProtectedRoute>} />
 
       <Route path="/pace-report" element={<ProtectedRoute roles={["manager", "admin"]}><PaceReport /></ProtectedRoute>} />
       <Route path="/commission-report" element={<ProtectedRoute roles={["manager", "admin"]}><CommissionReport /></ProtectedRoute>} />

@@ -22,6 +22,7 @@ const MANAGER_NAV = [
   { to: "/commission-report", label: "Commission Report" },
   { to: "/product-mix", label: "Product Mix" },
   { to: "/employees", label: "Employees" },
+  { to: "/newsletter-admin", label: "Newsletter" },
 ];
 
 const ADMIN_NAV = [
@@ -30,7 +31,7 @@ const ADMIN_NAV = [
   { to: "/admin/import", label: "Import Data" },
 ];
 
-const PROTECTED_PATHS = ["/manager-view", "/pace-report", "/commission-report", "/product-mix", "/employees", "/admin-view", "/admin/import"];
+const PROTECTED_PATHS = ["/manager-view", "/pace-report", "/commission-report", "/product-mix", "/employees", "/newsletter-admin", "/admin-view", "/admin/import"];
 
 function getNavItems(role) {
   let items;

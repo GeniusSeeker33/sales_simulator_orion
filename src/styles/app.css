@@ -1446,6 +1446,26 @@ button:hover {
   vertical-align: middle;
 }
 .admin-table tr:last-child td { border-bottom: none; }
+/* Newsletter PDF export — print only the preview area */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #newsletter-print,
+  #newsletter-print * {
+    visibility: visible;
+  }
+  #newsletter-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
 .admin-table-sub {
   font-size: 0.75rem;
   color: #97a3c6;
