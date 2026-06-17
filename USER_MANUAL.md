@@ -535,6 +535,103 @@ The **+ Refer a Candidate** button at the top of this page opens the referral fo
 
 ---
 
+### Newsletter (Orion Insider)
+
+**Path: Newsletter in the sidebar**
+
+The Orion Insider is the company's bi-weekly employee newsletter. This dashboard is where managers and admins build each issue, preview it live, and publish it. The published newsletter is readable by anyone at the public `/newsletter` link — handy for emailing to the whole team.
+
+The page is laid out with **content forms on the left and a live preview on the right**. Anything you add appears in the preview instantly so you can see the finished issue as you build it.
+
+---
+
+#### The Bi-Weekly Workflow
+
+1. Open **Newsletter** from the sidebar.
+2. Work through the five tabs (below), filling in what you want in this issue.
+3. Watch the live preview update on the right.
+4. Click **Generate** to publish the issue to `/newsletter`.
+5. Use **Export PDF** and/or **Email to Employees** to distribute it.
+
+Each issue is self-contained: when you open the dashboard, you only see content added **since the last issue you published**, so every cycle starts with a clean slate. After you click Generate, the working set clears automatically and the next cycle begins.
+
+---
+
+#### The Five Tabs
+
+| Tab | What It Does |
+|-----|-------------|
+| **Issue Setup** | Name the issue, set the issue date, and pick the opening joke |
+| **Add Review** | Add a customer or employer review (positive **or** critical) |
+| **Add Shout-Out** | Recognize an employee |
+| **Add Company Update** | Post an announcement, milestone, or news item |
+| **New Hires** | Add new team members, or quick-add them from the roster |
+
+---
+
+#### Opening Joke
+
+On the Issue Setup tab, the **Opening Joke** is pulled from the company joke library and pre-filled with one that hasn't been used recently. You can:
+
+- Edit the text directly in the box for this issue
+- Click **🎲 Shuffle joke** to rotate to a different one (the small tag shows its category and how many times it has run)
+
+When you Generate the issue, the selected joke is marked as used so future issues favor fresh jokes.
+
+---
+
+#### Adding Reviews (including critical ones)
+
+Orion shares **both glowing and critical reviews** for transparency. To add one:
+
+1. Go to the **Add Review** tab
+2. Pick the **Source** (Google, Glassdoor, Indeed, Facebook, etc.)
+3. Set the **Rating** (1–5 stars)
+4. Enter the **Reviewer Name** and **Review Text**
+5. *(Optional but recommended for critical reviews)* Fill in the **Leadership Response** — a short note on how leadership is addressing the feedback
+6. Click **Add Review**
+
+In the newsletter, positive reviews show with a gold accent and critical reviews (3 stars or fewer) show with a muted gray accent, so honest feedback reads as honest feedback rather than a celebration. If you added a Leadership Response, it appears in an "Our response" box directly under the review.
+
+---
+
+#### Adding Shout-Outs
+
+On the **Add Shout-Out** tab, enter the **Employee Name**, their **Department**, who it's **Submitted By** (auto-filled with your name), and the **Shout-Out Text**. Click **Add Shout-Out**. It saves immediately and appears in the Recognition section of the preview.
+
+---
+
+#### Adding Company Updates
+
+On the **Add Company Update** tab, enter a **Category**, **Date**, **Title**, and **Description**, then click **Add Update**. Updates appear in the "Company Updates" section.
+
+---
+
+#### Adding New Hires
+
+On the **New Hires** tab you can either:
+
+- Type a new hire in manually (Name, Department, Title, Start Date) and click **Add Hire**, or
+- Click any name under **Quick-add from roster** to pull a recent hire straight from the employee directory
+
+Selected hires are listed below and can be removed before you publish. New hires are grouped by department in the newsletter's "New Team Members" section.
+
+---
+
+#### Publishing and Distributing
+
+The top toolbar has three buttons:
+
+| Button | What It Does |
+|--------|-------------|
+| **Generate** | Publishes the current issue (joke + new hires + everything in the preview) to the public `/newsletter` page and starts the next cycle |
+| **Export PDF** | Opens your browser's print dialog to save the newsletter as a PDF |
+| **Email to Employees** | Opens a pre-filled email to the whole roster (bcc'd) with a link to the live newsletter |
+
+> **Tip:** Reviews, shout-outs, and updates save to the database the moment you click their "Add" button. The joke and new-hire list are only saved when you click **Generate**. So always click Generate to lock in the full issue before exporting or emailing.
+
+---
+
 ## 4. Admin Guide
 
 Admins have access to everything Managers see, plus the pages below.
@@ -962,6 +1059,10 @@ Your JSON should look like this:
 | Track my referral bonuses | Dashboard → Refer & Earn card |
 | See my team's coaching alerts | Manager View |
 | Review a rep's simulator sessions | Manager View → Simulator Activity |
+| Build or publish the company newsletter | Newsletter |
+| Add a customer or employer review (incl. critical) | Newsletter → Add Review |
+| Recognize an employee in the newsletter | Newsletter → Add Shout-Out |
+| Email the newsletter to the whole team | Newsletter → Email to Employees |
 | Record today's prize winners | Prize Leaderboard or Manager View |
 | Advance a referral status | Admin View → Referral Program |
 | See company financials | Admin View |
