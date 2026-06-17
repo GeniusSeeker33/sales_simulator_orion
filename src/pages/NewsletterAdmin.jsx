@@ -6,7 +6,8 @@ import NewsletterContent from "../components/NewsletterContent";
 import { NEW_HIRE_DEPARTMENTS, REVIEW_SOURCES } from "../lib/newsletter";
 import Layout from "../components/layout/Layout";
 
-const JOKES = [
+// Fallback jokes used only if the newsletter_jokes table can't be reached.
+const FALLBACK_JOKES = [
   "Why did the sales rep bring a ladder to work? Because leadership said it was time to take performance to the next level.",
   "I told my manager I needed a raise because three other companies were after me. He asked which ones. I said the electric, gas, and water company.",
   "Why don't salespeople play hide and seek? Because good luck hiding when quota always finds you.",
@@ -48,14 +49,49 @@ export default function NewsletterAdmin() {
     `Orion Insider — ${todayISO()}`
   );
   const [issueDate, setIssueDate] = useState(todayISO());
-  const [joke, setJoke] = useState(JOKES[0]);
+  const [joke, setJoke] = useState(FALLBACK_JOKES[0]);
+
+  // Joke pool from newsletter_jokes (least-used first); jokeId tracks the
+  // selected joke so we can bump its usage stats when the issue is generated.
+  const [jokes, setJokes] = useState([]);
+  const [jokeId, setJokeId] = useState(null);
 
   // New hires selected for this issue (snapshot stored in newsletter_issues)
   const [newHires, setNewHires] = useState([]);
 
   useEffect(() => {
     loadPool();
+    loadJokes();
   }, []);
+
+  async function loadJokes() {
+    const { data } = await supabase
+      .from("newsletter_jokes")
+      .select("*")
+      .eq("active", true)
+      .order("used_count", { ascending: true });
+    if (data && data.length) {
+      setJokes(data);
+      setJoke(data[0].joke_text);
+      setJokeId(data[0].id);
+    }
+  }
+
+  // Rotate to the next joke. Prefers the live table (least-used first) and
+  // falls back to the hardcoded list if the table is empty/unreachable.
+  function shuffleJoke() {
+    if (jokes.length) {
+      const idx = jokes.findIndex((j) => j.id === jokeId);
+      const next = jokes[(idx + 1) % jokes.length];
+      setJoke(next.joke_text);
+      setJokeId(next.id);
+    } else {
+      const idx = FALLBACK_JOKES.indexOf(joke);
+      setJoke(FALLBACK_JOKES[(idx + 1) % FALLBACK_JOKES.length]);
+    }
+  }
+
+  const currentJoke = jokes.find((j) => j.id === jokeId);
 
   async function loadPool() {
     const [{ data: r }, { data: s }, { data: u }, { data: issues }] =
@@ -253,10 +289,23 @@ export default function NewsletterAdmin() {
     ]);
     setGenerating(false);
     if (error) return flash(`Error saving issue: ${error.message}`);
+
+    // Mark the published joke as used so rotation favors fresh ones next time.
+    if (jokeId) {
+      await supabase
+        .from("newsletter_jokes")
+        .update({
+          used_count: (currentJoke?.used_count || 0) + 1,
+          last_used_at: new Date().toISOString(),
+        })
+        .eq("id", jokeId);
+    }
+
     flash("Issue generated & saved ✓ — live at /newsletter");
     // Items in this issue are now "published"; clear the desk for the next cycle.
     setNewHires([]);
     loadPool();
+    loadJokes();
   }
 
   /* ---------------- Export PDF ---------------- */
@@ -363,15 +412,20 @@ export default function NewsletterAdmin() {
                     value={joke}
                     onChange={(e) => setJoke(e.target.value)}
                   />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setJoke(JOKES[(JOKES.indexOf(joke) + 1) % JOKES.length])
-                    }
-                    className="mt-2 text-sm font-semibold text-amber-600 hover:underline"
-                  >
-                    🎲 Shuffle joke
-                  </button>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={shuffleJoke}
+                      className="text-sm font-semibold text-amber-600 hover:underline"
+                    >
+                      🎲 Shuffle joke
+                    </button>
+                    {currentJoke && (
+                      <span className="text-xs text-slate-400">
+                        {currentJoke.category} · used {currentJoke.used_count}×
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
