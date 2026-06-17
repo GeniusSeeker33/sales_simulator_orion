@@ -5,6 +5,7 @@ export const NEW_HIRE_DEPARTMENTS = [
   "Warehouse",
   "Executives",
   "Taylor Customs",
+  "Corporate & Administrative",
 ];
 
 // Platforms a review can come from — customer/business review sites plus
