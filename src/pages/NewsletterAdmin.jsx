@@ -146,6 +146,7 @@ export default function NewsletterAdmin() {
     rating: 5,
     reviewer_name: "",
     review_text: "",
+    response: "",
     review_date: todayISO(),
   });
 
@@ -161,6 +162,7 @@ export default function NewsletterAdmin() {
       rating: 5,
       reviewer_name: "",
       review_text: "",
+      response: "",
       review_date: todayISO(),
     });
     flash("Review added ✓");
@@ -489,6 +491,26 @@ export default function NewsletterAdmin() {
                       setReviewForm({
                         ...reviewForm,
                         review_text: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>
+                    Leadership Response{" "}
+                    <span className="font-normal text-slate-400">
+                      (optional — great for critical reviews)
+                    </span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    placeholder="How we're addressing this feedback…"
+                    value={reviewForm.response}
+                    onChange={(e) =>
+                      setReviewForm({
+                        ...reviewForm,
+                        response: e.target.value,
                       })
                     }
                   />

@@ -90,32 +90,52 @@ export default function NewsletterContent({
         </div>
       </section>
 
-      {/* Customer reviews */}
+      {/* Reviews — celebratory and critical alike, for transparency */}
       <section className="border-b border-slate-200 px-10 py-10">
-        <SectionHeading kicker="In Their Words" title="Customer Reviews" />
+        <SectionHeading kicker="In Their Words" title="Reviews" />
 
         <div className="grid gap-4">
           {reviews.length > 0 ? (
-            reviews.map((review) => (
-              <figure
-                key={review.id}
-                className="rounded-lg border-l-4 border-amber-500 bg-slate-50 py-5 pl-6 pr-5"
-              >
-                <p className="text-sm tracking-wide text-amber-500">
-                  {"★".repeat(review.rating || 5)}
-                  <span className="text-slate-300">
-                    {"★".repeat(Math.max(0, 5 - (review.rating || 5)))}
-                  </span>
-                </p>
-                <blockquote className="mt-3 text-lg italic leading-relaxed text-slate-700">
-                  &ldquo;{review.review_text}&rdquo;
-                </blockquote>
-                <figcaption className="mt-3 text-sm font-medium text-slate-500">
-                  {review.reviewer_name || "Customer"}
-                  <span className="text-slate-400"> · via {review.source}</span>
-                </figcaption>
-              </figure>
-            ))
+            reviews.map((review) => {
+              const rating = review.rating || 5;
+              const isCritical = rating <= 3;
+              return (
+                <figure
+                  key={review.id}
+                  className={`rounded-lg border-l-4 bg-slate-50 py-5 pl-6 pr-5 ${
+                    isCritical ? "border-slate-400" : "border-amber-500"
+                  }`}
+                >
+                  <p
+                    className={`text-sm tracking-wide ${
+                      isCritical ? "text-slate-500" : "text-amber-500"
+                    }`}
+                  >
+                    {"★".repeat(rating)}
+                    <span className="text-slate-300">
+                      {"★".repeat(Math.max(0, 5 - rating))}
+                    </span>
+                  </p>
+                  <blockquote className="mt-3 text-lg italic leading-relaxed text-slate-700">
+                    &ldquo;{review.review_text}&rdquo;
+                  </blockquote>
+                  <figcaption className="mt-3 text-sm font-medium text-slate-500">
+                    {review.reviewer_name || "Customer"}
+                    <span className="text-slate-400"> · via {review.source}</span>
+                  </figcaption>
+                  {review.response ? (
+                    <div className="mt-4 rounded-md border-l-2 border-amber-500 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">
+                        Our response
+                      </p>
+                      <p className="mt-1 leading-relaxed text-slate-600">
+                        {review.response}
+                      </p>
+                    </div>
+                  ) : null}
+                </figure>
+              );
+            })
           ) : (
             <p className="text-slate-400">No reviews added yet.</p>
           )}
