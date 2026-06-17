@@ -8,11 +8,14 @@ import Layout from "../components/layout/Layout";
 
 // Fallback jokes used only if the newsletter_jokes table can't be reached.
 const FALLBACK_JOKES = [
-  "Why did the sales rep bring a ladder to work? Because leadership said it was time to take performance to the next level.",
-  "I told my manager I needed a raise because three other companies were after me. He asked which ones. I said the electric, gas, and water company.",
-  "Why don't salespeople play hide and seek? Because good luck hiding when quota always finds you.",
-  "Our forecast is like a weather forecast — confident, detailed, and occasionally completely wrong.",
-  "Why did the CRM go to therapy? Too many unresolved leads.",
+  "My pipeline is like my gym membership: technically active, full of good intentions, and somehow it never converts.",
+  "Quota is the only houseguest that shows up on the 1st, judges everything you did last month, and never brings wine.",
+  "A prospect told me he'd 'circle back.' That was 2019. I assume he's still orbiting.",
+  "The fastest way to close a deal is a discount. The fastest way to end a career is explaining that discount to finance.",
+  "Cold calling is just texting your ex, except the rejection is faster and you get to log it in a spreadsheet.",
+  "Our forecast and a fortune cookie have a lot in common: vague, oddly confident, and best taken with a grain of salt.",
+  "My manager asked where I see myself in five years. Honestly? This same call, still on hold with procurement.",
+  "Wholesale is just retail for people who prefer to buy their problems in bulk.",
 ];
 
 const SECTIONS = [
@@ -82,17 +85,19 @@ export default function NewsletterAdmin() {
     }
   }
 
-  // Rotate to the next joke. Prefers the live table (least-used first) and
-  // falls back to the hardcoded list if the table is empty/unreachable.
+  // Jump to a random joke (never the one already showing). Prefers the live
+  // table and falls back to the hardcoded list if it's empty/unreachable.
   function shuffleJoke() {
     if (jokes.length) {
-      const idx = jokes.findIndex((j) => j.id === jokeId);
-      const next = jokes[(idx + 1) % jokes.length];
+      const others = jokes.filter((j) => j.id !== jokeId);
+      const pool = others.length ? others : jokes;
+      const next = pool[Math.floor(Math.random() * pool.length)];
       setJoke(next.joke_text);
       setJokeId(next.id);
     } else {
-      const idx = FALLBACK_JOKES.indexOf(joke);
-      setJoke(FALLBACK_JOKES[(idx + 1) % FALLBACK_JOKES.length]);
+      const others = FALLBACK_JOKES.filter((j) => j !== joke);
+      const pool = others.length ? others : FALLBACK_JOKES;
+      setJoke(pool[Math.floor(Math.random() * pool.length)]);
     }
   }
 

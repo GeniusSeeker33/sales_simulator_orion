@@ -7,7 +7,7 @@ import { NEW_HIRE_DEPARTMENTS } from "../lib/newsletter";
 // All data comes in via props — this component does no fetching.
 
 const DEFAULT_JOKE =
-  "Why did the sales rep bring a ladder to work? Because leadership said it was time to take performance to the next level.";
+  "My pipeline is like my gym membership: technically active, full of good intentions, and somehow it never converts.";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
