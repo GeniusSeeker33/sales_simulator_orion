@@ -21,6 +21,7 @@ const SECTIONS = [
   { key: "shoutout", label: "Add Shout-Out" },
   { key: "update", label: "Add Company Update" },
   { key: "hires", label: "New Hires" },
+  { key: "celebrations", label: "Celebrations" },
 ];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -58,6 +59,10 @@ export default function NewsletterAdmin() {
 
   // New hires selected for this issue (snapshot stored in newsletter_issues)
   const [newHires, setNewHires] = useState([]);
+
+  // Birthdays & work anniversaries for this issue (snapshot, same as hires)
+  const [birthdays, setBirthdays] = useState([]);
+  const [anniversaries, setAnniversaries] = useState([]);
 
   useEffect(() => {
     loadPool();
@@ -270,6 +275,83 @@ export default function NewsletterAdmin() {
     setNewHires((prev) => prev.filter((h) => h.id !== id));
   }
 
+  /* ---------------- Celebrations (birthdays + anniversaries) ---------------- */
+  const [birthdayForm, setBirthdayForm] = useState({
+    name: "",
+    department: "Sales",
+    date: todayISO(),
+  });
+
+  function addBirthday() {
+    if (!birthdayForm.name.trim()) return flash("Birthday name is required.");
+    setBirthdays((prev) => [
+      ...prev,
+      { ...birthdayForm, id: `bday-${birthdayForm.name}-${prev.length}` },
+    ]);
+    setBirthdayForm({ name: "", department: "Sales", date: todayISO() });
+  }
+
+  function removeBirthday(id) {
+    setBirthdays((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  const [anniversaryForm, setAnniversaryForm] = useState({
+    name: "",
+    department: "Sales",
+    years: 1,
+    start_date: todayISO(),
+  });
+
+  function addAnniversary() {
+    if (!anniversaryForm.name.trim())
+      return flash("Anniversary name is required.");
+    setAnniversaries((prev) => [
+      ...prev,
+      {
+        ...anniversaryForm,
+        years: Number(anniversaryForm.years),
+        id: `anniv-${anniversaryForm.name}-${prev.length}`,
+      },
+    ]);
+    setAnniversaryForm({
+      name: "",
+      department: "Sales",
+      years: 1,
+      start_date: todayISO(),
+    });
+  }
+
+  function removeAnniversary(id) {
+    setAnniversaries((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  // Quick-add a roster anniversary — years are derived from hire date relative
+  // to the issue year so the count is correct for the cycle being published.
+  function quickAddAnniversary(emp) {
+    const years = emp.hireDate
+      ? Number(issueDate.slice(0, 4)) - Number(emp.hireDate.slice(0, 4))
+      : 0;
+    setAnniversaries((prev) => [
+      ...prev,
+      {
+        id: `anniv-${emp.code}-${prev.length}`,
+        name: getEmployeeFullName(emp),
+        department: "Sales",
+        years,
+        start_date: emp.hireDate || todayISO(),
+      },
+    ]);
+  }
+
+  // Reps whose hire-date anniversary falls in the issue month — the natural
+  // candidates to celebrate this cycle, newest milestone first.
+  const anniversaryCandidates = useMemo(() => {
+    const issueMonth = issueDate.slice(5, 7);
+    return [...employees]
+      .filter((e) => e.hireDate && e.hireDate.slice(5, 7) === issueMonth)
+      .sort((a, b) => (a.hireDate < b.hireDate ? -1 : 1));
+  }, [issueDate]);
+
   /* ---------------- Generate (save issue snapshot) ---------------- */
   const [generating, setGenerating] = useState(false);
 
@@ -277,6 +359,8 @@ export default function NewsletterAdmin() {
     setGenerating(true);
     const generated_content = JSON.stringify({
       newHires,
+      birthdays,
+      anniversaries,
       reviewIds: reviews.map((r) => r.id),
       shoutoutIds: shoutouts.map((s) => s.id),
       updateIds: updates.map((u) => u.id),
@@ -306,6 +390,8 @@ export default function NewsletterAdmin() {
     flash("Issue generated & saved ✓ — live at /newsletter");
     // Items in this issue are now "published"; clear the desk for the next cycle.
     setNewHires([]);
+    setBirthdays([]);
+    setAnniversaries([]);
     loadPool();
     loadJokes();
   }
@@ -747,6 +833,210 @@ export default function NewsletterAdmin() {
                 )}
               </div>
             )}
+
+            {/* Celebrations — birthdays & anniversaries */}
+            {activeSection === "celebrations" && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-bold">Celebrations</h2>
+
+                {/* Birthdays */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-700">
+                    🎂 Birthdays
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className={labelCls}>Name *</label>
+                      <input
+                        className={inputCls}
+                        value={birthdayForm.name}
+                        onChange={(e) =>
+                          setBirthdayForm({
+                            ...birthdayForm,
+                            name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Department</label>
+                      <select
+                        className={inputCls}
+                        value={birthdayForm.department}
+                        onChange={(e) =>
+                          setBirthdayForm({
+                            ...birthdayForm,
+                            department: e.target.value,
+                          })
+                        }
+                      >
+                        {NEW_HIRE_DEPARTMENTS.map((d) => (
+                          <option key={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Date</label>
+                      <input
+                        type="date"
+                        className={inputCls}
+                        value={birthdayForm.date}
+                        onChange={(e) =>
+                          setBirthdayForm({
+                            ...birthdayForm,
+                            date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addBirthday}
+                    className={btnPrimary}
+                  >
+                    Add Birthday
+                  </button>
+
+                  {birthdays.length > 0 && (
+                    <div className="space-y-2">
+                      {birthdays.map((b) => (
+                        <div
+                          key={b.id}
+                          className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                        >
+                          <span>
+                            {b.name}{" "}
+                            <span className="text-slate-400">
+                              · {b.department}
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => removeBirthday(b.id)}
+                            className="text-rose-500 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Work anniversaries */}
+                <div className="space-y-3 border-t border-slate-100 pt-5">
+                  <h3 className="text-sm font-bold text-slate-700">
+                    🎉 Work Anniversaries
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className={labelCls}>Name *</label>
+                      <input
+                        className={inputCls}
+                        value={anniversaryForm.name}
+                        onChange={(e) =>
+                          setAnniversaryForm({
+                            ...anniversaryForm,
+                            name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Years</label>
+                      <input
+                        type="number"
+                        min={1}
+                        className={inputCls}
+                        value={anniversaryForm.years}
+                        onChange={(e) =>
+                          setAnniversaryForm({
+                            ...anniversaryForm,
+                            years: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Department</label>
+                      <select
+                        className={inputCls}
+                        value={anniversaryForm.department}
+                        onChange={(e) =>
+                          setAnniversaryForm({
+                            ...anniversaryForm,
+                            department: e.target.value,
+                          })
+                        }
+                      >
+                        {NEW_HIRE_DEPARTMENTS.map((d) => (
+                          <option key={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addAnniversary}
+                    className={btnPrimary}
+                  >
+                    Add Anniversary
+                  </button>
+
+                  <div>
+                    <p className="mb-2 text-sm font-semibold text-slate-600">
+                      This month&rsquo;s roster milestones
+                    </p>
+                    {anniversaryCandidates.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {anniversaryCandidates.map((emp) => (
+                          <button
+                            key={emp.code}
+                            type="button"
+                            onClick={() => quickAddAnniversary(emp)}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                          >
+                            + {getEmployeeFullName(emp)} (
+                            {Number(issueDate.slice(0, 4)) -
+                              Number(emp.hireDate.slice(0, 4))}
+                            y)
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        No roster hire-date anniversaries in this issue&rsquo;s
+                        month.
+                      </p>
+                    )}
+                  </div>
+
+                  {anniversaries.length > 0 && (
+                    <div className="space-y-2">
+                      {anniversaries.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                        >
+                          <span>
+                            {a.name}{" "}
+                            <span className="text-slate-400">
+                              · {a.years}y · {a.department}
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => removeAnniversary(a.id)}
+                            className="text-rose-500 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-slate-400">
@@ -767,6 +1057,8 @@ export default function NewsletterAdmin() {
             updates={updates}
             reviews={reviews}
             newHires={newHires}
+            birthdays={birthdays}
+            anniversaries={anniversaries}
             shoutouts={shoutouts}
             session={session}
           />

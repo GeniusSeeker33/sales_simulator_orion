@@ -548,7 +548,7 @@ The page is laid out with **content forms on the left and a live preview on the 
 #### The Bi-Weekly Workflow
 
 1. Open **Newsletter** from the sidebar.
-2. Work through the five tabs (below), filling in what you want in this issue.
+2. Work through the six tabs (below), filling in what you want in this issue.
 3. Watch the live preview update on the right.
 4. Click **Generate** to publish the issue to `/newsletter`.
 5. Use **Export PDF** and/or **Email to Employees** to distribute it.
@@ -557,7 +557,7 @@ Each issue is self-contained: when you open the dashboard, you only see content 
 
 ---
 
-#### The Five Tabs
+#### The Six Tabs
 
 | Tab | What It Does |
 |-----|-------------|
@@ -566,6 +566,7 @@ Each issue is self-contained: when you open the dashboard, you only see content 
 | **Add Shout-Out** | Recognize an employee |
 | **Add Company Update** | Post an announcement, milestone, or news item |
 | **New Hires** | Add new team members, or quick-add them from the roster |
+| **Celebrations** | Add birthdays and work anniversaries for this issue |
 
 ---
 
@@ -618,17 +619,30 @@ Selected hires are listed below and can be removed before you publish. New hires
 
 ---
 
+#### Adding Celebrations (Birthdays & Anniversaries)
+
+The **Celebrations** tab has two sections that feed the newsletter's "Birthdays & Anniversaries" block:
+
+- **🎂 Birthdays** — enter a **Name**, **Department**, and **Date**, then click **Add Birthday**. The newsletter shows the person and their birthday as "Month Day."
+- **🎉 Work Anniversaries** — enter a **Name**, **Years**, and **Department**, then click **Add Anniversary**. For roster reps, use **This month's roster milestones** to quick-add anyone whose hire-date anniversary falls in the issue month — the years of service are calculated automatically (shown as, for example, `+ Chase Farmer (4y)`).
+
+Each entry is listed below its form and can be removed before you publish.
+
+> **Note:** Anniversaries can be pulled from the roster automatically, but birthdays must be entered by hand — the employee directory tracks hire dates, not dates of birth.
+
+---
+
 #### Publishing and Distributing
 
 The top toolbar has three buttons:
 
 | Button | What It Does |
 |--------|-------------|
-| **Generate** | Publishes the current issue (joke + new hires + everything in the preview) to the public `/newsletter` page and starts the next cycle |
+| **Generate** | Publishes the current issue (joke + new hires + celebrations + everything in the preview) to the public `/newsletter` page and starts the next cycle |
 | **Export PDF** | Opens your browser's print dialog to save the newsletter as a PDF |
 | **Email to Employees** | Opens a pre-filled email to the whole roster (bcc'd) with a link to the live newsletter |
 
-> **Tip:** Reviews, shout-outs, and updates save to the database the moment you click their "Add" button. The joke and new-hire list are only saved when you click **Generate**. So always click Generate to lock in the full issue before exporting or emailing.
+> **Tip:** Reviews, shout-outs, and updates save to the database the moment you click their "Add" button. The joke, new-hire list, and celebrations are only saved when you click **Generate**. So always click Generate to lock in the full issue before exporting or emailing.
 
 ---
 

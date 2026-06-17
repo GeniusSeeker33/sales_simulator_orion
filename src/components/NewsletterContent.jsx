@@ -9,6 +9,20 @@ import { NEW_HIRE_DEPARTMENTS } from "../lib/newsletter";
 const DEFAULT_JOKE =
   "Why did the sales rep bring a ladder to work? Because leadership said it was time to take performance to the next level.";
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Format an ISO date (YYYY-MM-DD) as "Month Day" without constructing a Date,
+// which would shift the day across time zones. Falls back to the raw value.
+function formatMonthDay(iso) {
+  if (!iso) return "";
+  const [, m, d] = iso.split("-").map(Number);
+  if (!m || !d) return iso;
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
 // Consistent editorial section header: a small uppercase kicker above a
 // strong headline, separated by a thin amber rule.
 function SectionHeading({ kicker, title }) {
@@ -31,6 +45,8 @@ export default function NewsletterContent({
   updates = [],
   reviews = [],
   newHires = [],
+  birthdays = [],
+  anniversaries = [],
   shoutouts = [],
   session,
 }) {
@@ -180,6 +196,80 @@ export default function NewsletterContent({
               )}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Celebrations — birthdays and work anniversaries this cycle */}
+      <section className="border-b border-slate-200 px-10 py-10">
+        <SectionHeading kicker="Celebrations" title="Birthdays & Anniversaries" />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Birthdays */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              🎂 Birthdays
+            </h3>
+            {birthdays.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {birthdays.map((person, i) => (
+                  <li key={person.id || i} className="text-slate-700">
+                    <span className="font-bold text-slate-900">
+                      {person.name}
+                    </span>
+                    {person.department ? (
+                      <span className="text-slate-500"> · {person.department}</span>
+                    ) : null}
+                    {person.date ? (
+                      <span className="block text-sm text-slate-400">
+                        {formatMonthDay(person.date)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">
+                No birthdays this issue.
+              </p>
+            )}
+          </div>
+
+          {/* Work anniversaries */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              🎉 Work Anniversaries
+            </h3>
+            {anniversaries.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {anniversaries.map((person, i) => (
+                  <li key={person.id || i} className="text-slate-700">
+                    <span className="font-bold text-slate-900">
+                      {person.name}
+                    </span>
+                    {person.department ? (
+                      <span className="text-slate-500"> · {person.department}</span>
+                    ) : null}
+                    {person.years ? (
+                      <span className="block text-sm text-amber-600">
+                        {person.years}{" "}
+                        {Number(person.years) === 1 ? "year" : "years"}
+                        {person.start_date ? (
+                          <span className="text-slate-400">
+                            {" "}
+                            · since {person.start_date}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">
+                No work anniversaries this issue.
+              </p>
+            )}
+          </div>
         </div>
       </section>
 

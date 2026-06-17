@@ -87,6 +87,8 @@ export default function Newsletter() {
         updates={updates}
         reviews={reviews}
         newHires={snapshot.newHires || []}
+        birthdays={snapshot.birthdays || []}
+        anniversaries={snapshot.anniversaries || []}
         shoutouts={shoutouts}
         session={session}
       />
