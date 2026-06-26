@@ -64,6 +64,43 @@ function clearDraft() {
   }
 }
 
+// The same draft, but kept in Supabase so it follows the editor from one
+// computer/browser to another (localStorage above is a per-machine cache only).
+// There is a single draft row, id = 'current'.
+const DRAFT_ROW_ID = "current";
+
+async function readCloudDraft() {
+  try {
+    const { data, error } = await supabase
+      .from("newsletter_draft")
+      .select("data")
+      .eq("id", DRAFT_ROW_ID)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCloudDraft(draft) {
+  return supabase
+    .from("newsletter_draft")
+    .upsert({
+      id: DRAFT_ROW_ID,
+      data: draft,
+      updated_at: new Date().toISOString(),
+    });
+}
+
+async function clearCloudDraft() {
+  try {
+    await supabase.from("newsletter_draft").delete().eq("id", DRAFT_ROW_ID);
+  } catch {
+    /* ignore */
+  }
+}
+
 const inputCls =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none";
 const labelCls = "block text-sm font-semibold text-slate-700 mb-1";
@@ -106,16 +143,48 @@ export default function NewsletterAdmin() {
     () => readDraft().anniversaries ?? []
   );
 
+  // Tracks the shared-database draft: draftLoaded gates auto-save until we've
+  // pulled the cloud copy (so we never overwrite it with stale local state on
+  // load); draftStatus drives the "Saving…/Saved" indicator in the toolbar.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("");
+
   useEffect(() => {
     loadPool();
     loadJokes();
+    // Pull the in-progress issue from the shared database so it picks up where
+    // it was left off, even on a different computer. Falls back to whatever the
+    // local cache already seeded above.
+    (async () => {
+      const cloud = await readCloudDraft();
+      if (cloud) {
+        if (typeof cloud.issueName === "string") setIssueName(cloud.issueName);
+        if (typeof cloud.issueDate === "string") setIssueDate(cloud.issueDate);
+        if (Array.isArray(cloud.newHires)) setNewHires(cloud.newHires);
+        if (Array.isArray(cloud.birthdays)) setBirthdays(cloud.birthdays);
+        if (Array.isArray(cloud.anniversaries))
+          setAnniversaries(cloud.anniversaries);
+      }
+      setDraftLoaded(true);
+    })();
   }, []);
 
-  // Keep the living draft in sync with the editable issue fields. Runs on every
-  // change so a refresh restores exactly what was on screen; cleared on Generate.
+  // Keep the living draft in sync with the editable issue fields. Saves to the
+  // local cache immediately and to the shared database (debounced) so the issue
+  // survives a refresh AND follows the editor across devices. Cleared on
+  // Generate. We wait for the cloud load before pushing, so we never clobber a
+  // saved draft with empty starting state.
   useEffect(() => {
-    saveDraft({ issueName, issueDate, newHires, birthdays, anniversaries });
-  }, [issueName, issueDate, newHires, birthdays, anniversaries]);
+    const draft = { issueName, issueDate, newHires, birthdays, anniversaries };
+    saveDraft(draft);
+    if (!draftLoaded) return;
+    const t = setTimeout(async () => {
+      setDraftStatus("Saving…");
+      const { error } = await writeCloudDraft(draft);
+      setDraftStatus(error ? "Save failed — check connection" : "Saved ✓");
+    }, 800);
+    return () => clearTimeout(t);
+  }, [issueName, issueDate, newHires, birthdays, anniversaries, draftLoaded]);
 
   async function loadJokes() {
     const { data } = await supabase
@@ -250,29 +319,71 @@ export default function NewsletterAdmin() {
     loadPool();
   }
 
-  /* ---------------- Add Company Update ---------------- */
-  const [updateForm, setUpdateForm] = useState({
+  /* ---------------- Add / Edit Company Update ---------------- */
+  const emptyUpdateForm = {
     title: "",
     description: "",
     category: "Company",
     update_date: todayISO(),
-  });
+  };
+  const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
+  // null = adding a new update; an id = editing that existing one.
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
 
   async function addUpdate(e) {
     e.preventDefault();
     if (!updateForm.title.trim() || !updateForm.description.trim())
       return flash("Title and description are required.");
+
+    if (editingUpdateId) {
+      const { error } = await supabase
+        .from("newsletter_updates")
+        .update({
+          title: updateForm.title,
+          description: updateForm.description,
+          category: updateForm.category,
+          update_date: updateForm.update_date,
+        })
+        .eq("id", editingUpdateId);
+      if (error) return flash(`Error: ${error.message}`);
+      flash("Update saved ✓");
+    } else {
+      const { error } = await supabase
+        .from("newsletter_updates")
+        .insert([{ ...updateForm, approved: true }]);
+      if (error) return flash(`Error: ${error.message}`);
+      flash("Update added ✓");
+    }
+    setUpdateForm(emptyUpdateForm);
+    setEditingUpdateId(null);
+    loadPool();
+  }
+
+  // Load an existing update into the form so it can be corrected.
+  function editUpdate(u) {
+    setEditingUpdateId(u.id);
+    setUpdateForm({
+      title: u.title || "",
+      description: u.description || "",
+      category: u.category || "Company",
+      update_date: u.update_date || todayISO(),
+    });
+    setActiveSection("update");
+  }
+
+  function cancelEditUpdate() {
+    setEditingUpdateId(null);
+    setUpdateForm(emptyUpdateForm);
+  }
+
+  async function deleteUpdate(id) {
     const { error } = await supabase
       .from("newsletter_updates")
-      .insert([{ ...updateForm, approved: true }]);
+      .delete()
+      .eq("id", id);
     if (error) return flash(`Error: ${error.message}`);
-    setUpdateForm({
-      title: "",
-      description: "",
-      category: "Company",
-      update_date: todayISO(),
-    });
-    flash("Update added ✓");
+    if (editingUpdateId === id) cancelEditUpdate();
+    flash("Update deleted ✓");
     loadPool();
   }
 
@@ -439,8 +550,10 @@ export default function NewsletterAdmin() {
 
     flash("Issue generated & saved ✓ — live at /newsletter");
     // Items in this issue are now "published"; clear the desk (and the saved
-    // draft) for the next cycle.
+    // draft, both local and shared) for the next cycle.
     clearDraft();
+    clearCloudDraft();
+    setDraftStatus("");
     setNewHires([]);
     setBirthdays([]);
     setAnniversaries([]);
@@ -521,6 +634,18 @@ export default function NewsletterAdmin() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {draftStatus && (
+              <span
+                className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                  draftStatus.startsWith("Save failed")
+                    ? "bg-rose-50 text-rose-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+                title="Your in-progress issue is saved to the shared database and follows you across computers."
+              >
+                {draftStatus}
+              </span>
+            )}
             {status && (
               <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
                 {status}
@@ -767,10 +892,13 @@ export default function NewsletterAdmin() {
               </form>
             )}
 
-            {/* Add update */}
+            {/* Add / edit company updates */}
             {activeSection === "update" && (
+              <div className="space-y-4">
               <form onSubmit={addUpdate} className="space-y-4">
-                <h2 className="text-lg font-bold">Add Company Update</h2>
+                <h2 className="text-lg font-bold">
+                  {editingUpdateId ? "Edit Company Update" : "Add Company Update"}
+                </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Category</label>
@@ -824,8 +952,76 @@ export default function NewsletterAdmin() {
                     }
                   />
                 </div>
-                <button className={btnPrimary}>Add Update</button>
+                <div className="flex items-center gap-2">
+                  <button className={btnPrimary}>
+                    {editingUpdateId ? "Save Changes" : "Add Update"}
+                  </button>
+                  {editingUpdateId && (
+                    <button
+                      type="button"
+                      onClick={cancelEditUpdate}
+                      className={btnGhost}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
+
+              {/* Existing updates — edit a typo or remove one entirely. */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-700">
+                  Updates in this issue ({updates.length})
+                </h3>
+                {updates.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    No updates yet. Add one above and it appears here and in the
+                    preview.
+                  </p>
+                ) : (
+                  updates.map((u) => (
+                    <div
+                      key={u.id}
+                      className={`rounded-lg border px-3 py-2 ${
+                        editingUpdateId === u.id
+                          ? "border-amber-400 bg-amber-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {u.title}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {u.category} · {u.update_date}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                            {u.description}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => editUpdate(u)}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteUpdate(u.id)}
+                            className="rounded-md border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              </div>
             )}
 
             {/* New hires */}
@@ -1068,6 +1264,20 @@ export default function NewsletterAdmin() {
                           <option key={d}>{d}</option>
                         ))}
                       </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className={labelCls}>Start Date</label>
+                      <input
+                        type="date"
+                        className={inputCls}
+                        value={anniversaryForm.start_date}
+                        onChange={(e) =>
+                          setAnniversaryForm({
+                            ...anniversaryForm,
+                            start_date: e.target.value,
+                          })
+                        }
+                      />
                     </div>
                   </div>
                   <button
