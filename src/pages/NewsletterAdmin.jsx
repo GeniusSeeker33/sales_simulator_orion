@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toBlob } from "html-to-image";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import { employees, getEmployeeFullName } from "../data/employees";
@@ -114,6 +115,8 @@ export default function NewsletterAdmin() {
 
   const [activeSection, setActiveSection] = useState("setup");
   const [status, setStatus] = useState("");
+  // The live preview DOM node, captured to a PNG by "Copy as Image".
+  const previewRef = useRef(null);
 
   // Content pool (pulled from Supabase)
   const [reviews, setReviews] = useState([]);
@@ -608,7 +611,7 @@ export default function NewsletterAdmin() {
         }),
       ]);
       setStatus("Newsletter copied — paste into a Gmail/Outlook compose window.");
-    } catch (err) {
+    } catch {
       // Older browsers (or insecure origins) lack ClipboardItem; fall back to
       // copying the plain text so the action still does something useful.
       try {
@@ -616,6 +619,47 @@ export default function NewsletterAdmin() {
         setStatus("Copied as plain text — rich formatting needs Chrome/Edge/Safari.");
       } catch {
         setStatus("Couldn't access the clipboard. Try again or use Export PDF.");
+      }
+    }
+  }
+
+  // Copy the on-screen newsletter as a high-res PNG so it can be pasted into
+  // Outlook (or any client) looking *exactly* like the design — every color and
+  // the dark masthead survive, because the client receives a flat image instead
+  // of HTML it can sanitize. Tradeoff: links in the image aren't clickable.
+  async function copyAsImage() {
+    const node = previewRef.current;
+    if (!node) return;
+    setStatus("Rendering image…");
+    try {
+      const blob = await toBlob(node, {
+        pixelRatio: 2, // 2× for crisp text on high-DPI screens and when zoomed
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+      if (!blob) throw new Error("Render produced no image");
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+      setStatus("Image copied — paste into Outlook (Ctrl/Cmd+V).");
+    } catch {
+      // Image-to-clipboard needs a Chromium/Safari browser on a secure origin.
+      // If it fails, hand back a downloaded PNG the user can drag into the email.
+      try {
+        const blob = await toBlob(node, {
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+          cacheBust: true,
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${issueName || "orion-insider"}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setStatus("Couldn't copy to clipboard — downloaded the image instead.");
+      } catch {
+        setStatus("Couldn't render the image. Try again or use Export PDF.");
       }
     }
   }
@@ -663,6 +707,9 @@ export default function NewsletterAdmin() {
             </button>
             <button onClick={copyForEmail} className={btnGhost}>
               Copy for Email
+            </button>
+            <button onClick={copyAsImage} className={btnGhost}>
+              Copy as Image
             </button>
             <button onClick={emailNewsletter} className={btnGhost}>
               Email to Employees
@@ -1355,7 +1402,7 @@ export default function NewsletterAdmin() {
         </div>
 
         {/* ---------- Right: live preview ---------- */}
-        <div id="newsletter-print">
+        <div id="newsletter-print" ref={previewRef}>
           <NewsletterContent
             issueName={issueName}
             joke={joke}
