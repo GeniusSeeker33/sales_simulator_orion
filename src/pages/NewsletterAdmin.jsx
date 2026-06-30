@@ -626,11 +626,38 @@ export default function NewsletterAdmin() {
   // Copy the on-screen newsletter as a high-res PNG so it can be pasted into
   // Outlook (or any client) looking *exactly* like the design — every color and
   // the dark masthead survive, because the client receives a flat image instead
-  // of HTML it can sanitize. Tradeoff: links in the image aren't clickable.
+  // of HTML it can sanitize.
+  //
+  // A flat image can't hold clickable regions, so we also put an HTML flavor on
+  // the clipboard: the same image (inlined as a data URI) followed by a real
+  // clickable button bar. Rich clients like Outlook prefer the HTML and render
+  // the picture *plus* working "Refer Someone" / "Open Jobs" links; image-only
+  // targets fall back to the plain PNG.
   async function copyAsImage() {
     const node = previewRef.current;
     if (!node) return;
     setStatus("Rendering image…");
+    const CAREERS_URL = "https://join-orion.com/careers";
+    // Build the HTML flavor: inlined image + a two-button CTA bar beneath it.
+    const buildHtml = (dataUrl, width) => `
+<div style="font:400 14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+  <img src="${dataUrl}" width="${width}" style="display:block;width:${width}px;max-width:100%;border:0;" alt="Orion Insider newsletter" />
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 4px;"><tr>
+    <td style="padding-right:10px;">
+      <a href="${CAREERS_URL}" style="display:inline-block;padding:11px 22px;border-radius:8px;background:#f59e0b;color:#020617;font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;text-decoration:none;">Refer Someone</a>
+    </td>
+    <td>
+      <a href="${CAREERS_URL}" style="display:inline-block;padding:11px 22px;border-radius:8px;border:1.5px solid #f59e0b;color:#b45309;font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;text-decoration:none;">Open Jobs</a>
+    </td>
+  </tr></table>
+</div>`;
+    const blobToDataUrl = (b) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(b);
+      });
     try {
       const blob = await toBlob(node, {
         pixelRatio: 2, // 2× for crisp text on high-DPI screens and when zoomed
@@ -638,10 +665,15 @@ export default function NewsletterAdmin() {
         cacheBust: true,
       });
       if (!blob) throw new Error("Render produced no image");
+      const dataUrl = await blobToDataUrl(blob);
+      const html = buildHtml(dataUrl, node.offsetWidth);
       await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "image/png": blob,
+        }),
       ]);
-      setStatus("Image copied — paste into Outlook (Ctrl/Cmd+V).");
+      setStatus("Copied with clickable links — paste into Outlook (Ctrl/Cmd+V).");
     } catch {
       // Image-to-clipboard needs a Chromium/Safari browser on a secure origin.
       // If it fails, hand back a downloaded PNG the user can drag into the email.
