@@ -3,7 +3,6 @@
 export const NEW_HIRE_DEPARTMENTS = [
   "Sales",
   "Warehouse",
-  "Executives",
   "Taylor Customs",
   "Corporate & Administrative",
 ];
