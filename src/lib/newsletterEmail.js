@@ -66,22 +66,23 @@ function card(inner) {
 }
 
 function buildUpdates(updates) {
-  const body = updates.length
-    ? updates
-        .map((u) =>
-          card(`
+  // Optional section — omitted entirely when there's nothing to report.
+  if (!updates.length) return "";
+  const body = updates
+    .map((u) =>
+      card(`
             <p style="margin:0;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:1px;color:${AMBER_DARK};">${esc(u.category)}</p>
             <h3 style="margin:6px 0 0;font:700 18px/1.3 ${FONT};color:${INK};">${esc(u.title)}</h3>
             <p style="margin:8px 0 0;font:400 15px/1.6 ${FONT};color:${SLATE_600};">${esc(u.description)}</p>`)
-        )
-        .join("")
-    : `<p style="margin:0;font:400 15px/1.6 ${FONT};color:${SLATE_400};">No updates this issue.</p>`;
+    )
+    .join("");
   return section(heading("The Latest", "Company Updates") + body);
 }
 
 function buildReviews(reviews) {
-  const body = reviews.length
-    ? reviews
+  // Optional section — omitted entirely when there are no reviews.
+  if (!reviews.length) return "";
+  const body = reviews
         .map((r) => {
           const rating = r.rating || 5;
           const critical = rating <= 3;
@@ -102,8 +103,7 @@ function buildReviews(reviews) {
             ${response}
           </td></tr></table>`;
         })
-        .join("")
-    : `<p style="margin:0;font:400 15px/1.6 ${FONT};color:${SLATE_400};">No reviews this issue.</p>`;
+    .join("");
   return section(heading("In Their Words", "Reviews") + body);
 }
 
@@ -181,17 +181,17 @@ function buildCelebrations(birthdays, anniversaries) {
 }
 
 function buildShoutouts(shoutouts) {
-  const body = shoutouts.length
-    ? shoutouts
-        .map(
-          (s) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><tr><td style="padding:20px 24px;">
+  // Optional section — omitted entirely when there are no shout-outs.
+  if (!shoutouts.length) return "";
+  const body = shoutouts
+    .map(
+      (s) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><tr><td style="padding:20px 24px;">
             <h3 style="margin:0;font:700 17px/1.3 ${FONT};color:${INK};">${esc(s.employee_name)}</h3>
             <p style="margin:8px 0 0;font:400 15px/1.6 ${FONT};color:${SLATE_700};">${esc(s.shoutout_text)}</p>
             <p style="margin:12px 0 0;font:500 13px/1.4 ${FONT};color:${SLATE_500};">Submitted by ${esc(s.submitted_by || "Leadership")}</p>
           </td></tr></table>`
-        )
-        .join("")
-    : `<p style="margin:0;font:400 15px/1.6 ${FONT};color:${SLATE_400};">No shout-outs this issue.</p>`;
+    )
+    .join("");
   return section(heading("Recognition", "Team Shout-Outs") + body);
 }
 

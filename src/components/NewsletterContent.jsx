@@ -78,13 +78,13 @@ export default function NewsletterContent({
         </p>
       </section>
 
-      {/* Company updates */}
-      <section className="border-b border-slate-200 px-10 py-10">
-        <SectionHeading kicker="The Latest" title="Company Updates" />
+      {/* Company updates — only shown when there's something to report */}
+      {updates.length > 0 && (
+        <section className="border-b border-slate-200 px-10 py-10">
+          <SectionHeading kicker="The Latest" title="Company Updates" />
 
-        <div className="grid gap-4">
-          {updates.length > 0 ? (
-            updates.map((item) => (
+          <div className="grid gap-4">
+            {updates.map((item) => (
               <div
                 key={item.id}
                 className="rounded-lg border border-slate-200 bg-slate-50 p-6"
@@ -99,20 +99,19 @@ export default function NewsletterContent({
                   {item.description}
                 </p>
               </div>
-            ))
-          ) : (
-            <p className="text-slate-400">No updates added yet.</p>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Reviews — celebratory and critical alike, for transparency */}
-      <section className="border-b border-slate-200 px-10 py-10">
-        <SectionHeading kicker="In Their Words" title="Reviews" />
+      {/* Reviews — celebratory and critical alike, for transparency.
+          Only shown when there are reviews to report. */}
+      {reviews.length > 0 && (
+        <section className="border-b border-slate-200 px-10 py-10">
+          <SectionHeading kicker="In Their Words" title="Reviews" />
 
-        <div className="grid gap-4">
-          {reviews.length > 0 ? (
-            reviews.map((review) => {
+          <div className="grid gap-4">
+            {reviews.map((review) => {
               const rating = review.rating || 5;
               const isCritical = rating <= 3;
               return (
@@ -151,12 +150,10 @@ export default function NewsletterContent({
                   ) : null}
                 </figure>
               );
-            })
-          ) : (
-            <p className="text-slate-400">No reviews added yet.</p>
-          )}
-        </div>
-      </section>
+            })}
+          </div>
+        </section>
+      )}
 
       {/* New team members */}
       <section className="border-b border-slate-200 px-10 py-10">
@@ -273,13 +270,13 @@ export default function NewsletterContent({
         </div>
       </section>
 
-      {/* Recognition */}
-      <section className="border-b border-slate-200 px-10 py-10">
-        <SectionHeading kicker="Recognition" title="Team Shout-Outs" />
+      {/* Recognition — only shown when there are shout-outs to report */}
+      {shoutouts.length > 0 && (
+        <section className="border-b border-slate-200 px-10 py-10">
+          <SectionHeading kicker="Recognition" title="Team Shout-Outs" />
 
-        <div className="grid gap-4">
-          {shoutouts.length > 0 ? (
-            shoutouts.map((item) => (
+          <div className="grid gap-4">
+            {shoutouts.map((item) => (
               <div
                 key={item.id}
                 className="rounded-lg border border-amber-200 bg-amber-50 p-6"
@@ -294,12 +291,10 @@ export default function NewsletterContent({
                   Submitted by {item.submitted_by || "Leadership"}
                 </p>
               </div>
-            ))
-          ) : (
-            <p className="text-slate-400">No shout-outs added yet.</p>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Referral program */}
       <section className="bg-slate-950 px-10 py-12 text-white">
