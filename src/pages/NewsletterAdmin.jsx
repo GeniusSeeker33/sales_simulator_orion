@@ -145,6 +145,7 @@ export default function NewsletterAdmin() {
 
   const [activeSection, setActiveSection] = useState("setup");
   const [status, setStatus] = useState("");
+  const [statusIsError, setStatusIsError] = useState(false);
   // The live preview DOM node, captured to a PNG by "Copy as Image".
   const previewRef = useRef(null);
 
@@ -292,10 +293,31 @@ export default function NewsletterAdmin() {
     setUpdates((u || []).filter((row) => !usedUpdateIds.has(row.id)));
   }
 
+  // Success messages fade after a few seconds; errors stay put until the next
+  // action, so a failed save can't disappear before it's been read.
   function flash(msg) {
+    setStatusIsError(false);
     setStatus(msg);
     setTimeout(() => setStatus(""), 3000);
   }
+
+  function flashError(msg) {
+    setStatusIsError(true);
+    setStatus(msg);
+  }
+
+  // True when Supabase rejected the write because the image_url column doesn't
+  // exist yet — i.e. add_update_image_column.sql hasn't been run on this
+  // database. Without this the whole save fails and the text is lost too.
+  function isMissingImageColumn(error) {
+    if (!error) return false;
+    const msg = `${error.message || ""} ${error.details || ""}`.toLowerCase();
+    return error.code === "PGRST204" || msg.includes("image_url");
+  }
+
+  const IMAGE_COLUMN_HINT =
+    "Saved without the image — this database doesn't have the image column yet. " +
+    "Run add_update_image_column.sql in the Supabase SQL editor, then re-add the image.";
 
   /* ---------------- Add Review ---------------- */
   const [reviewForm, setReviewForm] = useState({
@@ -313,7 +335,7 @@ export default function NewsletterAdmin() {
     const { error } = await supabase.from("newsletter_reviews").insert([
       { ...reviewForm, rating: Number(reviewForm.rating), approved: true },
     ]);
-    if (error) return flash(`Error: ${error.message}`);
+    if (error) return flashError(`Error: ${error.message}`);
     setReviewForm({
       source: "Google",
       rating: 5,
@@ -342,7 +364,18 @@ export default function NewsletterAdmin() {
     const { error } = await supabase
       .from("newsletter_shoutouts")
       .insert([{ ...shoutForm, approved: true }]);
-    if (error) return flash(`Error: ${error.message}`);
+    let imageDropped = false;
+    if (error) {
+      if (!isMissingImageColumn(error))
+        return flashError(`Error: ${error.message}`);
+      // Retry without the image so the shout-out text still gets saved.
+      const { image_url: _omit, ...withoutImage } = shoutForm;
+      const { error: retryError } = await supabase
+        .from("newsletter_shoutouts")
+        .insert([{ ...withoutImage, approved: true }]);
+      if (retryError) return flashError(`Error: ${retryError.message}`);
+      imageDropped = true;
+    }
     setShoutForm({
       employee_name: "",
       department: "Sales",
@@ -350,7 +383,8 @@ export default function NewsletterAdmin() {
       shoutout_text: "",
       image_url: "",
     });
-    flash("Shout-out added ✓");
+    if (imageDropped) flashError(IMAGE_COLUMN_HINT);
+    else flash("Shout-out added ✓");
     loadPool();
   }
 
@@ -392,25 +426,46 @@ export default function NewsletterAdmin() {
     if (!updateForm.title.trim() || !updateForm.description.trim())
       return flash("Title and description are required.");
 
+    const fields = {
+      title: updateForm.title,
+      description: updateForm.description,
+      category: updateForm.category,
+      update_date: updateForm.update_date,
+    };
+
     if (editingUpdateId) {
       const { error } = await supabase
         .from("newsletter_updates")
-        .update({
-          title: updateForm.title,
-          description: updateForm.description,
-          category: updateForm.category,
-          update_date: updateForm.update_date,
-          image_url: updateForm.image_url,
-        })
+        .update({ ...fields, image_url: updateForm.image_url })
         .eq("id", editingUpdateId);
-      if (error) return flash(`Error: ${error.message}`);
-      flash("Update saved ✓");
+      if (error) {
+        if (!isMissingImageColumn(error))
+          return flashError(`Error: ${error.message}`);
+        // Retry without the image so the text edits still get saved.
+        const { error: retryError } = await supabase
+          .from("newsletter_updates")
+          .update(fields)
+          .eq("id", editingUpdateId);
+        if (retryError) return flashError(`Error: ${retryError.message}`);
+        flashError(IMAGE_COLUMN_HINT);
+      } else {
+        flash("Update saved ✓");
+      }
     } else {
       const { error } = await supabase
         .from("newsletter_updates")
         .insert([{ ...updateForm, approved: true }]);
-      if (error) return flash(`Error: ${error.message}`);
-      flash("Update added ✓");
+      if (error) {
+        if (!isMissingImageColumn(error))
+          return flashError(`Error: ${error.message}`);
+        const { error: retryError } = await supabase
+          .from("newsletter_updates")
+          .insert([{ ...fields, approved: true }]);
+        if (retryError) return flashError(`Error: ${retryError.message}`);
+        flashError(IMAGE_COLUMN_HINT);
+      } else {
+        flash("Update added ✓");
+      }
     }
     setUpdateForm(emptyUpdateForm);
     setEditingUpdateId(null);
@@ -440,7 +495,7 @@ export default function NewsletterAdmin() {
       .from("newsletter_updates")
       .delete()
       .eq("id", id);
-    if (error) return flash(`Error: ${error.message}`);
+    if (error) return flashError(`Error: ${error.message}`);
     if (editingUpdateId === id) cancelEditUpdate();
     flash("Update deleted ✓");
     loadPool();
@@ -594,7 +649,7 @@ export default function NewsletterAdmin() {
       },
     ]);
     setGenerating(false);
-    if (error) return flash(`Error saving issue: ${error.message}`);
+    if (error) return flashError(`Error saving issue: ${error.message}`);
 
     // Mark the published joke as used so rotation favors fresh ones next time.
     if (jokeId) {
@@ -779,8 +834,23 @@ export default function NewsletterAdmin() {
               </span>
             )}
             {status && (
-              <span className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+              <span
+                className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                  statusIsError
+                    ? "max-w-md bg-rose-50 text-rose-700"
+                    : "bg-emerald-50 text-emerald-700"
+                }`}
+              >
                 {status}
+                {statusIsError && (
+                  <button
+                    onClick={() => setStatus("")}
+                    className="ml-2 text-rose-500 hover:text-rose-700"
+                    title="Dismiss"
+                  >
+                    ✕
+                  </button>
+                )}
               </span>
             )}
             <button
