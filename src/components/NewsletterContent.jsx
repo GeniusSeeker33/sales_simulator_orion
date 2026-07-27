@@ -98,6 +98,13 @@ export default function NewsletterContent({
                 <p className="mt-2 leading-relaxed text-slate-600">
                   {item.description}
                 </p>
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
+                    alt={item.title}
+                    className="mt-4 w-full rounded-lg border border-slate-200 object-cover"
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -287,6 +294,13 @@ export default function NewsletterContent({
                 <p className="mt-2 leading-relaxed text-slate-700">
                   {item.shoutout_text}
                 </p>
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
+                    alt={item.employee_name}
+                    className="mt-4 w-full rounded-lg border border-amber-200 object-cover"
+                  />
+                )}
                 <p className="mt-3 text-sm font-medium text-slate-500">
                   Submitted by {item.submitted_by || "Leadership"}
                 </p>

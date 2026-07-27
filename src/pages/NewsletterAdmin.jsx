@@ -102,6 +102,36 @@ async function clearCloudDraft() {
   }
 }
 
+// Load an image file, scale it down so its longest side is at most maxPx, and
+// return a compressed JPEG data URL. Keeps the stored string small enough to
+// live in a text column and render inline everywhere the newsletter shows.
+function downscaleImage(file, maxPx, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        // Fill white first so transparent PNGs don't turn black as JPEG.
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 const inputCls =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none";
 const labelCls = "block text-sm font-semibold text-slate-700 mb-1";
@@ -302,6 +332,7 @@ export default function NewsletterAdmin() {
     department: "Sales",
     submitted_by: session?.name || "Leadership",
     shoutout_text: "",
+    image_url: "",
   });
 
   async function addShoutout(e) {
@@ -317,6 +348,7 @@ export default function NewsletterAdmin() {
       department: "Sales",
       submitted_by: session?.name || "Leadership",
       shoutout_text: "",
+      image_url: "",
     });
     flash("Shout-out added ✓");
     loadPool();
@@ -328,10 +360,32 @@ export default function NewsletterAdmin() {
     description: "",
     category: "Company",
     update_date: todayISO(),
+    image_url: "",
   };
   const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
   // null = adding a new update; an id = editing that existing one.
   const [editingUpdateId, setEditingUpdateId] = useState(null);
+  // Shows a spinner label while an uploaded image is being downscaled.
+  const [imageBusy, setImageBusy] = useState(false);
+
+  // Read an uploaded image file, downscale it to a sensible max width, and
+  // store it as a base64 data URL on the form. We keep it inline (rather than
+  // Supabase Storage) so it needs no bucket setup and gets baked into the
+  // "Copy as Image" newsletter paste with no CORS issues.
+  async function handleImageFile(file, setForm) {
+    if (!file) return;
+    if (!file.type.startsWith("image/"))
+      return flash("Please choose an image file.");
+    setImageBusy(true);
+    try {
+      const dataUrl = await downscaleImage(file, 1000, 0.82);
+      setForm((f) => ({ ...f, image_url: dataUrl }));
+    } catch {
+      flash("Couldn't read that image. Try a different file.");
+    } finally {
+      setImageBusy(false);
+    }
+  }
 
   async function addUpdate(e) {
     e.preventDefault();
@@ -346,6 +400,7 @@ export default function NewsletterAdmin() {
           description: updateForm.description,
           category: updateForm.category,
           update_date: updateForm.update_date,
+          image_url: updateForm.image_url,
         })
         .eq("id", editingUpdateId);
       if (error) return flash(`Error: ${error.message}`);
@@ -370,6 +425,7 @@ export default function NewsletterAdmin() {
       description: u.description || "",
       category: u.category || "Company",
       update_date: u.update_date || todayISO(),
+      image_url: u.image_url || "",
     });
     setActiveSection("update");
   }
@@ -967,7 +1023,42 @@ export default function NewsletterAdmin() {
                     }
                   />
                 </div>
-                <button className={btnPrimary}>Add Shout-Out</button>
+                <div>
+                  <label className={labelCls}>Image (optional)</label>
+                  {shoutForm.image_url ? (
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={shoutForm.image_url}
+                        alt="Shout-out preview"
+                        className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShoutForm({ ...shoutForm, image_url: "" })
+                        }
+                        className={btnGhost}
+                      >
+                        Remove image
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageFile(e.target.files?.[0], setShoutForm)
+                      }
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500 file:px-4 file:py-2 file:text-sm file:font-bold file:text-slate-950 hover:file:bg-amber-400"
+                    />
+                  )}
+                  {imageBusy && (
+                    <p className="mt-1 text-xs text-slate-400">Processing image…</p>
+                  )}
+                </div>
+                <button className={btnPrimary} disabled={imageBusy}>
+                  Add Shout-Out
+                </button>
               </form>
             )}
 
@@ -1031,8 +1122,41 @@ export default function NewsletterAdmin() {
                     }
                   />
                 </div>
+                <div>
+                  <label className={labelCls}>Image (optional)</label>
+                  {updateForm.image_url ? (
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={updateForm.image_url}
+                        alt="Update preview"
+                        className="h-24 w-24 rounded-lg border border-slate-200 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUpdateForm({ ...updateForm, image_url: "" })
+                        }
+                        className={btnGhost}
+                      >
+                        Remove image
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageFile(e.target.files?.[0], setUpdateForm)
+                      }
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500 file:px-4 file:py-2 file:text-sm file:font-bold file:text-slate-950 hover:file:bg-amber-400"
+                    />
+                  )}
+                  {imageBusy && (
+                    <p className="mt-1 text-xs text-slate-400">Processing image…</p>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
-                  <button className={btnPrimary}>
+                  <button className={btnPrimary} disabled={imageBusy}>
                     {editingUpdateId ? "Save Changes" : "Add Update"}
                   </button>
                   {editingUpdateId && (
@@ -1068,7 +1192,15 @@ export default function NewsletterAdmin() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 items-start gap-2">
+                          {u.image_url && (
+                            <img
+                              src={u.image_url}
+                              alt=""
+                              className="h-10 w-10 shrink-0 rounded border border-slate-200 object-cover"
+                            />
+                          )}
+                          <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-800">
                             {u.title}
                           </p>
@@ -1078,6 +1210,7 @@ export default function NewsletterAdmin() {
                           <p className="mt-1 line-clamp-2 text-xs text-slate-600">
                             {u.description}
                           </p>
+                          </div>
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button
