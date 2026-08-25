@@ -319,72 +319,161 @@ export default function NewsletterAdmin() {
     "Saved without the image — this database doesn't have the image column yet. " +
     "Run add_update_image_column.sql in the Supabase SQL editor, then re-add the image.";
 
-  /* ---------------- Add Review ---------------- */
-  const [reviewForm, setReviewForm] = useState({
+  /* ---------------- Add / Edit Review ---------------- */
+  const emptyReviewForm = {
     source: "Google",
     rating: 5,
     reviewer_name: "",
     review_text: "",
     response: "",
     review_date: todayISO(),
-  });
+  };
+  const [reviewForm, setReviewForm] = useState(emptyReviewForm);
+  // null = adding a new review; an id = editing that existing one.
+  const [editingReviewId, setEditingReviewId] = useState(null);
 
   async function addReview(e) {
     e.preventDefault();
     if (!reviewForm.review_text.trim()) return flash("Review text is required.");
-    const { error } = await supabase.from("newsletter_reviews").insert([
-      { ...reviewForm, rating: Number(reviewForm.rating), approved: true },
-    ]);
-    if (error) return flashError(`Error: ${error.message}`);
-    setReviewForm({
-      source: "Google",
-      rating: 5,
-      reviewer_name: "",
-      review_text: "",
-      response: "",
-      review_date: todayISO(),
-    });
-    flash("Review added ✓");
+    const fields = { ...reviewForm, rating: Number(reviewForm.rating) };
+
+    if (editingReviewId) {
+      const { error } = await supabase
+        .from("newsletter_reviews")
+        .update(fields)
+        .eq("id", editingReviewId);
+      if (error) return flashError(`Error: ${error.message}`);
+      flash("Review saved ✓");
+    } else {
+      const { error } = await supabase
+        .from("newsletter_reviews")
+        .insert([{ ...fields, approved: true }]);
+      if (error) return flashError(`Error: ${error.message}`);
+      flash("Review added ✓");
+    }
+    setReviewForm(emptyReviewForm);
+    setEditingReviewId(null);
     loadPool();
   }
 
-  /* ---------------- Add Shout-Out ---------------- */
-  const [shoutForm, setShoutForm] = useState({
+  // Load an existing review into the form so it can be corrected.
+  function editReview(r) {
+    setEditingReviewId(r.id);
+    setReviewForm({
+      source: r.source || "Google",
+      rating: r.rating || 5,
+      reviewer_name: r.reviewer_name || "",
+      review_text: r.review_text || "",
+      response: r.response || "",
+      review_date: r.review_date || todayISO(),
+    });
+    setActiveSection("review");
+  }
+
+  function cancelEditReview() {
+    setEditingReviewId(null);
+    setReviewForm(emptyReviewForm);
+  }
+
+  // Remove a single review — used to clear a double-post without having to
+  // wipe everything else already added to the issue.
+  async function deleteReview(id) {
+    const { error } = await supabase
+      .from("newsletter_reviews")
+      .delete()
+      .eq("id", id);
+    if (error) return flashError(`Error: ${error.message}`);
+    if (editingReviewId === id) cancelEditReview();
+    flash("Review deleted ✓");
+    loadPool();
+  }
+
+  /* ---------------- Add / Edit Shout-Out ---------------- */
+  const emptyShoutForm = {
     employee_name: "",
     department: "Sales",
     submitted_by: session?.name || "Leadership",
     shoutout_text: "",
     image_url: "",
-  });
+  };
+  const [shoutForm, setShoutForm] = useState(emptyShoutForm);
+  // null = adding a new shout-out; an id = editing that existing one.
+  const [editingShoutoutId, setEditingShoutoutId] = useState(null);
 
   async function addShoutout(e) {
     e.preventDefault();
     if (!shoutForm.employee_name.trim() || !shoutForm.shoutout_text.trim())
       return flash("Employee name and shout-out text are required.");
+
+    // Text-only copy, used to retry when the database has no image column yet.
+    const { image_url: _omit, ...fields } = shoutForm;
+    let imageDropped = false;
+
+    if (editingShoutoutId) {
+      const { error } = await supabase
+        .from("newsletter_shoutouts")
+        .update({ ...fields, image_url: shoutForm.image_url })
+        .eq("id", editingShoutoutId);
+      if (error) {
+        if (!isMissingImageColumn(error))
+          return flashError(`Error: ${error.message}`);
+        // Retry without the image so the text edits still get saved.
+        const { error: retryError } = await supabase
+          .from("newsletter_shoutouts")
+          .update(fields)
+          .eq("id", editingShoutoutId);
+        if (retryError) return flashError(`Error: ${retryError.message}`);
+        imageDropped = true;
+      }
+      if (!imageDropped) flash("Shout-out saved ✓");
+    } else {
+      const { error } = await supabase
+        .from("newsletter_shoutouts")
+        .insert([{ ...shoutForm, approved: true }]);
+      if (error) {
+        if (!isMissingImageColumn(error))
+          return flashError(`Error: ${error.message}`);
+        const { error: retryError } = await supabase
+          .from("newsletter_shoutouts")
+          .insert([{ ...fields, approved: true }]);
+        if (retryError) return flashError(`Error: ${retryError.message}`);
+        imageDropped = true;
+      }
+      if (!imageDropped) flash("Shout-out added ✓");
+    }
+
+    setShoutForm(emptyShoutForm);
+    setEditingShoutoutId(null);
+    if (imageDropped) flashError(IMAGE_COLUMN_HINT);
+    loadPool();
+  }
+
+  // Load an existing shout-out into the form so it can be corrected.
+  function editShoutout(s) {
+    setEditingShoutoutId(s.id);
+    setShoutForm({
+      employee_name: s.employee_name || "",
+      department: s.department || "Sales",
+      submitted_by: s.submitted_by || session?.name || "Leadership",
+      shoutout_text: s.shoutout_text || "",
+      image_url: s.image_url || "",
+    });
+    setActiveSection("shoutout");
+  }
+
+  function cancelEditShoutout() {
+    setEditingShoutoutId(null);
+    setShoutForm(emptyShoutForm);
+  }
+
+  async function deleteShoutout(id) {
     const { error } = await supabase
       .from("newsletter_shoutouts")
-      .insert([{ ...shoutForm, approved: true }]);
-    let imageDropped = false;
-    if (error) {
-      if (!isMissingImageColumn(error))
-        return flashError(`Error: ${error.message}`);
-      // Retry without the image so the shout-out text still gets saved.
-      const { image_url: _omit, ...withoutImage } = shoutForm;
-      const { error: retryError } = await supabase
-        .from("newsletter_shoutouts")
-        .insert([{ ...withoutImage, approved: true }]);
-      if (retryError) return flashError(`Error: ${retryError.message}`);
-      imageDropped = true;
-    }
-    setShoutForm({
-      employee_name: "",
-      department: "Sales",
-      submitted_by: session?.name || "Leadership",
-      shoutout_text: "",
-      image_url: "",
-    });
-    if (imageDropped) flashError(IMAGE_COLUMN_HINT);
-    else flash("Shout-out added ✓");
+      .delete()
+      .eq("id", id);
+    if (error) return flashError(`Error: ${error.message}`);
+    if (editingShoutoutId === id) cancelEditShoutout();
+    flash("Shout-out deleted ✓");
     loadPool();
   }
 
@@ -943,10 +1032,13 @@ export default function NewsletterAdmin() {
               </div>
             )}
 
-            {/* Add review */}
+            {/* Add / edit reviews */}
             {activeSection === "review" && (
+              <div className="space-y-4">
               <form onSubmit={addReview} className="space-y-4">
-                <h2 className="text-lg font-bold">Add Review</h2>
+                <h2 className="text-lg font-bold">
+                  {editingReviewId ? "Edit Review" : "Add Review"}
+                </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Source</label>
@@ -1026,14 +1118,89 @@ export default function NewsletterAdmin() {
                     }
                   />
                 </div>
-                <button className={btnPrimary}>Add Review</button>
+                <div className="flex items-center gap-2">
+                  <button className={btnPrimary}>
+                    {editingReviewId ? "Save Review" : "Add Review"}
+                  </button>
+                  {editingReviewId && (
+                    <button
+                      type="button"
+                      onClick={cancelEditReview}
+                      className={btnGhost}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
+
+              {/* Existing reviews — fix a typo or remove a double-post. */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-700">
+                  Reviews in this issue ({reviews.length})
+                </h3>
+                {reviews.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    No reviews yet. Add one above and it appears here and in the
+                    preview.
+                  </p>
+                ) : (
+                  reviews.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`rounded-lg border px-3 py-2 ${
+                        editingReviewId === r.id
+                          ? "border-amber-400 bg-amber-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {r.reviewer_name || "Customer"}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            <span className="text-amber-500">
+                              {"★".repeat(r.rating || 5)}
+                            </span>{" "}
+                            · {r.source}
+                            {r.review_date ? ` · ${r.review_date}` : ""}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                            {r.review_text}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => editReview(r)}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteReview(r.id)}
+                            className="rounded-md border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              </div>
             )}
 
-            {/* Add shout-out */}
+            {/* Add / edit shout-outs */}
             {activeSection === "shoutout" && (
+              <div className="space-y-4">
               <form onSubmit={addShoutout} className="space-y-4">
-                <h2 className="text-lg font-bold">Add Shout-Out</h2>
+                <h2 className="text-lg font-bold">
+                  {editingShoutoutId ? "Edit Shout-Out" : "Add Shout-Out"}
+                </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Employee Name *</label>
@@ -1126,10 +1293,86 @@ export default function NewsletterAdmin() {
                     <p className="mt-1 text-xs text-slate-400">Processing image…</p>
                   )}
                 </div>
-                <button className={btnPrimary} disabled={imageBusy}>
-                  Add Shout-Out
-                </button>
+                <div className="flex items-center gap-2">
+                  <button className={btnPrimary} disabled={imageBusy}>
+                    {editingShoutoutId ? "Save Shout-Out" : "Add Shout-Out"}
+                  </button>
+                  {editingShoutoutId && (
+                    <button
+                      type="button"
+                      onClick={cancelEditShoutout}
+                      className={btnGhost}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
+
+              {/* Existing shout-outs — fix a typo or remove a double-post. */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-700">
+                  Shout-outs in this issue ({shoutouts.length})
+                </h3>
+                {shoutouts.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    No shout-outs yet. Add one above and it appears here and in
+                    the preview.
+                  </p>
+                ) : (
+                  shoutouts.map((s) => (
+                    <div
+                      key={s.id}
+                      className={`rounded-lg border px-3 py-2 ${
+                        editingShoutoutId === s.id
+                          ? "border-amber-400 bg-amber-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-start gap-2">
+                          {s.image_url && (
+                            <img
+                              src={s.image_url}
+                              alt=""
+                              className="h-10 w-10 shrink-0 rounded border border-slate-200 object-cover"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">
+                              {s.employee_name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {s.department}
+                              {s.submitted_by ? ` · by ${s.submitted_by}` : ""}
+                            </p>
+                            <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                              {s.shoutout_text}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => editShoutout(s)}
+                            className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteShoutout(s.id)}
+                            className="rounded-md border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              </div>
             )}
 
             {/* Add / edit company updates */}

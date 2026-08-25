@@ -55,6 +55,13 @@ export default function NewsletterContent({
     return acc;
   }, {});
 
+  // Only show departments that actually hired this issue — an empty card
+  // ("No new Warehouse hires this issue.") reads as filler, so it's dropped.
+  // If nobody was hired at all, the whole section is omitted.
+  const hiringDepts = NEW_HIRE_DEPARTMENTS.filter(
+    (dept) => hiresByDept[dept].length > 0
+  );
+
   return (
     <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
       {/* Masthead */}
@@ -162,20 +169,24 @@ export default function NewsletterContent({
         </section>
       )}
 
-      {/* New team members */}
-      <section className="border-b border-slate-200 px-10 py-10">
-        <SectionHeading kicker="Welcome Aboard" title="New Team Members" />
+      {/* New team members — departments with no hires are left out entirely */}
+      {hiringDepts.length > 0 && (
+        <section className="border-b border-slate-200 px-10 py-10">
+          <SectionHeading kicker="Welcome Aboard" title="New Team Members" />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          {NEW_HIRE_DEPARTMENTS.map((dept) => (
-            <div
-              key={dept}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-6"
-            >
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                {dept}
-              </h3>
-              {hiresByDept[dept].length > 0 ? (
+          <div
+            className={`grid gap-4 ${
+              hiringDepts.length > 1 ? "md:grid-cols-2" : ""
+            }`}
+          >
+            {hiringDepts.map((dept) => (
+              <div
+                key={dept}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-6"
+              >
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  {dept}
+                </h3>
                 <ul className="mt-3 space-y-2">
                   {hiresByDept[dept].map((hire, i) => (
                     <li key={hire.id || i} className="text-slate-700">
@@ -193,15 +204,11 @@ export default function NewsletterContent({
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="mt-3 text-sm text-slate-400">
-                  No new {dept} hires this issue.
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Celebrations — birthdays and work anniversaries this cycle */}
       <section className="border-b border-slate-200 px-10 py-10">

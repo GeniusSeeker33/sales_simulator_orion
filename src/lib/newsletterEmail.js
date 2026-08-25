@@ -123,25 +123,30 @@ function peopleList(people, renderMeta) {
 }
 
 function buildHires(newHires, departments) {
+  // Only departments that actually hired get a card; if nobody was hired at
+  // all the section is dropped. Mirrors NewsletterContent.
   const blocks = departments
-    .map((dept) => {
-      const inDept = newHires.filter((h) => h.department === dept);
-      const inner = inDept.length
-        ? peopleList(inDept, (h) => {
-            const title = h.title
-              ? `<span style="color:${SLATE_600};"> — ${esc(h.title)}</span>`
-              : "";
-            const start = h.start_date
-              ? `<br><span style="font-size:13px;color:${SLATE_400};">Started ${esc(h.start_date)}</span>`
-              : "";
-            return `${title}${start}`;
-          })
-        : `<p style="margin:0;font:400 14px/1.5 ${FONT};color:${SLATE_400};">No new ${esc(dept)} hires this issue.</p>`;
+    .map((dept) => ({
+      dept,
+      inDept: newHires.filter((h) => h.department === dept),
+    }))
+    .filter(({ inDept }) => inDept.length > 0)
+    .map(({ dept, inDept }) => {
+      const inner = peopleList(inDept, (h) => {
+        const title = h.title
+          ? `<span style="color:${SLATE_600};"> — ${esc(h.title)}</span>`
+          : "";
+        const start = h.start_date
+          ? `<br><span style="font-size:13px;color:${SLATE_400};">Started ${esc(h.start_date)}</span>`
+          : "";
+        return `${title}${start}`;
+      });
       return card(
         `<h3 style="margin:0 0 8px;font:600 11px/1.4 ${FONT};text-transform:uppercase;letter-spacing:1px;color:${SLATE_500};">${esc(dept)}</h3>${inner}`
       );
     })
     .join("");
+  if (!blocks) return "";
   return section(heading("Welcome Aboard", "New Team Members") + blocks);
 }
 
