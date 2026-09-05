@@ -1,3 +1,4 @@
+import ProgressionPanel from "../components/ProgressionPanel";
 import CompetencyBandPanel from "../components/CompetencyBandPanel";
 import CompetencyEvidencePanel from "../components/CompetencyEvidencePanel";
 import { useEffect, useState } from "react";
@@ -71,5 +72,6 @@ export default function ReviewerHistory() {
     {scopeId && <CoachingPanel key={scopeId} scopeId={scopeId} evidence={data?.records || []} />}
     {scopeId && <CompetencyEvidencePanel key={scopeId} scopeId={scopeId} />}
     {scopeId && <CompetencyBandPanel key={scopeId} scopeId={scopeId} />}
+    {scopeId && <ProgressionPanel key={scopeId} scopeId={scopeId} />}
   </Layout>;
 }
