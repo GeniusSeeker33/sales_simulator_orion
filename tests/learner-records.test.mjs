@@ -17,6 +17,7 @@ test("real PostgreSQL migration: ownership, attribution, durability, lifecycle a
     // Supabase's auth schema/JWT helper are the only stubbed infrastructure.
     await db.exec("create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;");
     await db.exec(await readFile(new URL("../supabase/migrations/20260905170811_durable_learner_records.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../supabase/migrations/20260905175922_scoped_reviewer_history.sql", import.meta.url), "utf8"));
     for (const n of [1,2,3,4]) await db.query("insert into auth.users values ($1)", [id(n)]);
     for (const n of [1,2]) await db.query("insert into public.learner_bindings(id,auth_user_id,person_id,employment_episode_id,organization_scope,role_scope_ref,source_environment,source_project,identity_source_ref,employment_source_ref,verified_by,verification_evidence_ref) values($1,$2,$3,$4,'orion','pilot-rep','test','isolated-test','identity/verified','hr/verified',$5,'case/test')",[id(10+n),id(n),id(20+n),id(30+n),id(3)]);
     const asUser = async n => {

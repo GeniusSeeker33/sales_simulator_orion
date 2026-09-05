@@ -6,6 +6,7 @@ const REP_NAV = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/sales-simulator", label: "AI Sales Simulator" },
   { to: "/training", label: "Training" },
+  { to: "/reviewer-history", label: "Assigned Learner History" },
   { to: "/accounts", label: "Accounts" },
   { to: "/ffl-prospects", label: "FFL Prospect Hub" },
   { to: "/activity", label: "Activity" },
