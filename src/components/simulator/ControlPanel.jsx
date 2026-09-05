@@ -6,6 +6,7 @@ export default function ControlPanel({
   difficulty,
   setDifficulty,
   isLive,
+  isBusy = false,
   startSession,
   endSession,
   scenario,
@@ -37,7 +38,7 @@ export default function ControlPanel({
         <select
           value={customerType}
           onChange={(event) => setCustomerType(event.target.value)}
-          disabled={isLive}
+          disabled={isLive || isBusy}
         >
           {safeCustomerTypes.map((type) => (
             <option key={type.id} value={type.id}>
@@ -52,7 +53,7 @@ export default function ControlPanel({
         <select
           value={difficulty}
           onChange={(event) => setDifficulty(event.target.value)}
-          disabled={isLive}
+          disabled={isLive || isBusy}
         >
           {safeDifficultyLevels.map((level) => (
             <option key={level.id} value={level.id}>
@@ -62,11 +63,11 @@ export default function ControlPanel({
         </select>
       </label>
 
-      <button onClick={startSession} disabled={isLive}>
+      <button onClick={startSession} disabled={isLive || isBusy}>
         Start AI Customer Call
       </button>
 
-      <button onClick={endSession} disabled={!isLive}>
+      <button onClick={endSession} disabled={!isLive || isBusy}>
         End Call / Score Me
       </button>
 

@@ -1,3 +1,4 @@
+import { learnerFetch } from "../../lib/learnerFetch";
 import { useEffect, useRef, useState } from "react";
 
 export default function RealtimeVoicePanel({
@@ -6,8 +7,14 @@ export default function RealtimeVoicePanel({
   scenario,
   addMessage,
   onCallEnded,
+  onStart,
+  onFailure,
+  disabled,
   onConnectedChange,
 }) {
+  const startingRef = useRef(false);
+  const activeRef = useRef(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [status, setStatus] = useState("Ready for live voice.");
   const [recordingUrl, setRecordingUrl] = useState(null);
@@ -25,13 +32,18 @@ export default function RealtimeVoicePanel({
   const transcriptRef = useRef([]);
 
   async function startRealtimeCall() {
+    if (startingRef.current || disabled) return;
+    startingRef.current = true;
+    setIsStarting(true);
     try {
+      if (!await onStart()) return;
+      activeRef.current = true;
       setStatus("Creating live AI customer session...");
       setRecordingUrl(null);
       recordedChunksRef.current = [];
       transcriptRef.current = [];
 
-      const sessionResponse = await fetch("/api/realtime-session", {
+      const sessionResponse = await learnerFetch("/api/realtime-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,6 +92,10 @@ export default function RealtimeVoicePanel({
       const dataChannel = peerConnection.createDataChannel("oai-events");
       dataChannelRef.current = dataChannel;
 
+      dataChannel.onerror = () => stopRealtimeCall(true);
+      peerConnection.onconnectionstatechange = () => {
+        if (["failed", "disconnected"].includes(peerConnection.connectionState)) stopRealtimeCall(true);
+      };
       dataChannel.onopen = () => {
         setStatus("Live voice connected. Start talking.");
         setIsConnected(true);
@@ -124,9 +140,9 @@ export default function RealtimeVoicePanel({
             addMessage?.("AI Customer", message.transcript);
           }
 
-          console.log("Realtime event:", message);
+          if (message.type === "error") stopRealtimeCall(true);
         } catch {
-          console.log("Realtime message:", event.data);
+          stopRealtimeCall(true);
         }
       };
 
@@ -162,8 +178,8 @@ export default function RealtimeVoicePanel({
     } catch (error) {
       console.error(error);
       setStatus(`Realtime voice failed: ${error.message}`);
-      stopRealtimeCall();
-    }
+      stopRealtimeCall(true);
+    } finally { startingRef.current = false; setIsStarting(false); }
   }
 
   function startRecording(stream) {
@@ -214,8 +230,9 @@ export default function RealtimeVoicePanel({
     a.click();
   }
 
-  function stopRealtimeCall() {
-    const wasConnected = isConnected;
+  function stopRealtimeCall(failed = false) {
+    const wasActive = activeRef.current;
+    activeRef.current = false;
     const finalTranscript = transcriptRef.current.slice();
 
     stopRecording();
@@ -238,13 +255,18 @@ export default function RealtimeVoicePanel({
 
     setIsConnected(false);
 
-    if (wasConnected && finalTranscript.length > 0 && onCallEnded) {
-      setStatus("Live voice stopped. Scoring your call...");
-      onCallEnded(finalTranscript);
-    } else {
-      setStatus("Live voice stopped.");
+    if (wasActive) {
+      if (failed === true) { setStatus("Voice failed — unscored."); onFailure?.(); }
+      else { setStatus("Live voice stopped."); onCallEnded?.(finalTranscript); }
     }
   }
+
+  useEffect(() => () => {
+    activeRef.current = false;
+    dataChannelRef.current?.close();
+    peerConnectionRef.current?.close();
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
 
   return (
     <section className="simulator-panel realtime-voice-panel">
@@ -252,11 +274,11 @@ export default function RealtimeVoicePanel({
       <p>{status}</p>
 
       <div className="realtime-voice-actions">
-        <button onClick={startRealtimeCall} disabled={isConnected}>
+        <button onClick={startRealtimeCall} disabled={isConnected || isStarting || disabled}>
           Start Live Voice Call
         </button>
 
-        <button onClick={stopRealtimeCall} disabled={!isConnected}>
+        <button onClick={() => stopRealtimeCall(false)} disabled={!isConnected}>
           Stop Live Voice Call
         </button>
 

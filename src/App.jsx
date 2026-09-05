@@ -24,7 +24,8 @@ import Newsletter from "./pages/Newsletter.jsx";
 import NewsletterAdmin from "./pages/NewsletterAdmin.jsx";
 
 function RootRedirect() {
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
+  if (loading) return <p>Verifying sign-in…</p>;
   if (!session) return <Navigate to="/login" replace />;
   if (session.role === "admin") return <Navigate to="/admin-view" replace />;
   if (session.role === "manager") return <Navigate to="/manager-view" replace />;

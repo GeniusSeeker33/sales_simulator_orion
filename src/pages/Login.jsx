@@ -19,7 +19,7 @@ export default function Login() {
 
     await new Promise((r) => setTimeout(r, 320));
 
-    const result = login(email, password);
+    const result = await login(email, password);
 
     if (result.success) {
       navigate(result.redirect, { replace: true });
@@ -78,18 +78,8 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={styles.hint}>
-          <p>
-            <strong>Employee login:</strong> your Orion email + your employee code followed by <code>@Orion</code>
-            <br />
-            Example: <code>CJF@Orion</code> for Chase Farmer
-          </p>
-          <p>
-            <strong>Admin / Executive access:</strong> contact Desiree Thayer for credentials.
-          </p>
-        </div>
-
-        <div style={styles.poweredBy}>
+        <div style={styles.hint}>Use your individually provisioned pilot account. Contact the pilot administrator for access or password recovery.</div>
+<div style={styles.poweredBy}>
           Powered by{" "}
           <a href="https://geniusseeker.com" target="_blank" rel="noopener noreferrer" style={styles.poweredByLink}>
             GeniusSeeker
