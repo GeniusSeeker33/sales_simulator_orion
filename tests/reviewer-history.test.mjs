@@ -8,7 +8,7 @@ test("scoped reviewer authorization against all applied migrations", async t => 
   const db = await PGlite.create();
   try {
     await db.exec("create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;");
-    for (const file of ["20260905170811_durable_learner_records.sql","20260905175922_scoped_reviewer_history.sql","20260905181617_attributable_coaching_sessions.sql"]) {
+    for (const file of ["20260905170811_durable_learner_records.sql","20260905175922_scoped_reviewer_history.sql","20260905181617_attributable_coaching_sessions.sql","20260905191217_human_reviewed_competency_evidence.sql"]) {
       await db.exec(await readFile(new URL("../supabase/migrations/"+file,import.meta.url),"utf8"));
     }
     for (const n of [1,2,3,4,5,6]) await db.query("insert into auth.users values($1)",[id(n)]);
