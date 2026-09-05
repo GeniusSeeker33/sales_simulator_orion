@@ -1,120 +1,45 @@
-import { createContext, useContext, useState } from "react";
-import { employees, getEmployeeFullName } from "../data/employees";
-
-const AUTH_SESSION_KEY = "orion-auth-session";
-
-export const ADMIN_EMAILS = [
-  "desireethayer1@gmail.com",
-  "desiree@orionwholesaleonline.com",
-  "cfo@orionwholesaleonline.com",
-  "controller@orionwholesaleonline.com",
-  "ceo@orionwholesaleonline.com",
-];
-
-export const MANAGER_EMAILS = [
-  "desireethayer1@gmail.com",
-  "desiree@orionwholesaleonline.com",
-  "chase@orionwholesaleonline.com",
-  "don@orionwholesaleonline.com",
-];
-
-const ADMIN_ACCOUNTS = [
-  { email: "desireethayer1@gmail.com", password: "Orion2026!", name: "Desiree Thayer", repCode: null },
-  { email: "desiree@orionwholesaleonline.com", password: "use4orion", name: "Desiree Thayer", repCode: null },
-  { email: "cfo@orionwholesaleonline.com", password: "OrionCFO2026!", name: "Chief Financial Officer", repCode: null },
-  { email: "controller@orionwholesaleonline.com", password: "OrionCtrl2026!", name: "Controller", repCode: null },
-  { email: "ceo@orionwholesaleonline.com", password: "OrionCEO2026!", name: "Chief Executive Officer", repCode: null },
-];
-
-function resolveRole(email) {
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) return "admin";
-  if (MANAGER_EMAILS.includes(email.toLowerCase())) return "manager";
-  return "rep";
-}
-
-function defaultRedirect(role) {
-  if (role === "admin") return "/admin-view";
-  if (role === "manager") return "/manager-view";
-  return "/dashboard";
-}
+import { createContext, useContext, useEffect, useState } from "react";
+import { learnerClient } from "../lib/learnerClient";
 
 const AuthContext = createContext(null);
-
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(() => {
-    try {
-      const raw = localStorage.getItem(AUTH_SESSION_KEY);
-      if (!raw) return null;
-      const stored = JSON.parse(raw);
-      // Always re-derive role from email so stale sessions can't escalate privileges
-      if (stored?.email) {
-        stored.role = resolveRole(stored.email);
-      }
-      return stored;
-    } catch {
-      return null;
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(!!learnerClient);
+  useEffect(() => {
+    let live = true;
+    let revision = 0;
+    async function refresh() {
+      const current = ++revision;
+      const { data, error } = await learnerClient.auth.getUser();
+      if (!live || current !== revision) return;
+      const user = !error && data.user;
+      setSession(user ? { id: user.id, email: user.email, name: user.email, role: "rep" } : null);
+      setLoading(false);
     }
-  });
-
-  function login(email, password) {
-    const normalized = email.toLowerCase().trim();
-
-    const adminAccount = ADMIN_ACCOUNTS.find(
-      (a) => a.email.toLowerCase() === normalized && a.password === password
-    );
-
-    if (adminAccount) {
-      const role = resolveRole(normalized);
-      const s = {
-        email: normalized,
-        name: adminAccount.name,
-        role,
-        repCode: adminAccount.repCode,
-        hireDate: null,
-        loginTime: new Date().toISOString(),
-      };
-      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(s));
-      setSession(s);
-      return { success: true, role, redirect: defaultRedirect(role) };
-    }
-
-    const emp = employees.find((e) => e.email.toLowerCase() === normalized);
-    if (emp) {
-      const expectedPassword = `${emp.code}@Orion`;
-      if (password !== expectedPassword) {
-        return { success: false, error: "Invalid email or password." };
-      }
-      const role = resolveRole(normalized);
-      const s = {
-        email: normalized,
-        name: getEmployeeFullName(emp),
-        role,
-        repCode: emp.code,
-        hireDate: emp.hireDate,
-        loginTime: new Date().toISOString(),
-      };
-      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(s));
-      setSession(s);
-      return { success: true, role, redirect: defaultRedirect(role) };
-    }
-
-    return { success: false, error: "Invalid email or password." };
+    localStorage.removeItem("orion-auth-session");
+    if (!learnerClient) return;
+    refresh();
+    const { data } = learnerClient.auth.onAuthStateChange(() => {
+      // Keep async Auth work outside the auth callback lock.
+      setTimeout(() => { if (live) refresh(); }, 0);
+    });
+    return () => { live = false; data.subscription.unsubscribe(); };
+  }, []);
+  async function login(email, password) {
+    if (!learnerClient) return { success: false, error: "Learner access is not configured. Contact the pilot administrator." };
+    const { data, error } = await learnerClient.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) return { success: false, error: "Sign-in failed. Use your individually provisioned pilot account." };
+    setSession({ id: data.user.id, email: data.user.email, name: data.user.email, role: "rep" });
+    return { success: true, redirect: "/training" };
   }
-
-  function logout() {
-    localStorage.removeItem(AUTH_SESSION_KEY);
+  async function logout() {
     setSession(null);
+    await learnerClient?.auth.signOut({ scope: "local" });
   }
-
-  return (
-    <AuthContext.Provider value={{ session, login, logout, isLoggedIn: !!session }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ session, loading, login, logout, isLoggedIn: !!session }}>
+    {children}
+  </AuthContext.Provider>;
 }
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
-  return ctx;
-}
+// Existing import contract shares the context hook with its provider.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAuth() { return useContext(AuthContext); }

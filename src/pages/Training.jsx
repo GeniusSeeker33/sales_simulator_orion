@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { loadAccounts, normalizeAccount } from "../lib/accountStore";
-import { loadTrainingResults, addTrainingResult } from "../lib/trainingStore";
+import { beginAttempt, finishAttempt } from "../lib/learnerRecords";
+import LearnerHistory from "../components/LearnerHistory";
 
 const scenarioMap = {
   "Growth Mission": {
@@ -83,7 +84,7 @@ export default function Training() {
     return [...importedAccounts, ...demoAccounts];
   }, []);
 
-  const trainingHistory = useMemo(() => loadTrainingResults(), []);
+
 
   const dealer = useMemo(() => {
     if (accountFromRoute) return normalizeAccount(accountFromRoute);
@@ -116,12 +117,10 @@ export default function Training() {
   const [submitted, setSubmitted] = useState(false);
   const [savedResult, setSavedResult] = useState(null);
 
-  const dealerHistory = useMemo(() => {
-    if (!dealer) return [];
-    return trainingHistory.filter((entry) => entry.dealerId === dealer.id);
-  }, [trainingHistory, dealer]);
-
-  const latestScore = dealerHistory[0]?.totalScore ?? dealerHistory[0]?.score ?? null;
+  const attemptId = useRef(null);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   function updateField(field, value) {
     setForm((prev) => ({
@@ -130,52 +129,18 @@ export default function Training() {
     }));
   }
 
-  function handleCompleteTraining() {
-    if (!dealer) return;
-
-    const scoring = scoreTraining(form);
-
-    const result = {
-      id: createId("training"),
-      completedAt: new Date().toISOString(),
-      scenarioType: scenario.title,
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      primaryBuyer: dealer.primaryBuyer,
-      assignedRep: dealer.assignedRep || "",
-      phone: dealer.phone || "",
-      email: dealer.email || "",
-      scoreBreakdown: scoring.breakdown,
-      totalScore: scoring.totalScore,
-      maxScore: 100,
-      repSummary: {
-        openingApproach: form.openingApproach.trim(),
-        discoveryQuestion: form.discoveryQuestion.trim(),
-        valueStory: form.valueStory.trim(),
-        closeAttempt: form.closeAttempt.trim(),
-        coachNotes: form.coachNotes.trim(),
-      },
-      accountSnapshot: {
-        categoryToExpand: dealer.categoryToExpand,
-        skuFocus: dealer.skuFocus,
-        plannedOrderFrequency: dealer.plannedOrderFrequency,
-        barrier: dealer.barrier,
-        aeActionRequired: dealer.aeActionRequired,
-        howWeGetThere: dealer.howWeGetThere,
-        lastMonthSales: dealer.lastMonthSales,
-        currentMonthTarget: dealer.currentMonthTarget,
-        growthGap: dealer.growthGap,
-        progressPercent: dealer.progressPercent,
-        assignedRep: dealer.assignedRep,
-        phone: dealer.phone,
-        email: dealer.email,
-        source: dealer.source,
-      },
-    };
-
-    addTrainingResult(result);
-    setSavedResult(result);
-    setSubmitted(true);
+  async function handleCompleteTraining() {
+    if (!dealer || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true); setSaveError("");
+    attemptId.current ||= crypto.randomUUID();
+    try {
+      await beginAttempt(attemptId.current, "written", scenario.title);
+      await finishAttempt(attemptId.current, "completed");
+      setSavedResult({ id: attemptId.current, scenarioType: scenario.title });
+      setSubmitted(true);
+    } catch (error) { setSaveError(error.message); }
+    finally { savingRef.current = false; setSaving(false); }
   }
 
   function handlePracticeAnother() {
@@ -186,6 +151,7 @@ export default function Training() {
       closeAttempt: "",
       coachNotes: "",
     });
+    attemptId.current = null;
     setSubmitted(false);
     setSavedResult(null);
   }
@@ -214,6 +180,7 @@ export default function Training() {
 
   return (
     <Layout title="Training Simulator">
+      {saveError && <p role="alert">{saveError}</p>}
       <section className="dashboard-grid">
         <div className="card">
           <div className="section-header">
@@ -348,7 +315,7 @@ export default function Training() {
               </label>
 
               <div className="button-row">
-                <button className="btn-primary" onClick={handleCompleteTraining}>
+                <button className="btn-primary" disabled={saving} onClick={handleCompleteTraining}>
                   Complete Training
                 </button>
 
@@ -369,39 +336,11 @@ export default function Training() {
           <div className="card">
             <div className="section-header">
               <div>
-                <h2>Performance Saved</h2>
-                <p className="section-subtext">
-                  This result is now stored and ready for dashboard and level progression.
-                </p>
-              </div>
-              <span className="status-pill status-positive">
-                Score {savedResult.totalScore}/100
-              </span>
-            </div>
-
-            <div className="detail-grid">
-              <div className="mini-stat">
-                <span>Opening</span>
-                <strong>{savedResult.scoreBreakdown.opening}</strong>
-              </div>
-              <div className="mini-stat">
-                <span>Discovery</span>
-                <strong>{savedResult.scoreBreakdown.discovery}</strong>
-              </div>
-              <div className="mini-stat">
-                <span>Value Story</span>
-                <strong>{savedResult.scoreBreakdown.valueStory}</strong>
-              </div>
-              <div className="mini-stat">
-                <span>Close</span>
-                <strong>{savedResult.scoreBreakdown.close}</strong>
+                <h2>Practice saved</h2>
+                <p className="section-subtext">Your completion record is saved durably. This written exercise is unscored. Responses and personal notes stay on this page and are not retained.</p>
               </div>
             </div>
-
-            <p className="coach-text">
-              Result saved for {savedResult.dealerName} under {savedResult.scenarioType}.
-            </p>
-
+            <p>Record {savedResult.id} · {savedResult.scenarioType}</p>
             <div className="button-row">
               <button className="btn-primary" onClick={handlePracticeAnother}>
                 Practice Again
@@ -425,83 +364,8 @@ export default function Training() {
           </div>
         )}
 
-        <div className="card">
-          <div className="section-header">
-            <div>
-              <h2>Dealer Training History</h2>
-              <p className="section-subtext">Recent saved results for this dealer.</p>
-            </div>
-          </div>
-
-          <div className="feedback-row">
-            <span>Total Sessions</span>
-            <strong>{dealerHistory.length}</strong>
-          </div>
-
-          <div className="feedback-row">
-            <span>Latest Score</span>
-            <strong>{latestScore ?? "—"}</strong>
-          </div>
-
-          {dealerHistory.length > 0 ? (
-            <div className="history-list">
-              {dealerHistory.slice(0, 5).map((entry) => (
-                <div key={entry.id} className="feedback-row">
-                  <span>
-                    {entry.scenarioType} • {formatDate(entry.completedAt)}
-                  </span>
-                  <strong>{entry.totalScore ?? entry.score ?? 0}/100</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="coach-text">No training history saved for this dealer yet.</p>
-          )}
-        </div>
+        <LearnerHistory revision={savedResult?.id} />
       </section>
     </Layout>
   );
-}
-
-function scoreTraining(form) {
-  const opening = scoreResponse(form.openingApproach, 25);
-  const discovery = scoreResponse(form.discoveryQuestion, 25);
-  const valueStory = scoreResponse(form.valueStory, 25);
-  const close = scoreResponse(form.closeAttempt, 25);
-
-  return {
-    breakdown: {
-      opening,
-      discovery,
-      valueStory,
-      close,
-    },
-    totalScore: opening + discovery + valueStory + close,
-  };
-}
-
-function scoreResponse(text, maxPoints) {
-  const clean = text.trim();
-
-  if (!clean) return 0;
-  if (clean.length < 40) return Math.round(maxPoints * 0.35);
-  if (clean.length < 90) return Math.round(maxPoints * 0.6);
-  if (clean.length < 180) return Math.round(maxPoints * 0.8);
-  return maxPoints;
-}
-
-function createId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function formatDate(value) {
-  try {
-    return new Date(value).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return value;
-  }
 }

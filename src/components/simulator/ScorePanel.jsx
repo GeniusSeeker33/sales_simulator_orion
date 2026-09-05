@@ -1,7 +1,7 @@
 export default function ScorePanel({ score, glcdEarned }) {
   return (
     <section className="simulator-panel simulator-score-panel">
-      <h2>Coaching Report</h2>
+      <h2>AI Practice Feedback (unreviewed)</h2>
 
       {glcdEarned != null && (
         <div className="glcd-earned-banner">
@@ -14,27 +14,27 @@ export default function ScorePanel({ score, glcdEarned }) {
       <div className="simulator-score-grid">
         <div className="simulator-score-card">
           <span>Overall</span>
-          <strong>{score.overall}</strong>
+          <strong>{score.overall ?? "Unscored"}</strong>
         </div>
 
         <div className="simulator-score-card">
           <span>Discovery</span>
-          <strong>{score.discovery}</strong>
+          <strong>{score.discovery ?? "Unscored"}</strong>
         </div>
 
         <div className="simulator-score-card">
           <span>Order Build</span>
-          <strong>{score.orderBuilding}</strong>
+          <strong>{score.orderBuilding ?? "Unscored"}</strong>
         </div>
 
         <div className="simulator-score-card">
           <span>Objections</span>
-          <strong>{score.objectionHandling}</strong>
+          <strong>{score.objectionHandling ?? "Unscored"}</strong>
         </div>
 
         <div className="simulator-score-card">
           <span>Closing</span>
-          <strong>{score.closing}</strong>
+          <strong>{score.closing ?? "Unscored"}</strong>
         </div>
       </div>
 

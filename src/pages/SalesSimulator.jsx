@@ -1,10 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { learnerFetch } from "../lib/learnerFetch";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import LearnerHistory from "../components/LearnerHistory";
+import { beginAttempt, finishAttempt } from "../lib/learnerRecords";
+import { evaluatePractice } from "../lib/evaluatePractice";
 import ControlPanel from "../components/simulator/ControlPanel";
-import { addSimulatorResult } from "../lib/simulatorResultsStore";
+
 import { loadProducts } from "../lib/productStore";
-import { calcGlcd, logGlcd } from "../lib/geniusDollars";
+
 import TranscriptPanel from "../components/simulator/TranscriptPanel";
 import OrderBuilder from "../components/simulator/OrderBuilder";
 import ScorePanel from "../components/simulator/ScorePanel";
@@ -18,7 +21,7 @@ import RealtimeVoicePanel from "../components/simulator/RealtimeVoicePanel";
 
 export default function SalesSimulator() {
   const location = useLocation();
-  const { session } = useAuth();
+
   const account = location.state?.account || null;
   const isColdCall =
     Boolean(location.state?.isColdCall) ||
@@ -58,7 +61,13 @@ export default function SalesSimulator() {
   const [orderItems, setOrderItems] = useState([]);
   const [objections, setObjections] = useState([]);
   const [score, setScore] = useState(null);
-  const [glcdEarned, setGlcdEarned] = useState(null);
+  const glcdEarned = null;
+  const attemptRef = useRef(null);
+  const busyRef = useRef(false);
+  const endedRef = useRef(false);
+  const pendingRef = useRef(null);
+  const [recordMessage, setRecordMessage] = useState("");
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [isScoring, setIsScoring] = useState(false);
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
   const [repLastMessageTime, setRepLastMessageTime] = useState(null);
@@ -176,12 +185,13 @@ ${inventoryContext || "- No imported inventory available yet."}`,
 
   async function speakCustomerReply(text) {
     if (!text) return;
-    if (isVoiceConnected) return;
+    if (isVoiceConnected || endedRef.current) return;
+    const speechAttempt = attemptRef.current;
 
     try {
       if (currentAudio) currentAudio.pause();
 
-      const response = await fetch("/api/speak-customer", {
+      const response = await learnerFetch("/api/speak-customer", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -194,6 +204,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
 
       if (!response.ok) throw new Error("Speech API failed");
 
+      if (endedRef.current || attemptRef.current !== speechAttempt) return;
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
@@ -201,37 +212,54 @@ ${inventoryContext || "- No imported inventory available yet."}`,
       audio.onended = () => URL.revokeObjectURL(audioUrl);
 
       setCurrentAudio(audio);
-      audio.play();
+      await audio.play();
     } catch (error) {
       console.error("Speech playback error:", error);
+      if (!endedRef.current && attemptRef.current === speechAttempt) await endSession(null, true);
     }
   }
 
-  function startSession() {
+  async function startSession(voice = false) {
+    if (busyRef.current || pendingRef.current || (attemptRef.current && !endedRef.current)) return false;
+    busyRef.current = true;
+    const id = crypto.randomUUID();
+    try {
+      await beginAttempt(id, "simulation", customerType, difficulty);
+    } catch (error) {
+      setRecordMessage(error.message); busyRef.current = false; return false;
+    }
+    attemptRef.current = id;
+    endedRef.current = false;
+    busyRef.current = false;
+    setRecordMessage("Session saved; practice is in progress.");
+    setHistoryRevision(n => n + 1);
     if (currentAudio) currentAudio.pause();
 
     setMessages([]);
     setOrderItems([]);
     setObjections([]);
     setScore(null);
-    setGlcdEarned(null);
+
     setIsScoring(false);
     setIsCustomerThinking(false);
     setRepLastMessageTime(Date.now());
     setIsLive(true);
     setIsEnded(false);
 
-    setTimeout(() => {
+    if (voice !== true) setTimeout(() => {
+      if (endedRef.current || attemptRef.current !== id) return;
       addMessage("AI Customer", scenario.opener);
       speakCustomerReply(scenario.opener);
     }, 300);
+    return true;
   }
 
   async function getCustomerReply(updatedMessages) {
+    const replyAttempt = attemptRef.current;
     setIsCustomerThinking(true);
 
     try {
-      const response = await fetch("/api/customer-reply", {
+      const response = await learnerFetch("/api/customer-reply", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -250,31 +278,28 @@ ${inventoryContext || "- No imported inventory available yet."}`,
       if (!response.ok) throw new Error("AI customer reply failed");
 
       const data = await response.json();
+      if (endedRef.current || attemptRef.current !== replyAttempt) return;
+      if (!data.reply) throw new Error("Missing provider reply");
       const reply =
         data.reply ||
         "Which SKU are you recommending, and why does that make sense for my store?";
 
       setTimeout(() => {
+        if (endedRef.current || attemptRef.current !== replyAttempt) return;
         addMessage("AI Customer", reply);
         speakCustomerReply(reply);
       }, 600 + Math.random() * 900);
     } catch (error) {
       console.error(error);
 
-      const fallback =
-        "I’m having trouble following. Which SKU are you recommending?";
-
-      setTimeout(() => {
-        addMessage("AI Customer", fallback);
-        speakCustomerReply(fallback);
-      }, 600);
+      if (!endedRef.current && attemptRef.current === replyAttempt) await endSession(null, true);
     } finally {
       setIsCustomerThinking(false);
     }
   }
 
   async function sendRepMessage(text) {
-    if (!text.trim() || isCustomerThinking) return;
+    if (!isLive || endedRef.current || !text.trim() || isCustomerThinking) return;
 
     setRepLastMessageTime(Date.now());
 
@@ -285,7 +310,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
   }
 
   async function customerReply() {
-    if (isCustomerThinking) return;
+    if (!isLive || endedRef.current || isCustomerThinking) return;
     await getCustomerReply(messages);
   }
 
@@ -341,110 +366,43 @@ ${inventoryContext || "- No imported inventory available yet."}`,
     }
   }, [isVoiceConnected, currentAudio]);
 
-  function saveSimulatorSession(finalScore, error = null) {
-    addSimulatorResult({
-      accountId: account?.id || null,
-      dealerName: account?.dealerName || "General Scenario",
-      primaryBuyer: account?.primaryBuyer || "",
-      assignedRep: account?.assignedRep || "",
-      customerType,
-      difficulty,
-      score: finalScore,
-      transcript: messages,
-      orderItems,
-      objections,
-      productsUsed: orderItems,
-      availableProducts,
-      error,
-    });
+  async function persistPending() {
+    const pending = pendingRef.current;
+    if (!pending || busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await finishAttempt(pending.id, pending.status, pending.score);
+      pendingRef.current = null;
+      setRecordMessage("Session saved durably. AI practice feedback is unreviewed; no progression or reward is awarded.");
+      setHistoryRevision(n => n + 1);
+    } catch (error) { setRecordMessage(error.message); }
+    finally { busyRef.current = false; }
   }
 
-  async function endSession(overrideTranscript = null) {
+  async function endSession(overrideTranscript = null, technicalFailure = false) {
+    if (!attemptRef.current || endedRef.current) return;
+    endedRef.current = true;
     if (currentAudio) currentAudio.pause();
-
-    const transcriptToScore = Array.isArray(overrideTranscript)
-      ? overrideTranscript
-      : messages;
-
-    setIsLive(false);
-    setIsEnded(true);
-    setIsScoring(true);
-    setScore(null);
-    setIsCustomerThinking(false);
-
-    try {
-      const response = await fetch("/api/score-call", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          transcript: transcriptToScore,
-          orderItems,
-          objections,
-          customerType,
-          difficulty,
-          scenario,
-          account,
-          products: availableProducts,
-        }),
-      });
-
-      if (!response.ok) throw new Error("AI scoring request failed");
-
-      const aiScore = await response.json();
-
-      const finalScore = {
-        overall: aiScore.overall ?? 0,
-        discovery: aiScore.discovery ?? 0,
-        orderBuilding: aiScore.orderBuilding ?? 0,
-        objectionHandling: aiScore.objectionHandling ?? 0,
-        closing: aiScore.closing ?? 0,
-        strengths: aiScore.strengths || [],
-        missedOpportunities: aiScore.missedOpportunities || [],
-        coachingNote: aiScore.coachingNote || "",
-        betterPhrases: aiScore.betterPhrases || [],
-      };
-
-      setScore(finalScore);
-      saveSimulatorSession(finalScore);
-
-      if (session?.email && finalScore.overall > 0) {
-        const earned = calcGlcd(finalScore.overall, difficulty);
-        setGlcdEarned(earned);
-        logGlcd({
-          actor: session.email,
-          amount: earned,
-          overallScore: finalScore.overall,
-          difficulty,
-          sessionRef: `orion-sim-${Date.now()}`,
-        });
-      }
-    } catch (error) {
-      console.error(error);
-
-      const fallbackScore = {
-        overall: 0,
-        discovery: 0,
-        orderBuilding: 0,
-        objectionHandling: 0,
-        closing: 0,
-        strengths: [],
-        missedOpportunities: [],
-        betterPhrases: [],
-        coachingNote:
-          "AI scoring could not run. Check /api/score-call and your OPENAI_API_KEY in Vercel.",
-      };
-
-      setScore(fallbackScore);
-      saveSimulatorSession(fallbackScore, "AI scoring failed");
-    } finally {
-      setIsScoring(false);
-    }
+    const transcriptToScore = Array.isArray(overrideTranscript) ? overrideTranscript : messages;
+    setIsLive(false); setIsEnded(true); setIsScoring(true); setScore(null); setIsCustomerThinking(false);
+    const outcome = await evaluatePractice(transcriptToScore, () => learnerFetch("/api/score-call", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript: transcriptToScore, orderItems, objections, customerType, difficulty, scenario, account, products: availableProducts }),
+    }), technicalFailure || isCustomerThinking);
+    setScore(outcome.score ? { ...outcome.score, coachingNote: outcome.feedback } : {
+      overall: null, discovery: null, orderBuilding: null, objectionHandling: null, closing: null,
+      coachingNote: outcome.status === "technical_failure" ? "Technical/provider failure — unscored. This is not a competence result." : "No learner response was observed — unscored.",
+    });
+    pendingRef.current = { id: attemptRef.current, status: outcome.status, score: outcome.score };
+    await persistPending();
+    setIsScoring(false);
   }
 
   return (
     <main className="simulator-shell">
+      <p role="status">{recordMessage}</p>
+      {pendingRef.current && <button disabled={isScoring} onClick={persistPending}>Retry saving this session</button>}
+      <LearnerHistory revision={historyRevision} />
       <section className="simulator-hero">
         <div>
           <p className="simulator-eyebrow">
@@ -585,12 +543,16 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         difficulty={difficulty}
         setDifficulty={setDifficulty}
         isLive={isLive}
-        startSession={startSession}
+        isBusy={isScoring || isVoiceConnected || !!pendingRef.current}
+        startSession={() => startSession(false)}
         endSession={endSession}
         scenario={scenario}
       />
 
       <RealtimeVoicePanel
+        onStart={() => startSession(true)}
+        onFailure={() => endSession(null, true)}
+        disabled={isLive || isScoring || !!pendingRef.current}
         customerType={customerType}
         difficulty={difficulty}
         scenario={scenario}
