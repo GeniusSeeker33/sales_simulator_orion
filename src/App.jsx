@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import Login from "./pages/Login";
 import ReviewerHistory from "./pages/ReviewerHistory";
+import MyCoaching from "./pages/MyCoaching";
 import AdminImport from "./pages/AdminImport.jsx";
 import Dashboard from "./pages/Dashboard";
 import Training from "./pages/Training";
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/sales-simulator" element={<ProtectedRoute><SalesSimulator /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/reviewer-history" element={<ProtectedRoute><ReviewerHistory /></ProtectedRoute>} />
+      <Route path="/my-coaching" element={<ProtectedRoute><MyCoaching /></ProtectedRoute>} />
       <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
       <Route path="/activity" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
       <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
