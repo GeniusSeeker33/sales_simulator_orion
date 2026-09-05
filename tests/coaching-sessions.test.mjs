@@ -6,7 +6,7 @@ import { join, resolve, sep } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { coachingCall, readCoaching } from "../src/lib/coachingRecords.js";
 const id=n=>"00000000-0000-4000-8000-"+String(n).padStart(12,"0");
-const migrations=["20260905170811_durable_learner_records.sql","20260905175922_scoped_reviewer_history.sql","20260905181617_attributable_coaching_sessions.sql","20260905191217_human_reviewed_competency_evidence.sql","20260905192514_human_approved_competency_band_review.sql"];
+const migrations=["20260905170811_durable_learner_records.sql","20260905175922_scoped_reviewer_history.sql","20260905181617_attributable_coaching_sessions.sql","20260905191217_human_reviewed_competency_evidence.sql","20260905192514_human_approved_competency_band_review.sql","20260905194609_human_approved_progression.sql"];
 test("coaching authorization, attribution, evidence, responses and corrections",async t=>{
   const dir=await mkdtemp(join(tmpdir(),"orion-coaching-test-"));
   let db=await PGlite.create(dir);
