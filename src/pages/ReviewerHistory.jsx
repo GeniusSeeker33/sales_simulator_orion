@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/layout/Layout";
+import CoachingPanel from "../components/CoachingPanel";
 import { learnerClient } from "../lib/learnerClient";
 import { fetchReviewerHistory, reviewAssessmentLabel } from "../lib/reviewerHistory";
 
@@ -65,5 +66,6 @@ export default function ReviewerHistory() {
         </>}
       </>}
     </section>
+    {scopeId && <CoachingPanel key={scopeId} scopeId={scopeId} evidence={data?.records || []} />}
   </Layout>;
 }

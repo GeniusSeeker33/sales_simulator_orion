@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs"
+    "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs tests/coaching-sessions.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
