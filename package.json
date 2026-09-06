@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:conversation": "node --test tests/dealer-conversation.test.mjs",
     "test:realtime": "node --test tests/realtime-session.test.mjs",
     "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs tests/coaching-sessions.test.mjs tests/competency-evidence.test.mjs tests/competency-band-reviews.test.mjs tests/progression-reviews.test.mjs"
   },

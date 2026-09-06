@@ -70,82 +70,20 @@ export default function SalesSimulator() {
   const [historyRevision, setHistoryRevision] = useState(0);
   const [isScoring, setIsScoring] = useState(false);
   const [isCustomerThinking, setIsCustomerThinking] = useState(false);
-  const [repLastMessageTime, setRepLastMessageTime] = useState(null);
   const [isVoiceConnected, setIsVoiceConnected] = useState(false);
 
   const baseScenario = getScenario(customerType);
 
-  const inventoryContext = availableProducts
-    .map(
-      (p) =>
-        `- ${p.name || p.sku}: ${p.category || "Uncategorized"}, ${
-          p.inventory ?? 0
-        } in stock, dealer price ${formatMoney(
-          p.dealerPrice
-        )}, retail ${formatMoney(p.retailPrice)}, velocity ${
-          p.velocity || "Unknown"
-        }`
-    )
-    .join("\n");
-
-  const scenario =
-    account && isColdCall
-      ? {
-          ...baseScenario,
-          opener: `You are ${account.primaryBuyer || "the licensee"} at ${
-            account.dealerName || "this FFL dealer"
-          } located in ${account.location || "your store"}.
-
-You are running your store when the phone rings. You have NEVER spoken to this caller before. You are an FFL holder and you get cold sales calls from wholesalers all the time. You did not ask for this call. You are busy.
-
-FFL Profile:
-- Business: ${account.dealerName || "Unknown"}
-- Licensee Contact: ${account.primaryBuyer || "Unknown"}
-- Location: ${account.location || "Unknown"}
-- State/Territory: ${account.territory || "Unknown"}
-- License Details (compliance, for context only — don't lecture): ${account.notes || ""}
-
-Available Inventory the Caller May Reference:
-${inventoryContext || "- No imported inventory available yet."}
-
-Personality (cold-call mode):
-- You don't know who Orion is. The rep has to earn your attention.
-- Be skeptical but human. Don't be hostile — be busy and slightly guarded.
-- Ask things like: "Who is this?", "What's this about?", "I already have a wholesaler", "How did you get my number?"
-- If the rep does great discovery and offers something genuinely interesting, soften and engage.
-- Push back on price, margin, minimum orders, and shipping policies before committing to anything.
-- Do not agree to a follow-up unless the rep has clearly earned it.
-- Do NOT make the call easy. Cold calls should feel like cold calls.`,
-        }
-      : account
-      ? {
-          ...baseScenario,
-          opener: `You are ${account.primaryBuyer || "the buyer"} from ${
-            account.dealerName || "this dealer account"
-          }. You are speaking with your sales rep.
-
-Current Situation:
-- Dealer: ${account.dealerName || "Unknown"}
-- Primary Buyer: ${account.primaryBuyer || "Unknown"}
-- Assigned Rep: ${account.assignedRep || "Unassigned"}
-- Category to Expand: ${account.categoryToExpand || "Not defined"}
-- Barrier: ${account.barrier || "No clear barrier yet"}
-- Strategy: ${account.howWeGetThere || "General growth discussion"}
-- Status: ${account.statusLabel || "Unknown"}
-
-Available Inventory:
-${inventoryContext || "- No imported inventory available yet."}
-
-Personality:
-Act like a real buyer. Be skeptical but realistic. Ask questions about margin, sell-through, inventory risk, price, and why this product makes sense for your store. Do not make the call too easy.`,
-        }
-      : {
-          ...baseScenario,
-          opener: `${baseScenario.opener}
-
-Available Inventory:
-${inventoryContext || "- No imported inventory available yet."}`,
-        };
+  const scenario = {
+    ...baseScenario,
+    dealerContext: account ? {
+      business: account.dealerName,
+      location: account.location,
+      relationship: isColdCall ? "First unsolicited call; no prior relationship with this caller" : "Existing dealer account",
+      categoryInterest: account.categoryToExpand,
+      currentConcern: account.barrier,
+    } : {},
+  };
 
   function addMessage(speaker, text) {
     const newMessage = {
@@ -242,15 +180,10 @@ ${inventoryContext || "- No imported inventory available yet."}`,
 
     setIsScoring(false);
     setIsCustomerThinking(false);
-    setRepLastMessageTime(Date.now());
     setIsLive(true);
     setIsEnded(false);
 
-    if (voice !== true) setTimeout(() => {
-      if (endedRef.current || attemptRef.current !== id) return;
-      addMessage("AI Customer", scenario.opener);
-      speakCustomerReply(scenario.opener);
-    }, 300);
+    if (voice !== true) void getCustomerReply([]);
     return true;
   }
 
@@ -301,7 +234,6 @@ ${inventoryContext || "- No imported inventory available yet."}`,
   async function sendRepMessage(text) {
     if (!isLive || endedRef.current || !text.trim() || isCustomerThinking) return;
 
-    setRepLastMessageTime(Date.now());
 
     const repMessage = addMessage("Sales Rep", text.trim());
     const updatedMessages = [...messages, repMessage];
@@ -341,24 +273,6 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         : [...prev, value]
     );
   }
-
-  useEffect(() => {
-    if (!isLive || isVoiceConnected) return;
-
-    const interval = setInterval(() => {
-      if (!repLastMessageTime || isCustomerThinking) return;
-
-      const timeSinceLastRep = Date.now() - repLastMessageTime;
-
-      if (timeSinceLastRep > 8000) {
-        addMessage("AI Customer", "You still there?");
-        speakCustomerReply("You still there?");
-        setRepLastMessageTime(Date.now());
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isLive, repLastMessageTime, isCustomerThinking, isVoiceConnected]);
 
   useEffect(() => {
     if (isVoiceConnected && currentAudio) {
@@ -546,7 +460,6 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         isBusy={isScoring || isVoiceConnected || !!pendingRef.current}
         startSession={() => startSession(false)}
         endSession={endSession}
-        scenario={scenario}
       />
 
       <RealtimeVoicePanel
@@ -556,6 +469,7 @@ ${inventoryContext || "- No imported inventory available yet."}`,
         customerType={customerType}
         difficulty={difficulty}
         scenario={scenario}
+        products={availableProducts}
         addMessage={addMessage}
         onCallEnded={endSession}
         onConnectedChange={setIsVoiceConnected}

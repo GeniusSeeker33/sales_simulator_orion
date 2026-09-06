@@ -5,6 +5,7 @@ export default function RealtimeVoicePanel({
   customerType,
   difficulty,
   scenario,
+  products,
   addMessage,
   onCallEnded,
   onStart,
@@ -52,6 +53,7 @@ export default function RealtimeVoicePanel({
           customerType,
           difficulty,
           scenario,
+          products,
         }),
       });
 
@@ -106,7 +108,7 @@ export default function RealtimeVoicePanel({
             type: "response.create",
             response: {
               instructions:
-                "Open the call as the customer. Greet the rep briefly and begin the sales scenario.",
+                "Answer the phone briefly as the dealer, consistent with the session instructions. Let the caller speak; do not launch a pitch or list of concerns.",
             },
           })
         );
@@ -129,7 +131,7 @@ export default function RealtimeVoicePanel({
             transcriptRef.current.push(item);
             addMessage?.("Sales Rep", message.transcript);
           } else if (
-            message.type === "response.audio_transcript.done" &&
+            ["response.output_audio_transcript.done", "response.audio_transcript.done"].includes(message.type) &&
             message.transcript
           ) {
             const item = {

@@ -9,7 +9,6 @@ export default function ControlPanel({
   isBusy = false,
   startSession,
   endSession,
-  scenario,
 }) {
   const safeCustomerTypes =
     customerTypes.length > 0
@@ -77,7 +76,7 @@ export default function ControlPanel({
           Loaded customer types: {safeCustomerTypes.length} | Loaded difficulty
           levels: {safeDifficultyLevels.length}
         </span>
-        {scenario?.hiddenNeed && <span>{scenario.hiddenNeed}</span>}
+        <span>Discover the dealer’s needs during the conversation.</span>
       </div>
     </section>
   );

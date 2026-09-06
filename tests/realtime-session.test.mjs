@@ -73,6 +73,7 @@ test('Realtime credential route with real learner guard and mocked network', asy
     assert.equal(body.session.model, 'gpt-realtime');
     assert.deepEqual(body.session.output_modalities, ['audio']);
     assert.equal(body.session.audio.output.voice, 'coral');
+    assert.deepEqual(body.session.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'medium', create_response: true, interrupt_response: true });
     assert.equal(body.session.audio.input.transcription.model, 'whisper-1');
   });
   for (const status of [401, 429, 500]) await t.test(`upstream ${status} is sanitized`, async () => {
