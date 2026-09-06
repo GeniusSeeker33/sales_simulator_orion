@@ -1,17 +1,21 @@
 import { requireLearner } from "./_lib/learner-auth.js";
 export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
   if (!await requireLearner(req, res)) return;
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
       message: "realtime-session API is live",
-      hasApiKey: Boolean(process.env.OPENAI_API_KEY),
+      hasApiKey: Boolean(process.env.OPENAI_API_KEY?.trim()),
     });
   }
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return res.status(503).json({ code: "realtime_not_configured", error: "Live voice is not configured on the server." });
 
   try {
     const {
@@ -70,8 +74,9 @@ Rules:
       "https://api.openai.com/v1/realtime/client_secrets",
       {
         method: "POST",
+        signal: AbortSignal.timeout(10000),
         headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -83,6 +88,7 @@ Rules:
             type: "realtime",
             model: "gpt-realtime",
             instructions,
+            output_modalities: ["audio"],
             audio: {
               input: {
                 transcription: {
@@ -99,22 +105,26 @@ Rules:
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
+      // Never echo/log upstream bodies, which can contain request or credential details.
+      console.warn("Realtime client-secret upstream failure", { status: response.status });
+      return res.status(502).json({ code: "realtime_upstream_error", error: "Live voice provider is unavailable. Try text simulation." });
     }
 
-    const data = await response.json();
-
-    return res.status(200).json({
-      clientSecret:
-        data?.value || data?.client_secret?.value || data?.client_secret,
-    });
+    let data;
+    try { data = await response.json(); }
+    catch { return res.status(502).json({ code: "realtime_invalid_response", error: "Live voice provider returned an invalid session." }); }
+    // Current GA client_secrets response is {value, expires_at, session}; no beta fallbacks.
+    if (typeof data?.value !== "string" || !data.value.startsWith("ek_") || data.value.length <= 3 ||
+        data.value === apiKey || !Number.isSafeInteger(data.expires_at) || data.expires_at <= Math.floor(Date.now() / 1000)) {
+      return res.status(502).json({ code: "realtime_invalid_response", error: "Live voice provider returned an invalid session." });
+    }
+    return res.status(200).json({ clientSecret: data.value, expiresAt: data.expires_at });
   } catch (error) {
-    console.error("Realtime session error:", error);
-
-    return res.status(500).json({
-      error: "Realtime session failed",
-      details: error.message,
+    const timeout = error?.name === "TimeoutError" || error?.name === "AbortError";
+    console.warn("Realtime client-secret request failed", { code: timeout ? "timeout" : "request_failed" });
+    return res.status(timeout ? 504 : 502).json({
+      code: timeout ? "realtime_upstream_timeout" : "realtime_upstream_error",
+      error: "Live voice provider is unavailable. Try text simulation.",
     });
   }
 }

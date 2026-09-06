@@ -62,7 +62,8 @@ export default function RealtimeVoicePanel({
       const sessionData = await sessionResponse.json();
       const clientSecret = sessionData.clientSecret;
 
-      if (!clientSecret) {
+      if (typeof clientSecret !== "string" || !clientSecret.startsWith("ek_") ||
+          !Number.isSafeInteger(sessionData.expiresAt) || sessionData.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error("No realtime client secret returned.");
       }
 
@@ -150,7 +151,7 @@ export default function RealtimeVoicePanel({
       await peerConnection.setLocalDescription(offer);
 
       const realtimeResponse = await fetch(
-        "https://api.openai.com/v1/realtime/calls?model=gpt-realtime",
+        "https://api.openai.com/v1/realtime/calls",
         {
           method: "POST",
           headers: {
@@ -163,8 +164,7 @@ export default function RealtimeVoicePanel({
       );
 
       if (!realtimeResponse.ok) {
-        const errorText = await realtimeResponse.text();
-        throw new Error(errorText);
+        throw new Error("Voice connection unavailable.");
       }
 
       const answerSdp = await realtimeResponse.text();
@@ -175,9 +175,7 @@ export default function RealtimeVoicePanel({
       });
 
       setStatus("Connecting audio...");
-    } catch (error) {
-      console.error(error);
-      setStatus(`Realtime voice failed: ${error.message}`);
+    } catch {
       stopRealtimeCall(true);
     } finally { startingRef.current = false; setIsStarting(false); }
   }
@@ -256,7 +254,7 @@ export default function RealtimeVoicePanel({
     setIsConnected(false);
 
     if (wasActive) {
-      if (failed === true) { setStatus("Voice failed — unscored."); onFailure?.(); }
+      if (failed === true) { setStatus("Live voice is unavailable. Continue with text simulation. This attempt is unscored."); onFailure?.(); }
       else { setStatus("Live voice stopped."); onCallEnded?.(finalTranscript); }
     }
   }
@@ -271,7 +269,7 @@ export default function RealtimeVoicePanel({
   return (
     <section className="simulator-panel realtime-voice-panel">
       <h2>Full Real-Time Voice</h2>
-      <p>{status}</p>
+      <p role="status">{status}</p>
 
       <div className="realtime-voice-actions">
         <button onClick={startRealtimeCall} disabled={isConnected || isStarting || disabled}>
