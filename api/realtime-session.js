@@ -1,3 +1,4 @@
+import { buildDealerInstructions } from "./_lib/dealer-conversation.js";
 import { requireLearner } from "./_lib/learner-auth.js";
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -22,6 +23,7 @@ export default async function handler(req, res) {
       customerType = "skeptical-store-owner",
       difficulty = "medium",
       scenario = {},
+      products = [],
     } = req.body || {};
 
     const voice =
@@ -43,32 +45,7 @@ export default async function handler(req, res) {
         ? "verse"
         : "alloy";
 
-    const instructions = `
-You are the AI Customer in the GeniusSeeker Sales Simulator.
-
-You are having a live voice sales call with a sales rep.
-
-Customer type: ${customerType}
-Difficulty: ${difficulty}
-
-Scenario:
-${JSON.stringify(scenario, null, 2)}
-
-Language:
-- Always speak and respond in English (United States).
-- Never switch to Spanish or any other language, even if the rep speaks another language or asks you to.
-
-Rules:
-- Speak naturally like a real American customer.
-- Do not explain that you are AI.
-- Do not coach or score the rep.
-- Stay in character.
-- Keep responses conversational and concise.
-- If the rep is vague, push back.
-- If the rep asks good discovery questions, reveal useful information.
-- If the rep pitches too early, resist.
-- If the rep earns trust, become more cooperative.
-`;
+    const instructions = buildDealerInstructions({ customerType, difficulty, scenario, products });
 
     const response = await fetch(
       "https://api.openai.com/v1/realtime/client_secrets",
@@ -91,6 +68,7 @@ Rules:
             output_modalities: ["audio"],
             audio: {
               input: {
+                turn_detection: { type: "semantic_vad", eagerness: "medium", create_response: true, interrupt_response: true },
                 transcription: {
                   model: "whisper-1",
                 },
