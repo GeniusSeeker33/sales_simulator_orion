@@ -97,7 +97,8 @@ function LearnerResponse({ record, onSaved }) {
     } catch (error) { setError(error.message); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <form onSubmit={save}>
+  return <form className="card review-form" onSubmit={save}>
+    <h3>Acknowledge or comment</h3>
     <p>Acknowledgment is receipt, not agreement. Comments are visible to authorized reviewers and append to this exact version.</p>
     <fieldset disabled={busy || !!pending}>
       <label><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />I acknowledge receipt of revision {record.revision}</label>

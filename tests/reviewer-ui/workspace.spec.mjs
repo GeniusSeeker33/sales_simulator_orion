@@ -89,3 +89,34 @@ test('same-episode access refresh preserves an unfinished form',async({page})=>{
  await expect(page.locator('#review-coaching form textarea').first()).toHaveValue('Keep this draft during an access check.');
  await expect(page.locator('#review-coaching form')).toBeVisible();
 });
+
+test('My Coaching has styled learner actions and preserves acknowledgment payload',async({page})=>{
+ await page.goto('/tests/reviewer-ui/index.html?learner');
+ const workspace=page.locator('.my-coaching-workspace');
+ await expect(workspace.getByRole('heading',{name:'Your coaching & next steps'})).toBeVisible();
+ await expect(workspace.locator('.review-level strong')).toHaveText('L1');
+ await expect(workspace.locator('[data-create]')).toHaveCount(0);
+ await expect(workspace.locator('.review-technical[open]')).toHaveCount(0);
+ await workspace.getByRole('button',{name:'Acknowledge / comment'}).click();
+ const form=workspace.locator('#review-coaching form');
+ await expect(form.getByRole('checkbox')).toBeFocused();
+ await form.getByRole('checkbox').check();
+ await form.getByLabel('Optional learner comment').fill('I will practice the recap before our follow-up.');
+ await page.screenshot({path:'test-results/my-coaching-desktop.png',fullPage:true});
+ await form.getByRole('button',{name:'Save learner response'}).click();
+ await expect.poll(()=>page.evaluate(()=>window.reviewFixture.packets.length)).toBe(1);
+ const packet=await page.evaluate(()=>window.reviewFixture.packets[0]);
+ expect(packet.name).toBe('respond_to_coaching');
+ expect(packet.args).toMatchObject({p_session:id(701),p_ack:true,p_comment:'I will practice the recap before our follow-up.'});
+ expect(Object.keys(packet.args).sort()).toEqual(['p_ack','p_comment','p_id','p_session']);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();
+});
+test('My Coaching clears prior learner comments when auth changes',async({page})=>{
+ await page.goto('/tests/reviewer-ui/index.html?learner');
+ const comment=page.getByLabel('Optional learner comment');await comment.fill('Old learner draft');
+ await page.evaluate(()=>window.reviewFixture.setUser('00000000-0000-4000-8000-000000000002'));
+ await expect(comment).toHaveValue('');
+ await expect(page.locator('#review-coaching')).toHaveCount(1);
+ await expect(page.locator('.my-coaching-workspace')).toHaveCount(1);
+});
