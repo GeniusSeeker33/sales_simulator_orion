@@ -43,3 +43,7 @@
 .review-section {scroll-margin-top:24px}
 @media(max-width:850px) {.review-workflow{grid-template-columns:1fr 1fr}.review-workflow li:after{display:none}.review-workspace .review-learner{grid-template-columns:1fr}.review-level{border-left:0;border-top:1px solid #587083;padding:14px 0}.review-workspace .card{padding:18px}}
 @media(max-width:520px) {.review-workflow{grid-template-columns:1fr}.review-action-buttons button{width:100%}.review-workspace fieldset{padding:12px}.review-workspace h2{font-size:1.2rem}}
+
+.my-coaching-workspace .review-workflow {grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:850px){.my-coaching-workspace .review-workflow{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.my-coaching-workspace .review-workflow{grid-template-columns:1fr}}
