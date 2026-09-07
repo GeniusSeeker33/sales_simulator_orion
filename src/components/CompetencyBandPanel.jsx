@@ -82,14 +82,14 @@ export default function CompetencyBandPanel({ scopeId = null }) {
   }, []);
   const fresh = result?.key === key;
   const data = result?.data;
-  useReviewReport("bands", fresh ? data : null);
+  useReviewReport("bands", data);
   return <section className="card review-section" id="review-bands">
     <h2>{scopeId ? "Competency Bands" : "My band-review history"}</h2>
     <p>Individual human reviews, not an aggregate competency profile. No L1–L5, promotion, discipline or compensation changes. Defer assigns no band.</p>
     <button onClick={refresh}>Refresh reviews and access</button>
-    {!fresh && <p role="status">Checking band-review access…</p>}
+    {!fresh && <p className={data ? "review-refresh-status" : undefined} role="status">Checking band-review access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
-    <div hidden={!fresh || !data}>
+    <div hidden={!data}>
       {data && <TechnicalDetails record={{ person_id: data.person_id, employment_episode_id: data.employment_episode_id }} />}
       {data?.can_create && !draft && <button data-create className="review-primary" onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Review Competency</button>}
       {draft && <BandForm key={draft.key} scopeId={scopeId} correction={draft.record} onCancel={() => { setDraft(null); refresh(); }} onSaved={() => { setDraft(null); setCursor(null); refresh(); }} />}

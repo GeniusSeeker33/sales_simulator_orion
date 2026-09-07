@@ -126,16 +126,16 @@ export default function CoachingPanel({ scopeId = null }) {
     window.addEventListener("focus", refresh);
     return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
-  // Keep draft mounted during refresh, but hide content until the fresh authorization succeeds.
+  // Revalidation must not collapse the page or blur an active draft. A failed response clears data.
   const data = result?.data;
   const fresh = result?.key === key;
-  const allowed = fresh && !!data;
+  const allowed = !!data;
   const refresh = () => setRevision(n => n + 1);
-  useReviewReport("coaching", fresh ? data : null);
+  useReviewReport("coaching", data);
   return <section className="card review-section" id="review-coaching">
     <h2>{scopeId ? "Coaching" : "My coaching"}</h2>
     <button onClick={refresh}>Refresh coaching and access</button>
-    {!fresh && <p role="status">Checking coaching access…</p>}
+    {!fresh && <p className={data ? "review-refresh-status" : undefined} role="status">Checking coaching access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
     <div hidden={!allowed}>
       {data && <TechnicalDetails record={{ person_id: data.person_id, employment_episode_id: data.employment_episode_id }} />}

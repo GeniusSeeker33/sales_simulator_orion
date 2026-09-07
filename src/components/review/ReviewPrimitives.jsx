@@ -9,6 +9,6 @@ export function RecentRecords({ records = [], children }) {
 }
 export function FormCard({ children, onSubmit }) {
   const ref = useRef(null);
-  useEffect(() => { ref.current?.querySelector('input, select, textarea, button')?.focus(); }, []);
+  useEffect(() => { ref.current?.querySelector('input, select, textarea, button')?.focus({ preventScroll: true }); }, []);
   return <form ref={ref} className="card review-form" onSubmit={onSubmit}><p className="review-eyebrow">Human review · Required fields are marked *</p>{children}</form>;
 }

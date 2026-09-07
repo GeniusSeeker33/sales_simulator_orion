@@ -17,8 +17,8 @@ function startAction(stage) {
   const section = document.getElementById(`review-${stage}`);
   section?.scrollIntoView({block:'start'});
   const action = section?.querySelector('[data-create]');
-  if (action) { action.focus(); action.click(); }
-  else section?.querySelector("form input, form select, form textarea")?.focus();
+  if (action) { action.focus({preventScroll:true}); action.click(); }
+  else section?.querySelector("form input, form select, form textarea")?.focus({preventScroll:true});
 }
 function EpisodeWorkspace({ scope, label }) {
   const [cursor,setCursor] = useState(null);
@@ -37,10 +37,11 @@ function EpisodeWorkspace({ scope, label }) {
     return ()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
   },[]);
   const fresh=result?.key===key;
-  const data=fresh ? result?.data : null;
+  const data=result?.data;
   const authorized=data?.scopes.some(s=>s.id===scope.id);
-  // The subtree remains mounted during same-episode refresh to preserve pending retry packets,
-  // but no old data/actions are visible while access is being checked. Episode/user keys reset it.
+  // Keep the last successful same-episode snapshot visible while revalidating.
+  // A failed/denied response replaces it; account/episode keys still discard stale state.
+  // Every publication continues to authorize on the server.
   return <ReviewReportContext.Provider value={report}>
     <section className="card review-learner"><div><p className="review-eyebrow">Selected learner · one employment episode</p><h2>{label}</h2>
       <p>{scope.role_scope_ref || 'Role context unavailable'} · {scope.organization_scope || 'Organization unavailable'}</p>
@@ -48,7 +49,7 @@ function EpisodeWorkspace({ scope, label }) {
       <div className="review-level"><span>Official level</span><strong>{authorized ? snapshots.progression?.current_level || 'Unavailable' : 'Checking…'}</strong><small>Human-approved history only</small></div>
       <TechnicalDetails record={scope}/>
     </section>
-    {!fresh && <p role="status">Loading selected episode / checking access…</p>}
+    {!fresh && <p className={data ? "review-refresh-status" : undefined} role="status">Loading selected episode / checking access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
     {fresh && data && !authorized && <p role="alert">This scope is no longer available. Select another approved episode.</p>}
     <div hidden={!authorized}>

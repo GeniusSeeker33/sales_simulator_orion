@@ -120,3 +120,88 @@ test('My Coaching clears prior learner comments when auth changes',async({page})
  await expect(page.locator('#review-coaching')).toHaveCount(1);
  await expect(page.locator('.my-coaching-workspace')).toHaveCount(1);
 });
+
+async function coachingDraft(page) {
+ await choose(page);
+ await page.locator('.review-actions').getByRole('button',{name:'Record Coaching',exact:true}).click();
+ const form=page.locator('#review-coaching form');
+ await form.getByLabel('Occurred at', {exact:false}).fill('2026-09-06T14:00:00Z');
+ await form.getByRole('checkbox', {name:/C01/}).check();
+ await form.locator('.review-evidence-option input').first().check();
+ for(const label of ['Observed behavior','Strengths','Development opportunity','Assigned practice / next action']) {
+  await form.getByLabel(label, {exact:false}).fill(`Draft ${label}`);
+ }
+ await form.getByLabel('Optional follow-up date').fill('2026-09-20');
+ await form.getByLabel('Development progress', {exact:false}).selectOption({index:1});
+ return form;
+}
+
+test('background revalidation preserves coaching DOM, all fields, scroll, focus and evidence',async({page})=>{
+ await page.clock.install();
+ const form=await coachingDraft(page);
+ const active=form.getByLabel('Observed behavior',{exact:false});
+ await active.focus();
+ await active.evaluate(el=>el.scrollIntoView({block:'center'}));
+ await page.evaluate(()=>{
+  const form=document.querySelector('#review-coaching form');
+  window.draftProbe={node:form,y:scrollY,focus:document.activeElement,
+   inputs:[...form.querySelectorAll('input,textarea,select')].map(el=>[el.value,el.checked])};
+  window.reviewFixture.delay=600;
+  window.reviewFixture.calls=[];
+  window.unexpectedMoves=[];
+  window.addEventListener('scroll',()=>{if(Math.abs(scrollY-window.draftProbe.y)>3)window.unexpectedMoves.push(scrollY);});
+ });
+ // Typing itself must not reload access or history.
+ await active.press('End');await active.press('Space');await active.press('Backspace');
+ expect(await page.evaluate(()=>window.reviewFixture.calls)).toEqual([]);
+ async function unchanged() {
+  await expect(form).toBeVisible();await expect(active).toBeFocused();
+  await expect(page.getByLabel('Assigned learner / episode')).toHaveValue(id(101));
+  expect(await page.evaluate(()=>{
+   const p=window.draftProbe,form=document.querySelector('#review-coaching form');
+   return {same:form===p.node,focus:document.activeElement===p.focus,delta:Math.abs(scrollY-p.y),
+    values:JSON.stringify([...form.querySelectorAll('input,textarea,select')].map(el=>[el.value,el.checked]))===JSON.stringify(p.inputs),moves:window.unexpectedMoves};
+  })).toEqual({same:true,focus:true,delta:0,values:true,moves:[]});
+ }
+ // Exercise the actual 30-second timers, including delayed in-flight state.
+ await page.clock.fastForward(30000);await unchanged();
+ await page.clock.runFor(700);await unchanged();
+ // Window focus revalidation and asynchronous panel results must also be stable.
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await unchanged();
+ await page.clock.runFor(700);await unchanged();
+ const calls=await page.evaluate(()=>window.reviewFixture.calls);
+ for(const rpc of ['read_reviewer_history','read_coaching_sessions','read_competency_evidence','read_competency_band_reviews','read_progression_reviews'])expect(calls).toContain(rpc);
+});
+
+test('cancel discards coaching draft and successful publication closes completed form',async({page})=>{
+ let form=await coachingDraft(page);
+ await form.getByRole('button',{name:'Cancel',exact:true}).click();await expect(form).toHaveCount(0);
+ await page.locator('.review-actions').getByRole('button',{name:'Record Coaching',exact:true}).click();
+ form=page.locator('#review-coaching form');
+ await expect(form.getByLabel('Occurred at',{exact:false})).toHaveValue('');
+ await expect(form.getByLabel('Observed behavior',{exact:false})).toHaveValue('');
+ await expect(form.locator('input:checked')).toHaveCount(0);
+ await form.getByRole('button',{name:'Cancel',exact:true}).click();
+ form=await coachingDraft(page);
+ await form.getByRole('button',{name:'Publish completed coaching',exact:true}).click();
+ await expect(form).toHaveCount(0);
+ const packet=await page.evaluate(()=>window.reviewFixture.packets[0]);
+ expect(packet.name).toBe('publish_coaching_session');
+ expect(packet.args.p_scope).toBe(id(101));expect(packet.args.p_body.targets).toEqual(['C01']);
+ expect(packet.args.p_body.evidence).toEqual([{kind:'attempt',id:id(501),revision:2}]);
+});
+
+test('real auth change clears an open coaching draft; same-user auth event does not',async({page})=>{
+ const form=await coachingDraft(page);
+ await page.evaluate(()=>window.reviewFixture.setUser('00000000-0000-4000-8000-000000000001'));
+ await expect(form.getByLabel('Observed behavior',{exact:false})).toHaveValue('Draft Observed behavior');
+ await page.evaluate(()=>window.reviewFixture.setUser('00000000-0000-4000-8000-000000000002'));
+ await expect(form).toHaveCount(0);await expect(page.getByLabel('Assigned learner / episode')).toHaveValue('');
+});
+
+test('failed access revalidation hides previously loaded workspace and draft',async({page})=>{
+ const form=await coachingDraft(page);
+ await page.evaluate(()=>{window.reviewFixture.deny=true;window.dispatchEvent(new Event('focus'));});
+ await expect(form).not.toBeVisible();await expect(page.locator('.review-actions')).not.toBeVisible();
+ await expect(page.getByRole('alert').filter({hasText:'Reviewer history unavailable or access no longer authorized.'}).first()).toBeVisible();
+});
