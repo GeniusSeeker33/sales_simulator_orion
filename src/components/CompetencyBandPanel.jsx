@@ -1,3 +1,6 @@
+import { useReviewReport } from "./review/reviewReport";
+import { Badge, TechnicalDetails, RecentRecords, FormCard } from "./review/ReviewPrimitives";
+import EvidencePicker from "./review/EvidencePicker";
 import { useEffect, useRef, useState } from "react";
 import { learnerClient } from "../lib/learnerClient";
 import { coachingCall } from "../lib/coachingRecords";
@@ -33,30 +36,30 @@ function BandForm({ scopeId, correction, onSaved, onCancel }) {
     } catch (e) { setError(e.message); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <form className="card" onSubmit={save}>
+  return <FormCard onSubmit={save}>
     <h3>{correction ? "Correct band review with a new revision" : "Human competency-band review"}</h3>
     <p>Review the current human-reviewed competency evidence above. Decide one competency only, using its versioned behavioral anchors. No score averaging or attempt-count threshold. Failure, disputed and insufficient opportunity are non-scored context, never default reasons for a lower band.</p>
     <p><a href="https://github.com/GeniusSeeker33/geniusseeker-talent-success-platform/blob/8326efd1940509dd15510a474a57299f18e6ab76/data/competency-models/orion-sales-competencies.md" target="_blank" rel="noreferrer">Read the pinned competency definitions and B1-B5 behavioral anchors</a></p>
     <fieldset disabled={busy || !!pending}>
       <label>Competency — {competencyVersion} (draft)
-        <select disabled={!!correction} value={code} onChange={e => setCode(e.target.value)}>{coachingTargets.map(t => <option key={t.id} value={t.id}>{t.id} · {t.label}</option>)}</select>
+        <select disabled={!!correction} value={code} onChange={e => { setCode(e.target.value); setReferences(""); }}>{coachingTargets.map(t => <option key={t.id} value={t.id}>{t.id} · {t.label}</option>)}</select>
       </label>
-      <label>Exact human-reviewed evidence (one UUID and revision per line, maximum 50)
-        <textarea rows={5} value={references} onChange={e => setReferences(e.target.value)} placeholder="00000000-0000-4000-8000-000000000001 1" />
-      </label>
+      <EvidencePicker key={code} scopeId={scopeId} source="evidence" competency={code}
+        selected={references.trim() ? references.trim().split(/\n/).map(line => { const [id, revision] = line.split(/\s+/); return {id, revision: Number(revision)}; }) : []}
+        onChange={refs => setReferences(refs.map(r => `${r.id} ${r.revision}`).join("\n"))} />
       <p>Only current evidence for this competency/version and episode is accepted. Leave references empty only to defer because no evidence exists. Raw attempt, simulation and coaching IDs are not accepted here.</p>
-      <label>Explicit human outcome<select required value={outcome} onChange={e => setOutcome(e.target.value)}>
+      <label>Explicit human outcome *<select required value={outcome} onChange={e => setOutcome(e.target.value)}>
         <option value="">Choose a band or defer</option>{["B1", "B2", "B3", "B4", "B5"].map(b => <option key={b}>{b}</option>)}
         <option value="defer">Defer — insufficient evidence, no band assigned</option>
       </select></label>
-      <label>Required rationale (visible to learner)<textarea required maxLength={2000} value={rationale} onChange={e => setRationale(e.target.value)} /></label>
+      <label>Required rationale (visible to learner) *<textarea aria-required="true" required maxLength={2000} value={rationale} onChange={e => setRationale(e.target.value)} /></label>
       <p>Write the decision rationale, not copied coaching narrative, AI feedback, transcripts, recordings or private artifacts. Review time is recorded when you publish.</p>
-      {correction && <label>Correction reason<textarea required maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label>}
+      {correction && <label>Correction reason *<textarea aria-required="true" required maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label>}
     </fieldset>
     {error && <p role="alert">{error}</p>}
     <button disabled={busy}>{pending ? "Retry identical submission" : "Publish human review"}</button>
-    <button type="button" disabled={busy} onClick={onCancel}>Cancel / check history before changing a failed request</button>
-  </form>;
+    <button type="button" disabled={busy} onClick={onCancel}>Cancel / check history</button>
+  </FormCard>;
 }
 export default function CompetencyBandPanel({ scopeId = null }) {
   const [refreshId, setRefreshId] = useState(0);
@@ -79,29 +82,26 @@ export default function CompetencyBandPanel({ scopeId = null }) {
   }, []);
   const fresh = result?.key === key;
   const data = result?.data;
-  return <section className="card">
-    <h2>{scopeId ? "Episode band-review history" : "My band-review history"}</h2>
+  useReviewReport("bands", fresh ? data : null);
+  return <section className="card review-section" id="review-bands">
+    <h2>{scopeId ? "Competency Bands" : "My band-review history"}</h2>
     <p>Individual human reviews, not an aggregate competency profile. No L1–L5, promotion, discipline or compensation changes. Defer assigns no band.</p>
     <button onClick={refresh}>Refresh reviews and access</button>
     {!fresh && <p role="status">Checking band-review access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
     <div hidden={!fresh || !data}>
-      {data && <p>Person {data.person_id} · Employment episode {data.employment_episode_id}</p>}
-      {data?.can_create && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Review one competency</button>}
+      {data && <TechnicalDetails record={{ person_id: data.person_id, employment_episode_id: data.employment_episode_id }} />}
+      {data?.can_create && !draft && <button data-create className="review-primary" onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Review Competency</button>}
       {draft && <BandForm key={draft.key} scopeId={scopeId} correction={draft.record} onCancel={() => { setDraft(null); refresh(); }} onSaved={() => { setDraft(null); setCursor(null); refresh(); }} />}
       {data?.records.length === 0 && <p>No band reviews on this page.</p>}
-      {data?.records.map(r => <article className="card" key={r.id}>
-        <h3>{r.competency_code} · {r.outcome === "defer" ? "Defer — insufficient evidence, no band assigned" : r.outcome} · revision {r.revision}{r.superseded_by ? " — superseded" : " — unsuperseded review"}</h3>
-        <p>{r.competency_version} · Reviewer {r.reviewer_user_id} · Reviewed {new Date(r.reviewed_at).toLocaleString()} · Recorded {new Date(r.created_at).toLocaleString()} · {r.status}</p>
-        <p>{r.rationale}</p>
-        <ul>{r.evidence.map(e => <li key={e.id}>Evidence {e.id} · revision {e.revision} · {e.finding} · {e.source_type}
-          {e.superseded_by && <> · Evidence corrected by {e.superseded_by}; human reconsideration required, original decision retained.</>}</li>)}</ul>
+      <RecentRecords records={data?.records}>{r => <article className="card" key={r.id}>
+        <h3>{r.competency_code} · <Badge value={r.outcome}/></h3><p>Reviewed {new Date(r.reviewed_at).toLocaleString()} · Revision {r.revision}</p><p>{r.rationale}</p>
+        <p>{r.evidence.length} human-reviewed evidence references · {r.competency_version}</p>
+        {r.evidence.some(e=>e.superseded_by) && <p role="status">Source evidence was corrected. Human reconsideration is required; the original decision is retained.</p>}
         {!r.evidence.length && <p>No evidence was available for this deferred review.</p>}
-        <p>Review {r.id}</p>
-        {r.supersedes_id && <p>Corrects {r.supersedes_id}: {r.correction_reason}</p>}
-        {r.superseded_by && <p>Replaced by {r.superseded_by}</p>}
-        {r.can_correct && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: r })}>Correct review</button>}
-      </article>)}
+        {r.supersedes_id && <p>Correction: {r.correction_reason}</p>}{r.superseded_by && <Badge value="superseded"/>}
+        <TechnicalDetails record={r}/>{r.can_correct && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: r })}>Correct review</button>}
+      </article>}</RecentRecords>
       {cursor && <button onClick={() => setCursor(null)}>Newest reviews</button>}
       {data?.hasMore && <button onClick={() => { const last = data.records.at(-1); setCursor({ created_at: last.created_at, id: last.id }); }}>Older reviews</button>}
     </div>
