@@ -26,3 +26,7 @@ dist-ssr
 
 # Orion source data exports — real customer/revenue; never commit
 *.xlsx
+
+# Local browser verification artifacts
+test-results/
+playwright-report/

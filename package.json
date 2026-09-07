@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:review-ui": "playwright test --config tests/reviewer-ui/playwright.config.mjs",
     "test:conversation": "node --test tests/dealer-conversation.test.mjs",
     "test:realtime": "node --test tests/realtime-session.test.mjs",
     "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs tests/coaching-sessions.test.mjs tests/competency-evidence.test.mjs tests/competency-band-reviews.test.mjs tests/progression-reviews.test.mjs"
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.63.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

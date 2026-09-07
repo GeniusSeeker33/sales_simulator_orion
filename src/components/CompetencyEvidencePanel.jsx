@@ -1,3 +1,7 @@
+import { useReviewReport } from "./review/reviewReport";
+import { Badge, TechnicalDetails, RecentRecords, FormCard } from "./review/ReviewPrimitives";
+import EvidencePicker from "./review/EvidencePicker";
+import { friendly } from "../lib/reviewPresentation";
 import { useEffect, useRef, useState } from "react";
 import { learnerClient } from "../lib/learnerClient";
 import { coachingCall } from "../lib/coachingRecords";
@@ -18,6 +22,7 @@ function EvidenceForm({ scopeId, correction, onSaved, onCancel }) {
     event.preventDefault(); if (lock.current) return;
     lock.current = true; setBusy(true); setError("");
     try {
+      if (!form.evidence.id) throw new Error("Choose an evidence record.");
       const submission = pending || { p_id: crypto.randomUUID(), p_scope: scopeId, p_body: form };
       setPending(submission);
       await coachingCall(learnerClient, "publish_competency_evidence", submission);
@@ -25,7 +30,7 @@ function EvidenceForm({ scopeId, correction, onSaved, onCancel }) {
     } catch (e) { setError(e.message); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <form className="card" onSubmit={save}>
+  return <FormCard onSubmit={save}>
     <h3>{correction ? "Correct finding with a new revision" : "Record human-reviewed evidence"}</h3>
     <p>Use one exact source ID and revision from practice history or coaching above. Review that version before publishing. Write a concise observation, never paste AI feedback, transcripts, recordings, private notes or personal details.</p>
     <fieldset disabled={busy || !!pending}>
@@ -39,20 +44,17 @@ function EvidenceForm({ scopeId, correction, onSaved, onCancel }) {
         <option value="human_coaching">Human coaching — exact completed session</option>
         <option disabled value="real_world_work">Real-world work — no governed source available</option>
       </select></label>
-      <label>Record kind<select value={form.evidence.kind} onChange={e => update("evidence", { ...form.evidence, kind: e.target.value, id: "" })}>
-        {form.source_type === "human_coaching" ? <option value="coaching">Coaching</option> : <><option value="attempt">Training attempt (written or simulation)</option><option value="simulation">Simulation session</option></>}
-      </select></label>
-      <label>Exact source record UUID<input required pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" value={form.evidence.id} onChange={e => update("evidence", { ...form.evidence, id: e.target.value })} /></label>
-      <label>Source revision<input type="number" required min="1" step="1" value={form.evidence.revision} onChange={e => update("evidence", { ...form.evidence, revision: Number(e.target.value) })} /></label>
-      <label>Observed behavior summary<textarea required maxLength={1500} value={form.observed_behavior} onChange={e => update("observed_behavior", e.target.value)} /></label>
-      <label>Finding (not a proficiency score)<select value={form.finding} onChange={e => update("finding", e.target.value)}>{findings.map(f => <option key={f}>{f}</option>)}</select></label>
+      <EvidencePicker key={form.source_type} scopeId={scopeId} source={form.source_type === "human_coaching" ? "coaching" : "practice"} single
+        selected={form.evidence.id ? [form.evidence] : []} onChange={refs => update("evidence", refs[0] || {kind: form.source_type === "human_coaching" ? "coaching" : "attempt", id: "", revision: 1})} />
+      <label>Observed behavior summary *<textarea aria-required="true" required maxLength={1500} value={form.observed_behavior} onChange={e => update("observed_behavior", e.target.value)} /></label>
+      <label>Finding (not a proficiency score)<select value={form.finding} onChange={e => update("finding", e.target.value)}>{findings.map(f => <option key={f} value={f}>{friendly(f)}</option>)}</select></label>
       <label>Evidence date (UTC calendar date)<input type="date" required value={form.evidence_date} onChange={e => update("evidence_date", e.target.value)} /></label>
-      {correction && <label>Correction reason<textarea required maxLength={500} value={form.correction_reason} onChange={e => update("correction_reason", e.target.value)} /></label>}
+      {correction && <label>Correction reason *<textarea aria-required="true" required maxLength={500} value={form.correction_reason} onChange={e => update("correction_reason", e.target.value)} /></label>}
     </fieldset>
     {error && <p role="alert">{error}</p>}
     <button disabled={busy}>{pending ? "Retry identical submission" : "Publish human finding"}</button>
-    <button type="button" disabled={busy} onClick={onCancel}>Cancel / check history before changing a failed request</button>
-  </form>;
+    <button type="button" disabled={busy} onClick={onCancel}>Cancel / check history</button>
+  </FormCard>;
 }
 export default function CompetencyEvidencePanel({ scopeId = null }) {
   const [refreshId, setRefreshId] = useState(0);
@@ -75,30 +77,25 @@ export default function CompetencyEvidencePanel({ scopeId = null }) {
   }, []);
   const fresh = result?.key === key;
   const data = result?.data;
-  return <section className="card">
-    <h2>{scopeId ? "Episode competency evidence" : "My competency evidence"}</h2>
+  useReviewReport("evidence", fresh ? data : null);
+  return <section className="card review-section" id="review-evidence">
+    <h2>{scopeId ? "Competency Evidence" : "My competency evidence"}</h2>
     <p>Human findings about one observation. AI practice remains supporting evidence only; no proficiency bands, progression levels or employee rankings. Technical failure, insufficient opportunity and disputed are unscored states.</p>
     <button onClick={refresh}>Refresh evidence and access</button>
     {!fresh && <p role="status">Checking evidence access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
     <div hidden={!fresh || !data}>
-      {data && <p>Person {data.person_id} · Employment episode {data.employment_episode_id}</p>}
-      {data?.can_create && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Record competency evidence</button>}
+      {data && <TechnicalDetails record={{ person_id: data.person_id, employment_episode_id: data.employment_episode_id }} />}
+      {data?.can_create && !draft && <button data-create className="review-primary" onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Record Competency Evidence</button>}
       {draft && <EvidenceForm key={draft.key} scopeId={scopeId} correction={draft.record} onCancel={() => { setDraft(null); refresh(); }} onSaved={() => { setDraft(null); setCursor(null); refresh(); }} />}
       {data?.records.length === 0 && <p>No competency evidence on this page.</p>}
-      {data?.records.map(r => <article className="card" key={r.id}>
-        <h3>{r.competency_code} · {r.finding} · revision {r.revision}{r.superseded_by ? " — superseded" : " — current"}</h3>
-        <p>{r.competency_version} · Reviewer {r.reviewer_user_id} · Evidence date {r.evidence_date} · Published {new Date(r.created_at).toLocaleString()}</p>
-        <p>{r.observed_behavior}</p>
-        <p>{r.source_type} · {r.evidence.kind} {r.evidence.id} · source revision {r.evidence.revision} · {r.evidence.status}</p>
-        <p>Source {r.evidence.source_system}/{r.evidence.source_entity} · {r.evidence.source_environment}/{r.evidence.source_project}</p>
-        {r.source_type === "ai_practice" && <p>AI practice context includes written exercises; this finding does not imply an AI assessment exists or is verified.</p>}
-        {r.source_superseded_by && <p>Source coaching was corrected by {r.source_superseded_by}. This finding retains the reviewed version and requires human reconsideration.</p>}
-        <p>Evidence record {r.id}</p>
-        {r.supersedes_id && <p>Corrects {r.supersedes_id}: {r.correction_reason}</p>}
-        {r.superseded_by && <p>Replaced by {r.superseded_by}</p>}
-        {r.can_correct && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: r })}>Correct finding</button>}
-      </article>)}
+      <RecentRecords records={data?.records}>{r => <article className="card" key={r.id}>
+        <h3>{r.competency_code} · <Badge value={r.finding}/></h3><p>{r.evidence_date} · {friendly(r.source_type)} · Revision {r.revision}</p>
+        <p>{r.observed_behavior}</p>{r.source_type === "ai_practice" && <p>AI practice — supporting evidence only; this finding does not verify an AI assessment.</p>}
+        {r.source_superseded_by && <p role="status">Source coaching was corrected. Human reconsideration is required.</p>}
+        {r.supersedes_id && <p>Correction: {r.correction_reason}</p>}{r.superseded_by && <Badge value="superseded"/>}
+        <TechnicalDetails record={r}/>{r.can_correct && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record: r })}>Correct finding</button>}
+      </article>}</RecentRecords>
       {cursor && <button onClick={() => setCursor(null)}>Newest evidence</button>}
       {data?.hasMore && <button onClick={() => { const last = data.records.at(-1); setCursor({ created_at: last.created_at, id: last.id }); }}>Older evidence</button>}
     </div>
