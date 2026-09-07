@@ -86,14 +86,14 @@ export default function ProgressionPanel({ scopeId = null }) {
   }, []);
   const fresh = result?.key === key; const data = result?.data;
   const open = record => setDraft({ key: crypto.randomUUID(), record, snapshot: { current_level: data.current_level, current_history_id: data.current_history_id } });
-  useReviewReport("progression", fresh ? data : null);
+  useReviewReport("progression", data);
   return <section className="card review-section" id="review-progression">
     <h2>{scopeId ? "Progression" : "My progression and official level history"}</h2>
     <p>Explicit human development decisions. No automatic promotion, discipline, compensation or employee ranking.</p>
     <button onClick={refresh}>Refresh progression and access</button>
-    {!fresh && <p role="status">Checking progression access…</p>}
+    {!fresh && <p className={data ? "review-refresh-status" : undefined} role="status">Checking progression access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
-    <div hidden={!fresh || !data}>
+    <div hidden={!data}>
       {data && <p>Official level: {data.current_level || "Unavailable — verified initial confirmation required"} · {progressionVersion}</p>}
       {data?.initial_confirmation && <details><summary>View initial human confirmation · {data.initial_confirmation.level}</summary><p>{data.initial_confirmation.rationale}</p><TechnicalDetails record={data.initial_confirmation}/></details>}
       {data?.can_create && !draft && <button data-create className="review-primary" onClick={() => open(null)}>Review Progression</button>}

@@ -77,14 +77,14 @@ export default function CompetencyEvidencePanel({ scopeId = null }) {
   }, []);
   const fresh = result?.key === key;
   const data = result?.data;
-  useReviewReport("evidence", fresh ? data : null);
+  useReviewReport("evidence", data);
   return <section className="card review-section" id="review-evidence">
     <h2>{scopeId ? "Competency Evidence" : "My competency evidence"}</h2>
     <p>Human findings about one observation. AI practice remains supporting evidence only; no proficiency bands, progression levels or employee rankings. Technical failure, insufficient opportunity and disputed are unscored states.</p>
     <button onClick={refresh}>Refresh evidence and access</button>
-    {!fresh && <p role="status">Checking evidence access…</p>}
+    {!fresh && <p className={data ? "review-refresh-status" : undefined} role="status">Checking evidence access…</p>}
     {fresh && result.error && <p role="alert">{result.error}</p>}
-    <div hidden={!fresh || !data}>
+    <div hidden={!data}>
       {data && <TechnicalDetails record={{ person_id: data.person_id, employment_episode_id: data.employment_episode_id }} />}
       {data?.can_create && !draft && <button data-create className="review-primary" onClick={() => setDraft({ key: crypto.randomUUID(), record: null })}>Record Competency Evidence</button>}
       {draft && <EvidenceForm key={draft.key} scopeId={scopeId} correction={draft.record} onCancel={() => { setDraft(null); refresh(); }} onSaved={() => { setDraft(null); setCursor(null); refresh(); }} />}
