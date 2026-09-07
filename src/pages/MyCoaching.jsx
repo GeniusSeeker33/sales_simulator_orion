@@ -13,8 +13,8 @@ import "../styles/reviewer-workspace.css";
 const stages = [["coaching", "Coaching"], ["evidence", "Competency Evidence"], ["bands", "Competency Bands"], ["progression", "Progression"]];
 function goTo(stage, response = false) {
   const section = document.getElementById(`review-${stage}`);
-  const target = response ? section?.querySelector("form input") : section?.querySelector("h2");
-  if (target) { if (!response) target.tabIndex = -1; target.scrollIntoView({block:"center"}); target.focus(); }
+  const target = response ? section?.querySelector("form input:not(:disabled), form textarea") : section?.querySelector("h2");
+  if (target) { if (!response) target.tabIndex = -1; target.scrollIntoView({block:"center"}); target.focus({preventScroll:true}); }
 }
 function LearnerWorkspace() {
   const [snapshots, setSnapshots] = useState({});

@@ -84,28 +84,55 @@ function LearnerResponse({ record, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [confirmed, setConfirmed] = useState([]);
   const lock = useRef(false);
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  // The write RPC returns only an ID. Show confirmed submitted content immediately;
+  // the existing read supplies authoritative timestamps on refresh. Never invent a time.
+  const responses = [...record.responses, ...confirmed.filter(r => !record.responses.some(existing => existing.id === r.id))];
+  const receipt = responses.find(r => r.acknowledged_at || r.acknowledged);
   async function save(e) {
     e.preventDefault();
-    if (lock.current) return;
-    lock.current = true; setBusy(true); setError("");
+    if (lock.current || (!pending && !ack && !comment.trim())) return;
+    lock.current = true; setBusy(true); setError(""); setSaved(false);
     try {
       const submission = pending || { p_id: crypto.randomUUID(), p_session: record.id, p_ack: ack, p_comment: comment };
       setPending(submission);
-      await coachingCall(learnerClient, "respond_to_coaching", submission);
-      setPending(null); setAck(false); setComment(""); onSaved();
-    } catch (error) { setError(error.message); }
-    finally { lock.current = false; setBusy(false); }
+      const responseId = await coachingCall(learnerClient, "respond_to_coaching", submission);
+      if (!live.current) return;
+      if (responseId !== submission.p_id) throw new Error("Response not confirmed");
+      setConfirmed(old => [...old.filter(r => r.id !== responseId), {
+        id: responseId, acknowledged: submission.p_ack, comment: submission.p_comment,
+      }]);
+      setPending(null); setAck(false); setComment(""); setSaved(true); onSaved();
+    } catch {
+      // A lost response may already have committed. Retry the identical ID/payload.
+      if (live.current) setError("Response save was not confirmed. Please try again. Retrying uses the same submission to avoid duplicates.");
+    } finally {
+      lock.current = false;
+      if (live.current) setBusy(false);
+    }
   }
   return <form className="card review-form" onSubmit={save}>
     <h3>Acknowledge or comment</h3>
     <p>Acknowledgment is receipt, not agreement. Comments are visible to authorized reviewers and append to this exact version.</p>
+    {receipt && <p><strong>✓ Receipt acknowledged</strong><br />{receipt.acknowledged_at ? date(receipt.acknowledged_at) : "Recorded; timestamp will appear when history refreshes."}</p>}
     <fieldset disabled={busy || !!pending}>
-      <label><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />I acknowledge receipt of revision {record.revision}</label>
-      <label>Optional learner comment<textarea maxLength={1500} value={comment} onChange={e => setComment(e.target.value)} /></label>
+      <label><input type="checkbox" disabled={!!receipt} checked={ack} onChange={e => setAck(e.target.checked)} />{receipt ? `Receipt already acknowledged for revision ${record.revision}` : `I acknowledge receipt of revision ${record.revision}`}</label>
+      <label>{receipt ? "Add another comment" : "Optional learner comment"}<textarea maxLength={1500} value={comment} onChange={e => setComment(e.target.value)} /></label>
     </fieldset>
     {error && <p role="alert">{error}</p>}
-    <button disabled={busy || (!ack && !comment.trim())}> {pending ? "Retry response" : "Save learner response"}</button>
+    <p role="status" aria-live="polite" className="review-save-status"><strong>{busy ? "Saving…" : saved ? "✓ Response saved" : ""}</strong></p>
+    <button disabled={busy || (!pending && !ack && !comment.trim())}>{busy ? "Saving…" : pending ? "Retry response" : "Save learner response"}</button>
+    {responses.length > 0 && <section aria-label="Your recorded responses">
+      <h4>Your recorded responses · revision {record.revision}</h4>
+      {responses.map(r => <article key={r.id}>
+        <p>{r.created_at ? date(r.created_at) : "Saved; refreshing history timestamp"} · {r.acknowledged_at || r.acknowledged ? "Receipt acknowledged (not agreement)" : "Learner comment"}</p>
+        {r.comment && <p>{r.comment}</p>}
+      </article>)}
+    </section>}
   </form>;
 }
 export default function CoachingPanel({ scopeId = null }) {
@@ -149,12 +176,12 @@ export default function CoachingPanel({ scopeId = null }) {
         <p><strong>Observed behavior:</strong> {record.observed_behavior}</p><p><strong>Next action:</strong> {record.next_action}</p>
         <p>Follow-up: {record.follow_up_on || "Not set"}</p>
         <details><summary>Read coaching details and learner responses</summary><p><strong>Strengths:</strong> {record.strengths}</p><p><strong>Development opportunity:</strong> {record.development_opportunity}</p>
-          {record.responses.map(r => <p key={r.id}>{date(r.created_at)} · {r.acknowledged_at ? "Receipt acknowledged (not agreement)" : "Learner comment"}{r.comment && <> · {r.comment}</>}</p>)}
+          {scopeId && record.responses.map(r => <p key={r.id}>{date(r.created_at)} · {r.acknowledged_at ? "Receipt acknowledged (not agreement)" : "Learner comment"}{r.comment && <> · {r.comment}</>}</p>)}
         </details>
         {record.supersedes_id && <p>Correction: {record.correction_reason}</p>}{record.superseded_by && <p>This version was replaced. Responses apply only to the original version.</p>}
         <TechnicalDetails record={record}/>
         {scopeId && record.can_correct && !draft && <button onClick={() => setDraft({ key: crypto.randomUUID(), record })}>Correct with a new version</button>}
-        {!scopeId && !record.superseded_by && <LearnerResponse record={record} onSaved={refresh} />}
+        {!scopeId && !record.superseded_by && <LearnerResponse key={`${data.person_id}:${data.employment_episode_id}:${record.id}:${record.revision}`} record={record} onSaved={refresh} />}
       </article>}</RecentRecords>
       {cursor && <button onClick={() => setCursor(null)}>Newest coaching</button>}
       {data?.hasMore && <button onClick={() => { const last = data.records.at(-1); setCursor({ created_at: last.created_at, id: last.id }); }}>Older coaching</button>}
