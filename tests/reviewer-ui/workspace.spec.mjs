@@ -205,3 +205,80 @@ test('failed access revalidation hides previously loaded workspace and draft',as
  await expect(form).not.toBeVisible();await expect(page.locator('.review-actions')).not.toBeVisible();
  await expect(page.getByRole('alert').filter({hasText:'Reviewer history unavailable or access no longer authorized.'}).first()).toBeVisible();
 });
+
+async function learnerResponse(page) {
+ await page.goto('/tests/reviewer-ui/index.html?learner');
+ const form=page.locator('#review-coaching form');
+ await expect(form).toBeVisible();return form;
+}
+test('learner save has pending/success states, immediate history and duplicate-submit protection',async({page})=>{
+ const form=await learnerResponse(page);
+ await page.evaluate(()=>{window.reviewFixture.responseDelay=500;});
+ await form.getByLabel('Optional learner comment').fill('My saved response');await form.getByRole('checkbox').check();
+ await form.getByRole('button',{name:'Save learner response'}).click();
+ await expect(form.getByRole('button',{name:'Saving…'})).toBeDisabled();
+ await form.evaluate(el=>{el.requestSubmit();el.requestSubmit();});
+ await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ await expect(form.getByRole('region',{name:'Your recorded responses'}).getByText('My saved response')).toBeVisible();
+ await expect(form.getByLabel('Add another comment')).toHaveValue('');
+ await expect(form.getByRole('checkbox')).not.toBeChecked();await expect(form.getByRole('checkbox')).toBeDisabled();
+ await expect(form.getByRole('button',{name:'Save learner response'})).toBeDisabled();
+ await form.evaluate(el=>el.requestSubmit());
+ expect(await page.evaluate(()=>window.reviewFixture.packets.length)).toBe(1);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ await form.getByLabel('Add another comment').fill('An intentional second comment');
+ await form.getByRole('button',{name:'Save learner response'}).click();
+ await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ const packets=await page.evaluate(()=>window.reviewFixture.packets);
+ expect(packets).toHaveLength(2);expect(packets[1].args.p_ack).toBe(false);expect(packets[1].args.p_id).not.toBe(packets[0].args.p_id);
+});
+test('rapid learner double click sends exactly one response',async({page})=>{
+ const form=await learnerResponse(page);await page.evaluate(()=>{window.reviewFixture.responseDelay=500;});
+ await form.getByLabel('Optional learner comment').fill('Double click test');
+ const button=form.getByRole('button',{name:'Save learner response'});const box=await button.boundingBox();
+ await page.mouse.dblclick(box.x+box.width/2,box.y+box.height/2);
+ await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ expect(await page.evaluate(()=>window.reviewFixture.packets.length)).toBe(1);
+});
+test('failed learner response keeps draft and retries identical packet without false success',async({page})=>{
+ const form=await learnerResponse(page);await page.evaluate(()=>{window.reviewFixture.responseFail=true;});
+ await form.getByLabel('Optional learner comment').fill('Keep on failure');await form.getByRole('checkbox').check();
+ await form.getByRole('button',{name:'Save learner response'}).click();
+ await expect(form.getByRole('alert')).toContainText('Response save was not confirmed');
+ await expect(form.getByLabel('Optional learner comment')).toHaveValue('Keep on failure');
+ await expect(form.getByRole('status')).not.toContainText('Response saved');
+ await expect(form.getByRole('button',{name:'Retry response'})).toBeEnabled();
+ await page.evaluate(()=>{window.reviewFixture.responseFail=false;});
+ await form.getByRole('button',{name:'Retry response'}).click();await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ const packets=await page.evaluate(()=>window.reviewFixture.packets);expect(packets[1].args).toEqual(packets[0].args);
+});
+test('existing receipt is obvious and permits a deliberate additional comment',async({page})=>{
+ const form=await learnerResponse(page);
+ await page.evaluate(()=>{window.reviewFixture.responses['00000000-0000-4000-8000-000000000701']=[{id:'existing',acknowledged_at:'2026-09-07T13:11:00Z',created_at:'2026-09-07T13:11:00Z',comment:'Prior receipt'}];window.dispatchEvent(new Event('focus'));});
+ await expect(form.getByText('✓ Receipt acknowledged',{exact:true})).toBeVisible();
+ await expect(form.getByRole('checkbox')).toBeDisabled();
+ await expect(form.getByLabel('Add another comment')).toBeEnabled();
+ await page.getByRole('button',{name:'Acknowledge / comment'}).click();await expect(form.getByLabel('Add another comment')).toBeFocused();
+ expect(await page.evaluate(()=>window.reviewFixture.packets.length)).toBe(0);
+});
+test('learner background refresh preserves unsaved comment, scroll and focus',async({page})=>{
+ const form=await learnerResponse(page),comment=form.getByLabel('Optional learner comment');
+ await comment.fill('Unsaved learner comment');await comment.evaluate(el=>el.scrollIntoView({block:'center'}));
+ const y=await page.evaluate(()=>scrollY);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(comment).toHaveValue('Unsaved learner comment');await expect(comment).toBeFocused();
+ expect(await page.evaluate(()=>scrollY)).toBe(y);expect(await page.evaluate(()=>window.reviewFixture.packets.length)).toBe(0);
+});
+test('auth changes discard confirmed learner state and ignore late submission completion',async({page})=>{
+ let form=await learnerResponse(page);await form.getByLabel('Optional learner comment').fill('Old success');
+ await form.getByRole('button',{name:'Save learner response'}).click();await expect(form.getByRole('status')).toHaveText('✓ Response saved');
+ await page.evaluate(()=>window.reviewFixture.setUser('00000000-0000-4000-8000-000000000002'));
+ await expect(page.getByText('Old success',{exact:true})).toHaveCount(0);await expect(form.getByRole('status')).not.toContainText('Response saved');
+ form=await learnerResponse(page);await page.evaluate(()=>{window.reviewFixture.responseDelay=600;});
+ await form.getByLabel('Optional learner comment').fill('Old pending');await form.getByRole('button',{name:'Save learner response'}).click();
+ await page.evaluate(()=>window.reviewFixture.setUser('00000000-0000-4000-8000-000000000002'));
+ await expect(form.getByLabel('Optional learner comment')).toHaveValue('');
+ await expect.poll(()=>page.evaluate(()=>Object.keys(window.reviewFixture.responses).length)).toBe(1);
+ await expect(form.getByRole('status')).not.toContainText('Response saved');await expect(page.getByText('Old pending',{exact:true})).toHaveCount(0);
+});
