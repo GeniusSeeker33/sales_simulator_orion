@@ -41,6 +41,7 @@ function getNavItems(role) {
   else if (role === "manager") items = MANAGER_NAV;
   else items = REP_NAV;
 
+  // Hard filter: reps can never see manager or admin nav links regardless of array contents
   if (role !== "admin" && role !== "manager") {
     items = items.filter((item) => !PROTECTED_PATHS.includes(item.to));
   }
@@ -92,12 +93,35 @@ export default function Layout({ title, children }) {
 
         {session && (
           <div style={{ marginTop: "auto", paddingTop: 16 }}>
-            <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", marginTop: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#eef2ff" }}>{session.name}</div>
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                marginTop: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#eef2ff" }}>
+                {session.name}
+              </div>
               <div style={{ fontSize: "0.78rem", color: "#97a3c6", marginTop: 2 }}>
                 {roleLabel}{session.repCode ? ` · ${session.repCode}` : ""}
               </div>
-              <button onClick={handleLogout} style={{ marginTop: 10, width: "100%", padding: "7px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "#97a3c6", fontSize: "0.82rem", cursor: "pointer" }}>
+              <button
+                onClick={handleLogout}
+                style={{
+                  marginTop: 10,
+                  width: "100%",
+                  padding: "7px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "transparent",
+                  color: "#97a3c6",
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                }}
+              >
                 Sign Out
               </button>
             </div>
@@ -109,7 +133,9 @@ export default function Layout({ title, children }) {
 
       <main className="main-content">
         <header className="page-topbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div><h1 className="page-title">{title}</h1></div>
+          <div>
+            <h1 className="page-title">{title}</h1>
+          </div>
           {session && (
             <div style={{ fontSize: "0.85rem", color: "#97a3c6" }}>
               Welcome back, <strong style={{ color: "#eef2ff" }}>{firstName}</strong>
