@@ -1,7 +1,55 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { uiCopy } from "../../data/uiCopy";
-import { getNavItems } from "../../lib/appNavigation";
+
+const REP_NAV = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/sales-simulator", label: "AI Sales Simulator" },
+  { to: "/training", label: "Training" },
+  { to: "/reviewer-history", label: "Assigned Learner History" },
+  { to: "/my-coaching", label: "My Coaching" },
+  { to: "/accounts", label: "Accounts" },
+  { to: "/ffl-prospects", label: "FFL Prospect Hub" },
+  { to: "/activity", label: "Activity" },
+  { to: "/leaderboard", label: "Leaderboard" },
+  { to: "/training-leaderboard", label: "Prize Leaderboard" },
+  { to: "/levels", label: "Level Progress" },
+  { to: "/rep-metrics", label: "Rep Metrics" },
+];
+
+const MANAGER_NAV = [
+  ...REP_NAV,
+  { to: "/manager-view", label: "Manager View", divider: true },
+  { to: "/pace-report", label: "Pace Report" },
+  { to: "/commission-report", label: "Commission Report" },
+  { to: "/product-mix", label: "Product Mix" },
+  { to: "/employees", label: "Employees" },
+  { to: "/newsletter-admin", label: "Newsletter" },
+];
+
+const ADMIN_NAV = [
+  ...MANAGER_NAV,
+  { to: "/admin-view", label: "Admin View", divider: true },
+  { to: "/admin/import", label: "Import Data" },
+];
+
+const PROTECTED_PATHS = ["/manager-view", "/pace-report", "/commission-report", "/product-mix", "/employees", "/newsletter-admin", "/admin-view", "/admin/import"];
+
+function getNavItems(role) {
+  let items;
+  if (role === "admin") items = ADMIN_NAV;
+  else if (role === "manager") items = MANAGER_NAV;
+  else items = REP_NAV;
+
+  if (role !== "admin" && role !== "manager") {
+    items = items.filter((item) => !PROTECTED_PATHS.includes(item.to));
+  }
+  if (role !== "admin") {
+    items = items.filter((item) => item.to !== "/admin-view" && item.to !== "/admin/import");
+  }
+
+  return items;
+}
 
 export default function Layout({ title, children }) {
   const { session, logout } = useAuth();
@@ -44,35 +92,12 @@ export default function Layout({ title, children }) {
 
         {session && (
           <div style={{ marginTop: "auto", paddingTop: 16 }}>
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: 12,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                marginTop: 12,
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#eef2ff" }}>
-                {session.name}
-              </div>
+            <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", marginTop: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#eef2ff" }}>{session.name}</div>
               <div style={{ fontSize: "0.78rem", color: "#97a3c6", marginTop: 2 }}>
                 {roleLabel}{session.repCode ? ` · ${session.repCode}` : ""}
               </div>
-              <button
-                onClick={handleLogout}
-                style={{
-                  marginTop: 10,
-                  width: "100%",
-                  padding: "7px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "transparent",
-                  color: "#97a3c6",
-                  fontSize: "0.82rem",
-                  cursor: "pointer",
-                }}
-              >
+              <button onClick={handleLogout} style={{ marginTop: 10, width: "100%", padding: "7px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "#97a3c6", fontSize: "0.82rem", cursor: "pointer" }}>
                 Sign Out
               </button>
             </div>
@@ -84,9 +109,7 @@ export default function Layout({ title, children }) {
 
       <main className="main-content">
         <header className="page-topbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 className="page-title">{title}</h1>
-          </div>
+          <div><h1 className="page-title">{title}</h1></div>
           {session && (
             <div style={{ fontSize: "0.85rem", color: "#97a3c6" }}>
               Welcome back, <strong style={{ color: "#eef2ff" }}>{firstName}</strong>
