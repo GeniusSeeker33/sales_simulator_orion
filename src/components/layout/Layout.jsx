@@ -1,7 +1,56 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { uiCopy } from "../../data/uiCopy";
-import { getNavItems } from "../../lib/appNavigation";
+
+const REP_NAV = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/sales-simulator", label: "AI Sales Simulator" },
+  { to: "/training", label: "Training" },
+  { to: "/reviewer-history", label: "Assigned Learner History" },
+  { to: "/my-coaching", label: "My Coaching" },
+  { to: "/accounts", label: "Accounts" },
+  { to: "/ffl-prospects", label: "FFL Prospect Hub" },
+  { to: "/activity", label: "Activity" },
+  { to: "/leaderboard", label: "Leaderboard" },
+  { to: "/training-leaderboard", label: "Prize Leaderboard" },
+  { to: "/levels", label: "Level Progress" },
+  { to: "/rep-metrics", label: "Rep Metrics" },
+];
+
+const MANAGER_NAV = [
+  ...REP_NAV,
+  { to: "/manager-view", label: "Manager View", divider: true },
+  { to: "/pace-report", label: "Pace Report" },
+  { to: "/commission-report", label: "Commission Report" },
+  { to: "/product-mix", label: "Product Mix" },
+  { to: "/employees", label: "Employees" },
+  { to: "/newsletter-admin", label: "Newsletter" },
+];
+
+const ADMIN_NAV = [
+  ...MANAGER_NAV,
+  { to: "/admin-view", label: "Admin View", divider: true },
+  { to: "/admin/import", label: "Import Data" },
+];
+
+const PROTECTED_PATHS = ["/manager-view", "/pace-report", "/commission-report", "/product-mix", "/employees", "/newsletter-admin", "/admin-view", "/admin/import"];
+
+function getNavItems(role) {
+  let items;
+  if (role === "admin") items = ADMIN_NAV;
+  else if (role === "manager") items = MANAGER_NAV;
+  else items = REP_NAV;
+
+  // Hard filter: reps can never see manager or admin nav links regardless of array contents
+  if (role !== "admin" && role !== "manager") {
+    items = items.filter((item) => !PROTECTED_PATHS.includes(item.to));
+  }
+  if (role !== "admin") {
+    items = items.filter((item) => item.to !== "/admin-view" && item.to !== "/admin/import");
+  }
+
+  return items;
+}
 
 export default function Layout({ title, children }) {
   const { session, logout } = useAuth();
