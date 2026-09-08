@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { isAppRoleAllowed } from "../lib/appRoles";
 
 export default function ProtectedRoute({ roles, children }) {
   const { session, loading } = useAuth();
@@ -9,7 +10,7 @@ export default function ProtectedRoute({ roles, children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (roles && !roles.includes(session.role)) {
+  if (!isAppRoleAllowed(session.role, roles)) {
     const fallback = session.role === "admin" ? "/admin-view" : session.role === "manager" ? "/manager-view" : "/dashboard";
     return <Navigate to={fallback} replace />;
   }
