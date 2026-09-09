@@ -109,7 +109,7 @@ export default function NewsletterContent({
                   <img
                     src={item.image_url}
                     alt={item.title}
-                    className="mt-4 w-full rounded-lg border border-slate-200 object-cover"
+                    className="mx-auto mt-4 h-auto w-full max-w-md rounded-lg border border-slate-200 object-cover"
                   />
                 )}
               </div>
@@ -305,7 +305,7 @@ export default function NewsletterContent({
                   <img
                     src={item.image_url}
                     alt={item.employee_name}
-                    className="mt-4 w-full rounded-lg border border-amber-200 object-cover"
+                    className="mx-auto mt-4 h-auto w-full max-w-sm rounded-lg border border-amber-200 object-cover"
                   />
                 )}
                 <p className="mt-3 text-sm font-medium text-slate-500">
