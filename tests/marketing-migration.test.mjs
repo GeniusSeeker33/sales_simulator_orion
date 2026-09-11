@@ -15,11 +15,12 @@ test("marketing campaigns are workspace scoped, audited, and human approved", as
     await db.query("insert into marketing.workspace_members values($1,$2,'contributor',now()),($1,$3,'approver',now()),($4,$2,'viewer',now())",[orion,id(1),id(2),other]);
     const asUser=async n=>{await db.exec("reset role");await db.query("select set_config('request.jwt.claim.sub',$1,false)",[n?id(n):""]);await db.exec(n?"set role authenticated":"set role anon");};
     const payload=(approval="draft",status="draft")=>({name:"Dealer Growth",description:"",status,approval_state:approval,objectives:["Leads"],target_audiences:["Dealers"],channels:["web"],owner_user_id:id(1),budget_amount:"1200",budget_currency:"USD",starts_on:"2026-10-01",ends_on:"2026-10-31",attribution_key:"dealer-growth-q4"});
-    const save=(user,campaign,revision,p,actor="human",run=null)=>asUser(user).then(()=>db.query("select public.save_marketing_campaign($1,$2,$3,$4,$5,$6)",[campaign,orion,revision,p,actor,run]));
+    const save=(user,campaign,revision,p)=>asUser(user).then(()=>db.query("select public.save_marketing_campaign($1,$2,$3,$4)",[campaign,orion,revision,p]));
+    const agentSave=async(campaign,revision,p,run)=>{await db.exec("reset role");return db.query("select marketing.save_campaign_as_agent($1,$2,$3,$4,$5)",[campaign,orion,revision,p,run]);};
     await t.test("anonymous, viewers, and other workspaces cannot write or read",async()=>{
       await asUser(null);await assert.rejects(db.query("select public.read_marketing_workspace(null)"),/permission denied/);
       await asUser(1);
-      await assert.rejects(db.query("select public.save_marketing_campaign($1,$2,null,$3,'human',null)",[id(40),other,payload()]),/write access/);
+      await assert.rejects(db.query("select public.save_marketing_campaign($1,$2,null,$3)",[id(40),other,payload()]),/write access/);
       await asUser(3);await assert.rejects(db.query("select public.read_marketing_workspace(null)"),/workspace unavailable/);
     });
     await t.test("contributor creates a draft with tenant attribution and audit",async()=>{
@@ -32,10 +33,14 @@ test("marketing campaigns are workspace scoped, audited, and human approved", as
     await t.test("contributors and agents cannot approve or activate",async()=>{
       await assert.rejects(save(1,id(30),1,payload("approved","active")),/approver role/);
       await db.exec("reset role");await db.query("insert into marketing.agent_runs(id,workspace_id,campaign_id,agent_key,purpose,status,initiated_by) values($1,$2,$3,'copy-agent','draft','started',$4)",[id(50),orion,id(30),id(1)]);
-      await assert.rejects(save(1,id(30),1,payload("approved","active"),"agent",id(50)),/Agents cannot approve/);
-      await save(1,id(30),1,payload("in_review","planned"),"agent",id(50));
+      await asUser(1);
+      await assert.rejects(db.query("select public.save_marketing_campaign($1,$2,$3,$4,'agent',$5)",[id(30),orion,1,payload("in_review","planned"),id(50)]),/does not exist/);
+      await assert.rejects(db.query("select marketing.save_campaign_as_agent($1,$2,$3,$4,$5)",[id(30),orion,1,payload("in_review","planned"),id(50)]),/permission denied/);
+      await assert.rejects(save(1,id(30),1,{...payload(),actor_type:"agent"}),/Unexpected campaign field/);
+      await assert.rejects(agentSave(id(30),1,payload("approved","active"),id(50)),/Agents cannot approve/);
+      await agentSave(id(30),1,payload("in_review","planned"),id(50));
       await db.exec("reset role");await db.query("insert into marketing.agent_runs(id,workspace_id,agent_key,purpose,status,initiated_by) values($1,$2,'brief-agent','draft','started',$3)",[id(51),orion,id(1)]);
-      await save(1,id(32),null,{...payload("draft","draft"),attribution_key:"agent-origin-draft"},"agent",id(51));
+      await agentSave(id(32),null,{...payload("draft","draft"),attribution_key:"agent-origin-draft"},id(51));
     });
     await t.test("human approver can approve and activation is audited",async()=>{
       await save(2,id(30),2,payload("approved","active"));
