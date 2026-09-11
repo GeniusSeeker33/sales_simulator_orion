@@ -21,6 +21,7 @@ export const MANAGER_NAV = [
   { to: "/product-mix", label: "Product Mix" },
   { to: "/employees", label: "Employees" },
   { to: "/newsletter-admin", label: "Newsletter" },
+  { to: "/marketing/overview", label: "Marketing Command Center", divider: true },
 ];
 
 export const ADMIN_NAV = [
@@ -36,6 +37,7 @@ const PROTECTED_PATHS = new Set([
   "/product-mix",
   "/employees",
   "/newsletter-admin",
+  "/marketing/overview",
   "/admin-view",
   "/admin/import",
 ]);

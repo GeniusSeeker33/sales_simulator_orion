@@ -11,7 +11,8 @@
     "test:review-ui": "playwright test --config tests/reviewer-ui/playwright.config.mjs",
     "test:conversation": "node --test tests/dealer-conversation.test.mjs",
     "test:realtime": "node --test tests/realtime-session.test.mjs",
-    "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs tests/coaching-sessions.test.mjs tests/competency-evidence.test.mjs tests/competency-band-reviews.test.mjs tests/progression-reviews.test.mjs"
+    "test:learner": "node --test tests/learner-records.test.mjs tests/reviewer-history.test.mjs tests/coaching-sessions.test.mjs tests/competency-evidence.test.mjs tests/competency-band-reviews.test.mjs tests/progression-reviews.test.mjs",
+    "test:marketing": "node --test tests/marketing-domain.test.mjs tests/marketing-migration.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
