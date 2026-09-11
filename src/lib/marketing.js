@@ -29,7 +29,5 @@ export function saveMarketingCampaign(workspaceId, campaign, expectedRevision = 
     p_workspace: workspaceId,
     p_expected_revision: expectedRevision,
     p_payload: campaign,
-    p_actor_type: "human",
-    p_agent_run: null,
   });
 }
