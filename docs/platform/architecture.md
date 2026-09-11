@@ -31,6 +31,9 @@ Tracking internal contributors, approved hours, modules, deliverables, expertise
 ### 9. Enterprise Integrations
 Microsoft Business Central, RingCentral, Supabase, Orion recruiting properties, and other internal systems.
 
+### 10. Marketing Command Center
+Tenant-aware campaign planning, attribution records, and human approval governance. The implemented repository foundation scopes campaigns by workspace and prevents agent-attributed changes from approving or activating them. Publishing, cross-channel ingestion/reporting, and agent orchestration remain future work; see `docs/marketing/marketing-command-center.md` for the implementation boundary.
+
 ## Technical Direction
 Use `geniusseeker-os` as the likely core product foundation. Keep specialized applications modular where appropriate, including the Orion sales simulator and Join-Orion front door.
 
