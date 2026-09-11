@@ -1471,3 +1471,28 @@ button:hover {
   color: #97a3c6;
   margin-top: 2px;
 }
+
+/* Marketing Command Center */
+.marketing-heading, .marketing-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.marketing-heading p, .marketing-future p, .marketing-empty p { color: #97a3c6; margin: 5px 0 0; }
+.marketing-eyebrow { color: #3ddc97; font-size: .76rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.marketing-nav { justify-content: flex-start; overflow-x: auto; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); }
+.marketing-nav a { white-space: nowrap; padding: 9px 13px; border-radius: 10px; color: #97a3c6; font-size: .86rem; }
+.marketing-nav a:hover, .marketing-nav a.active { color: #fff; background: rgba(61,220,151,.12); }
+.marketing-error { border-color: rgba(248,113,113,.35); color: #fecaca; }
+.marketing-error p { margin: 7px 0 0; color: #fca5a5; }
+.marketing-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.marketing-form .form-field { margin: 0; }
+.marketing-form .form-field select { width: 100%; padding: 11px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: #151c31; color: #eef2ff; }
+.marketing-wide { grid-column: 1 / -1; }
+.marketing-boundary { padding: 12px 14px; margin: 16px 0 0; border-left: 3px solid #3ddc97; background: rgba(61,220,151,.06); color: #c8d2f0; font-size: .86rem; line-height: 1.5; }
+.marketing-chip { display: inline-block; padding: 4px 9px; border-radius: 999px; background: rgba(129,140,248,.12); color: #c7d2fe; text-transform: capitalize; font-size: .75rem; }
+.marketing-campaign-link { color: #eef2ff; font-weight: 700; }
+.marketing-campaign-link:hover { color: #3ddc97; }
+.marketing-empty, .marketing-future { padding: 34px; text-align: center; }
+.marketing-future h2 { margin: 8px 0; }
+@media (max-width: 720px) {
+  .marketing-heading { align-items: flex-start; }
+  .marketing-form-grid { grid-template-columns: 1fr; }
+  .marketing-wide { grid-column: auto; }
+}
