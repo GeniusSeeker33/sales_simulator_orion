@@ -151,7 +151,9 @@ begin
  return result;
 end $$;
 
-create function public.save_marketing_campaign(p_id uuid,p_workspace uuid,p_expected_revision integer,p_payload jsonb,p_actor_type text default 'human',p_agent_run uuid default null)
+-- Shared implementation is deliberately outside the public API. Browser clients
+-- cannot select an actor mode; trusted wrappers supply it.
+create function marketing.save_campaign_internal(p_id uuid,p_workspace uuid,p_expected_revision integer,p_payload jsonb,p_actor_type text,p_agent_run uuid)
 returns uuid language plpgsql security definer set search_path='' as $$
 declare old marketing.campaigns; c marketing.campaigns; member_role text; next_status text; next_approval text; allowed text[];
 begin
@@ -189,5 +191,20 @@ begin
  values(p_workspace,p_id,old.status,c.status,old.approval_state,c.approval_state,p_actor_type,auth.uid(),p_agent_run);
  return p_id;
 end $$;
-revoke all on function public.read_marketing_workspace(uuid),public.save_marketing_campaign(uuid,uuid,integer,jsonb,text,uuid) from public,anon,authenticated;
-grant execute on function public.read_marketing_workspace(uuid),public.save_marketing_campaign(uuid,uuid,integer,jsonb,text,uuid) to authenticated;
+
+create function public.save_marketing_campaign(p_id uuid,p_workspace uuid,p_expected_revision integer,p_payload jsonb)
+returns uuid language sql security definer set search_path='' as $$
+ select marketing.save_campaign_internal(p_id,p_workspace,p_expected_revision,p_payload,'human',null)
+$$;
+
+-- Reserved for a future server-side agent orchestrator. It remains unavailable
+-- to browser roles and requires a valid, caller-attributed agent_run.
+create function marketing.save_campaign_as_agent(p_id uuid,p_workspace uuid,p_expected_revision integer,p_payload jsonb,p_agent_run uuid)
+returns uuid language sql security definer set search_path='' as $$
+ select marketing.save_campaign_internal(p_id,p_workspace,p_expected_revision,p_payload,'agent',p_agent_run)
+$$;
+
+revoke all on function marketing.save_campaign_internal(uuid,uuid,integer,jsonb,text,uuid),
+ marketing.save_campaign_as_agent(uuid,uuid,integer,jsonb,uuid),public.read_marketing_workspace(uuid),
+ public.save_marketing_campaign(uuid,uuid,integer,jsonb) from public,anon,authenticated;
+grant execute on function public.read_marketing_workspace(uuid),public.save_marketing_campaign(uuid,uuid,integer,jsonb) to authenticated;
