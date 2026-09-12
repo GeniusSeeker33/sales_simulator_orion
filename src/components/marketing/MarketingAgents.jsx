@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ASSET_TYPES, readMarketingAgentRun, readMarketingAgentRuns, runMarketingAgent } from '../../lib/marketing';
 import { AttentionIndicator } from './MarketingAttention';
 
+import { ConstraintChecks } from './HumanConstraints';
 import AgentResolution from './AgentResolution';
 
 const label = value => value.replaceAll('_', ' ');
@@ -53,6 +54,8 @@ function Outcome({ output }) {
     {result.content && <><h4>{result.name}</h4><pre className="marketing-asset-content">{result.content}</pre></>}
     {result.recommendation && <p><strong>Advisory recommendation: {label(result.recommendation)}</strong> · Not human approval.</p>}
     {result.findings?.map((finding, i) => <p key={i}><strong>{finding.category} · {finding.severity}:</strong> {finding.finding}</p>)}
+    {result.constraint_evaluations?.length > 0 && <><h4>Guardian constraint evaluations</h4><ul>{result.constraint_evaluations.map(e => <li key={e.constraint_id}>{e.status.replaceAll('_', ' ')} · {e.detail} · Constraint {e.constraint_id}</li>)}</ul></>}
+    <ConstraintChecks checks={output.deterministic_qa?.filter(q => q.constraint_id)} />
     {output.deterministic_qa?.length > 0 && <><h4>Deterministic QA for the recorded revision</h4><ul>{output.deterministic_qa.map(check => <li key={check.rule}>{check.review_required ? 'Human semantic review' : check.passed ? 'Pass' : 'Needs attention'}: {check.detail}</li>)}</ul></>}
   </div>;
 }

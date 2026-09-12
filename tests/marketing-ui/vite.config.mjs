@@ -14,7 +14,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -23,6 +23,7 @@ for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
 }
 const signatures = {
   resolve_marketing_agent_run: ['p_workspace', 'p_run', 'p_action', 'p_selection', 'p_note'],
+  save_marketing_human_constraints: ['p_workspace', 'p_asset', 'p_expected_revision', 'p_expected_set', 'p_constraints'],
   read_marketing_workspace: ['p_workspace'],
   read_marketing_attention_workspace: ['p_workspace'],
   read_marketing_agent_run: ['p_workspace', 'p_run'],
@@ -55,6 +56,8 @@ const agentDependencies = {
       guardian: { summary: 'Review audience and CTA before approval.', recommendation: 'needs_changes', findings: [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Confirm audience suitability.' }] },
     };
     if (context.request.purpose === 'Ready for approval' || context.orchestration) outputs.guardian = { summary: 'Ready for a human decision.', recommendation: 'ready_for_human_review', findings: [] };
+    if (context.orchestration?.instructions === 'Exercise constraint failure') outputs.creator.content = 'Competitive wholesale firearms. Book your guided demo.';
+    outputs.guardian.constraint_evaluations = (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: 'satisfied', detail: 'Model believes satisfied.' }));
     return { status: 'completed', output_text: JSON.stringify(outputs[context.request.agent_key]), usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } };
   } } }),
 };

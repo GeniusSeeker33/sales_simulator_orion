@@ -7,7 +7,7 @@ import { deriveMarketingAttention } from '../src/lib/marketingAttention.js';
 const cta = 'Apply to become an Orion Wholesale dealer at Join-Orion.com.';
 const content = 'Take the first step by applying at Join-Orion.com to begin the dealer qualification process.';
 const context = (text = content, primary_cta = cta) => ({ campaign: { primary_cta, channels: ['social'], target_audiences: ['dealers'] }, asset: { asset_type: 'social_copy', content: text } });
-const result = (recommendation = 'ready_for_human_review', findings = []) => ({ summary: 'Reviewed the asset.', recommendation, findings });
+const result = (recommendation = 'ready_for_human_review', findings = []) => ({ constraint_evaluations: [], summary: 'Reviewed the asset.', recommendation, findings });
 const finding = (severity, requires_correction, text = 'Review CTA suitability.') => ({ category: 'cta', severity, requires_correction, finding: text });
 const calibrate = (output, ctx = context()) => calibrateGuardian(validateOutput('guardian', output), deterministicQA(ctx));
 

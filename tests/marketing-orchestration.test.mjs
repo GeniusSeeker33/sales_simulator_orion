@@ -22,7 +22,7 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
   const asUser = async n => { await db.exec('reset role'); await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id(n)]); await db.exec('set role authenticated'); };
   await asUser(1); await db.query('select public.save_marketing_campaign($1,$2,null,$3)', [c, w, { name: 'Orchestration', attribution_key: 'orchestration', target_audiences: ['Dealers'], channels: ['social'] }]);
   await db.query('select public.save_marketing_brief($1,$2,1,$3)', [w, c, { primary_cta: 'Book a demo', target_audiences: ['Dealers'], channels: ['social'] }]);
-  let sequence = 30, calls = [], mode = 'ready', beforeModel, loseCompletion = false;
+  let sequence = 30, calls = [], mode = 'ready', creatorContent = 'Book your demo.', beforeModel, loseCompletion = false;
   const rpc = async (name, args) => {
     try {
       await db.exec('reset role; set role service_role'); const keys = signatures[name];
@@ -40,8 +40,8 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
       if (beforeModel) { const callback = beforeModel; beforeModel = null; await callback(context); }
       if (mode === 'failure' || mode === 'guardian_failure' && agent === 'guardian') throw new Error('private provider error');
       const output = agent === 'strategist' ? { summary: 'Task execution plan', steps: [{ title: 'Write task copy', rationale: 'Follow task scope' }], proposed_tasks: ['Prepare copy'] }
-        : agent === 'creator' ? { name: 'Orchestrated draft', asset_type: context.request.asset_type, content: 'Book your demo.' }
-        : { summary: 'QA', recommendation: mode === 'changes' ? 'needs_changes' : 'ready_for_human_review', findings: mode === 'changes' ? [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Explain dealer benefit.' }] : [] };
+        : agent === 'creator' ? { name: 'Orchestrated draft', asset_type: context.request.asset_type, content: creatorContent }
+        : { constraint_evaluations: (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: 'satisfied', detail: 'Model believes satisfied.' })), summary: 'QA', recommendation: mode === 'changes' ? 'needs_changes' : 'ready_for_human_review', findings: mode === 'changes' ? [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Explain dealer benefit.' }] : [] };
       return { status: 'completed', output_text: mode === 'malformed' ? '{bad' : JSON.stringify(output), usage: { input_tokens: 50, output_tokens: 25, total_tokens: 75 } };
     } } }) });
   const invoke = async (body, human = 1) => { const res = { setHeader() {}, status(n) { this.statusCode = n; return this; }, json(data) { this.body = data; return this; } }; await handler({ method: 'POST', headers: { authorization: `Bearer ${human}` }, body }, res); return res; };
@@ -145,5 +145,86 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     };
     const o = (await invoke(req)).body.orchestration;
     assert.equal(o.state, 'cancelled'); assert.equal(o.asset_id, null);
+  });
+  await t.test('bounded constraint evaluator handles normalization, lexicons, testimonials and exact destinations', async () => {
+    await db.exec('reset role');
+    const evaluate = async (type, value, content, details) => (await db.query('select marketing.evaluate_human_constraints($1,$2) data', [content, [{ constraints: [{ id: id(900), constraint_type: type, value, ...(details ? { details } : {}) }] }]])).rows[0].data[0];
+    for (const content of ['competitive wholesale firearms', 'COMPETITIVE   WHOLESALE FIREARMS', '“competitive, wholesale firearms!”']) {
+      const result = await evaluate('prohibited_phrase', 'competitive wholesale firearms', content);
+      assert.equal(result.passed, false); assert.equal(result.matched_text, 'competitive wholesale firearms'); assert.ok(result.normalized_offset);
+    }
+    for (const term of ['competitive', 'best', 'leading', 'leader', 'superior']) assert.equal((await evaluate('no_unverified_comparative_claim', '', `Our ${term} inventory`)).passed, false);
+    for (const term of ['grow your business', 'success', 'increase sales', 'improve profit', 'outperform', 'win']) assert.equal((await evaluate('no_unverified_outcome_claim', '', term)).passed, false);
+    for (const content of ['A satisfied dealer', 'Customer says: great service', '"They changed my business" — a dealer']) assert.equal((await evaluate('no_fabricated_testimonial', '', content)).passed, false);
+    assert.equal((await evaluate('no_fabricated_testimonial', '', 'Review the dealer application.')).review_required, true);
+    assert.equal((await evaluate('no_unverified_comparative_claim', '', 'A leadership workshop')).passed, true);
+    assert.equal((await evaluate('required_destination', 'Join-Orion.com', 'Apply at https://www.join-orion.com/apply.')).passed, true);
+    for (const content of ['Apply at join-orion.com.evil.com', 'Apply at https://join-orion.com@evil.com', 'Apply elsewhere']) assert.equal((await evaluate('required_destination', 'Join-Orion.com', content)).passed, false);
+    assert.equal((await evaluate('required_phrase_or_concept', 'dealer eligibility', 'Apply today', { mode: 'phrase' })).passed, false);
+    assert.equal((await evaluate('required_phrase_or_concept', 'dealer eligibility', 'Apply today', { mode: 'concept' })).review_required, true);
+  });
+  await t.test('human requested constraints block Creator preflight before Guardian and clean revisions clear it', async () => {
+    mode = 'ready'; creatorContent = 'Book your demo.';
+    let o = (await invoke(await assignment())).body.orchestration;
+    o = (await action(o, 'submit')).body.orchestration;
+    await asUser(2);
+    const rules = [{ constraint_type: 'prohibited_phrase', value: 'competitive wholesale firearms' }, { constraint_type: 'no_unverified_comparative_claim' }];
+    await db.query("select public.write_marketing_asset($1,$2,$3,$4,'request_changes',$5)", [w, c, o.asset_id, o.asset_revision, { notes: 'Remove unsupported competitive language.', human_constraints: rules, constraint_set_id: null }]);
+    let data = await snapshot(); o = data.orchestrations.find(x => x.id === o.id);
+    const constraintSet = data.human_constraint_sets.find(s => s.asset_id === o.asset_id && !s.superseded);
+    assert.equal(constraintSet.created_by, id(2)); assert.ok(constraintSet.source_decision_id); assert.equal(constraintSet.orchestration_id, o.id);
+    creatorContent = 'Our competitive wholesale firearms. Book your demo.'; calls = [];
+    o = (await action(o, 'revise')).body.orchestration;
+    assert.equal(o.state, 'changes_needed'); assert.equal(o.reason, 'Human constraint failed'); assert.equal(calls.length, 1); assert.equal(calls[0].agent, 'creator');
+    assert.equal(calls[0].context.human_constraints.length, 2); assert.equal(o.constraint_preflight.filter(q => !q.passed).length, 2);
+    data = await snapshot(); assert.equal(data.assets.find(a => a.id === o.asset_id).content, creatorContent);
+    assert.equal(deriveMarketingAttention(data).find(i => i.orchestration_id === o.id).severity, 'critical');
+    const run = (await db.query('select public.read_marketing_agent_run($1,$2) data', [w, o.active_run_id])).rows[0].data;
+    assert.equal(run.status, 'succeeded'); assert.ok(run.output_metadata.deterministic_qa.some(q => q.constraint_id && !q.passed));
+    await assert.rejects(db.query("select public.write_marketing_asset($1,$2,$3,$4,'submit','{}')", [w, c, o.asset_id, o.asset_revision]), /Human constraint failed/);
+    // A contradictory standalone Guardian response cannot override database preflight.
+    await db.exec('reset role; set role service_role'); const gid = id(sequence++);
+    const ctx = (await db.query("select public.start_marketing_agent_run($1,$2,$3,'marketing-v2','gpt-4.1-mini') data", [gid, id(1), { workspace_id: w, campaign_id: c, agent_key: 'guardian', purpose: 'Review constrained draft', asset_id: o.asset_id }])).rows[0].data;
+    const qa = { summary: 'No unsupported claims', recommendation: 'ready_for_human_review', findings: [], constraint_evaluations: ctx.human_constraints.map(r => ({ constraint_id: r.id, status: 'satisfied', detail: 'Model claims clean' })) };
+    const reviewed = (await db.query("select public.finish_marketing_agent_run($1,$2,'[]','{}',null) data", [gid, qa])).rows[0].data;
+    assert.equal(reviewed.output_metadata.result.recommendation, 'needs_changes'); assert.ok(reviewed.output_metadata.result.constraint_evaluations.every(e => e.status === 'violated'));
+    creatorContent = 'Book your dealer demo.'; calls = []; o = (await action(o, 'revise')).body.orchestration;
+    assert.equal(o.state, 'awaiting_review'); assert.equal(o.revision_cycles, 2); assert.deepEqual(calls.map(x => x.agent), ['creator', 'guardian']);
+    assert.ok(calls[1].context.creator_preflight.every(q => q.passed)); assert.ok(o.constraint_preflight.every(q => q.passed));
+    assert.equal(calls[1].context.prior_human_change_requests[0].notes, 'Remove unsupported competitive language.');
+    data = await snapshot(); assert.ok(!deriveMarketingAttention(data).some(i => i.run_id === gid));
+    await asUser(1); const clean = (await db.query('select public.read_marketing_agent_run($1,$2) data', [w, o.active_run_id])).rows[0].data;
+    assert.equal(clean.output_metadata.result.recommendation, 'ready_for_human_review'); assert.ok(clean.output_metadata.result.findings.every(f => !f.requires_correction));
+    // Supersession is append-only, attributable, scoped, and optimistic.
+    await asUser(3); await assert.rejects(db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, o.asset_id, o.asset_revision, constraintSet.id, []]), /unavailable/);
+    await asUser(4); await assert.rejects(db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, o.asset_id, o.asset_revision, constraintSet.id, []]), /unavailable/);
+    await db.exec('reset role; set role service_role'); await assert.rejects(db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, o.asset_id, o.asset_revision, constraintSet.id, []]), /permission denied/);
+    await asUser(1); await assert.rejects(db.query('select public.save_marketing_human_constraints($1,$2,$3,null,$4)', [w, o.asset_id, o.asset_revision, []]), /Constraints changed/);
+    await db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, o.asset_id, o.asset_revision, constraintSet.id, []]);
+    data = await snapshot(); assert.equal(data.human_constraint_sets.find(s => s.id === constraintSet.id).superseded, true);
+    await db.exec('reset role'); await assert.rejects(db.query("update marketing.human_constraint_sets set constraints='[]' where id=$1", [constraintSet.id]), /append-only/);
+    await assert.rejects(db.query('delete from marketing.human_constraint_sets where id=$1', [constraintSet.id]), /append-only/);
+  });
+  await t.test('constraint supersession during inference rejects stale work and never leaks to another task', async () => {
+    mode = 'changes'; creatorContent = 'Book your demo.';
+    let o = (await invoke(await assignment())).body.orchestration;
+    await asUser(1);
+    const set = (await db.query('select public.save_marketing_human_constraints($1,$2,$3,null,$4) data', [w, o.asset_id, o.asset_revision, [{ constraint_type: 'prohibited_phrase', value: 'unsupported phrase' }]])).rows[0].data;
+    beforeModel = async context => {
+      assert.equal(context.human_constraints.length, 1);
+      await asUser(1);
+      await db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, o.asset_id, o.asset_revision, set.id, []]);
+    };
+    o = (await action(o, 'revise')).body.orchestration;
+    assert.equal(o.state, 'failed'); assert.equal(o.asset_revision, 1);
+    mode = 'ready'; calls = [];
+    const unrelated = (await invoke(await assignment())).body.orchestration;
+    assert.equal(unrelated.state, 'awaiting_review'); assert.ok(calls.every(c => c.context.human_constraints.length === 0));
+    await asUser(1);
+    await assert.rejects(db.query('select public.save_marketing_human_constraints($1,$2,$3,null,$4)', [w, unrelated.asset_id, unrelated.asset_revision, [{ constraint_type: 'prohibited_phrase', value: 'word', created_by: id(4) }]]), /Invalid constraint/);
+    await db.exec('reset role; set role service_role');
+    await assert.rejects(db.query("select marketing.finish_marketing_agent_run_before_constraints($1,null,'[]','{}',null)", [unrelated.active_run_id]), /permission denied/);
+    await asUser(4); const foreign = (await db.query('select public.read_marketing_attention_workspace($1) data', [other])).rows[0].data;
+    assert.equal(foreign.human_constraint_sets.length, 0);
   });
 });

@@ -10,7 +10,7 @@ const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const workspace = '4f52494f-4e00-4000-8000-000000000001', campaign = id(10), other = id(20);
 const plan = { summary: 'Prepare a demo campaign.', steps: [{ title: 'Prepare copy', rationale: 'Explain the offer.' }], proposed_tasks: ['Write social draft'] };
 const draft = { name: 'Agent draft', asset_type: 'social_copy', content: 'Book a demo' };
-const guardian = { summary: 'CTA reviewed.', recommendation: 'ready_for_human_review', findings: [] };
+const guardian = { constraint_evaluations: [], summary: 'CTA reviewed.', recommendation: 'ready_for_human_review', findings: [] };
 const signatures = {
   start_marketing_agent_run: ['p_id', 'p_human', 'p_request', 'p_version', 'p_model'],
   finish_marketing_agent_run: ['p_id', 'p_output', 'p_qa', 'p_usage', 'p_error'],
@@ -25,7 +25,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   for (let n = 1; n <= 4; n++) await db.query('insert into auth.users values($1)', [id(n)]);
   await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')", [other]);
   await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$3,'contributor'),($1,$4,'approver'),($1,$5,'viewer'),($2,$6,'admin')", [workspace, other, id(1), id(2), id(3), id(4)]);
@@ -45,7 +45,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
   const invoke = async ({ body = request(), human = 1, auth = true, token = 'verified', output = plan, modelError = false, beforeOutput, status = 'completed', rpcOverride } = {}) => {
     const handler = createHandler({
       makeClient: (_url, key) => key === 'public' ? { auth: { getUser: async supplied => { assert.equal(supplied, token); return { data: { user: auth ? { id: id(human) } : null }, error: !auth }; } } } : { rpc: rpcOverride || rpc },
-      makeModel: () => ({ responses: { create: async options => { calls++; assert.equal(options.store, false); assert.equal(options.text.format.strict, true); assert.ok(!JSON.stringify(options).includes('server-secret')); if (beforeOutput) await beforeOutput(JSON.parse(options.input[1].content)); if (modelError) throw new Error('SECRET provider detail'); return { status, output_text: typeof output === 'string' ? output : JSON.stringify(output), usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 } }; } } }),
+      makeModel: () => ({ responses: { create: async options => { calls++; assert.equal(options.store, false); assert.equal(options.text.format.strict, true); assert.ok(!JSON.stringify(options).includes('server-secret')); if (beforeOutput) await beforeOutput(JSON.parse(options.input[1].content)); if (modelError) throw new Error('SECRET provider detail'); return { status, output_text: typeof output === 'string' ? output : JSON.stringify(body.agent_key === 'guardian' ? { constraint_evaluations: [], ...output } : output), usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 } }; } } }),
     });
     const res = { setHeader() {}, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
     await handler({ method: 'POST', headers: { authorization: token ? `Bearer ${token}` : '' }, body }, res);
