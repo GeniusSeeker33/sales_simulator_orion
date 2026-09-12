@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { APPROVAL_STATES, CAMPAIGN_STATUSES, createAttributionKey, splitList } from "../../lib/marketing";
 
-export default function CampaignForm({ campaign, currentUserId, canApprove, onSave, onCancel }) {
+export default function CampaignForm({ campaign, currentUserId, canApprove, canWrite = true, onSave, onCancel }) {
   const [form, setForm] = useState(() => ({
     id: campaign?.id || crypto.randomUUID(), name: campaign?.name || "", description: campaign?.description || "",
     status: campaign?.status || "draft", approval_state: campaign?.approval_state || "draft",
@@ -11,19 +11,21 @@ export default function CampaignForm({ campaign, currentUserId, canApprove, onSa
     starts_on: campaign?.starts_on || "", ends_on: campaign?.ends_on || "", attribution_key: campaign?.attribution_key || "",
   }));
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const change = (event) => setForm({ ...form, [event.target.name]: event.target.value });
   async function submit(event) {
     event.preventDefault(); setError("");
     if (form.status === "active" && form.approval_state !== "approved") return setError("Only an approved campaign can be activated.");
+    setBusy(true);
     try {
       await onSave({ ...form, attribution_key: form.attribution_key || createAttributionKey(form.name, form.id),
         objectives: splitList(form.objectives), target_audiences: splitList(form.target_audiences), channels: splitList(form.channels) });
-    } catch (err) { setError(err.message); }
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
   return <form className="card marketing-form" onSubmit={submit}>
     <div className="section-header"><div><h2>{campaign ? "Edit campaign" : "Create campaign"}</h2><p className="section-subtext">Campaign decisions remain human-owned and auditable.</p></div></div>
     {error && <div className="marketing-error" role="alert">{error}</div>}
-    <div className="marketing-form-grid">
+    <fieldset disabled={!canWrite || busy} className="marketing-fieldset"><div className="marketing-form-grid">
       <label className="form-field marketing-wide"><span>Name</span><input required maxLength="160" name="name" value={form.name} onChange={change} /></label>
       <label className="form-field marketing-wide"><span>Description</span><textarea maxLength="4000" rows="3" name="description" value={form.description} onChange={change} /></label>
       <label className="form-field"><span>Status</span><select name="status" value={form.status} onChange={change}>{CAMPAIGN_STATUSES.map(x => <option key={x}>{x}</option>)}</select></label>
@@ -38,6 +40,6 @@ export default function CampaignForm({ campaign, currentUserId, canApprove, onSa
       <label className="form-field marketing-wide"><span>Attribution key</span><input name="attribution_key" value={form.attribution_key} onChange={change} placeholder="Generated on save" /></label>
     </div>
     <p className="marketing-boundary">Agents may draft and submit for review, but only a human approver can approve. Publishing is intentionally unavailable in this foundation.</p>
-    <div className="button-row"><button className="btn-primary" type="submit">Save campaign</button><button className="btn-secondary" type="button" onClick={onCancel}>Cancel</button></div>
+    <div className="button-row">{canWrite && <button className="btn-primary" type="submit">{busy ? "Saving…" : "Save campaign"}</button>}<button className="btn-secondary" type="button" onClick={onCancel}>Cancel</button></div></fieldset>
   </form>;
 }

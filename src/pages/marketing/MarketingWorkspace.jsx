@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import Layout from "../../components/layout/Layout";
 import MarketingNav from "../../components/marketing/MarketingNav";
 import CampaignForm from "../../components/marketing/CampaignForm";
+import CampaignWorkflow, { AssetLibrary } from "../../components/marketing/CampaignWorkflow";
 import { useAuth } from "../../context/AuthContext";
 import { readMarketingWorkspace, saveMarketingCampaign } from "../../lib/marketing";
 
 const FUTURE = {
-  content: ["Content", "Asset library and content drafting will be delivered in a future module."],
-  approvals: ["Approvals", "A dedicated human review queue will build on the approval boundary in this schema."],
   agents: ["Agents", "Agent orchestration is deferred; agent-run attribution and safety constraints are ready."],
   analytics: ["Analytics", "Cross-channel event ingestion and reporting are deferred; attribution-ready events are modeled."],
   settings: ["Settings", "Workspace membership and configuration remain administrator-provisioned for now."],
@@ -21,7 +20,7 @@ export default function MarketingWorkspace() {
   const { section = "overview", campaignId } = useParams();
   const { session } = useAuth(); const navigate = useNavigate();
   const [data, setData] = useState(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
-  const load = useCallback(async () => { setLoading(true); setError(""); try { setData(await readMarketingWorkspace()); } catch (e) { setError(e.message); } finally { setLoading(false); } }, []);
+  async function load() { const result = await readMarketingWorkspace(data?.workspace?.id); setData(result); setError(""); }
   useEffect(() => {
     let current = true;
     readMarketingWorkspace()
@@ -33,7 +32,7 @@ export default function MarketingWorkspace() {
   const campaign = useMemo(() => data?.campaigns?.find(c => c.id === campaignId), [data, campaignId]);
   const canApprove = ["approver", "admin"].includes(data?.role);
   async function save(item) { await saveMarketingCampaign(data.workspace.id, item, campaign?.revision ?? null); await load(); navigate(`/marketing/campaigns/${item.id}`); }
-  if (!section || !["overview", "campaigns", ...Object.keys(FUTURE)].includes(section)) return <Navigate to="/marketing/overview" replace />;
+  if (!section || !["overview", "campaigns", "content", "approvals", ...Object.keys(FUTURE)].includes(section)) return <Navigate to="/marketing/overview" replace />;
   return <Layout title="Marketing Command Center">
     <div className="marketing-heading"><div><span className="marketing-eyebrow">{data?.workspace?.name || "Workspace"}</span><p>Plan accountable, attributable campaigns with a human approval boundary.</p></div>{data && <span className="status-pill status-neutral">{label(data.role)}</span>}</div>
     <MarketingNav />
@@ -41,9 +40,11 @@ export default function MarketingWorkspace() {
     {error && <div className="card marketing-error"><strong>Workspace unavailable.</strong><p>{error}</p><p>A marketing administrator must provision workspace membership.</p></div>}
     {!loading && data && section === "overview" && <Overview campaigns={data.campaigns} />}
     {!loading && data && section === "campaigns" && (campaignId === "new" || campaign ?
-      <CampaignForm campaign={campaign} currentUserId={session.id} canApprove={canApprove} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /> :
+      campaign ? <><CampaignWorkflow data={data} campaign={campaign} onRefresh={load} /><details className="card marketing-record"><summary>Campaign settings & campaign approval</summary><CampaignForm key={`${campaign.id}:${campaign.revision}`} campaign={campaign} currentUserId={session.id} canApprove={canApprove} canWrite={data.role !== "viewer"} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /></details></> :
+      <CampaignForm key="new" currentUserId={session.id} canApprove={canApprove} canWrite={data.role !== "viewer"} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /> :
       campaignId ? <div className="card marketing-error">Campaign not found. <Link to="/marketing/campaigns">Return to campaigns</Link>.</div> :
       <Campaigns campaigns={data.campaigns} canWrite={data.role !== "viewer"} />)}
+    {!loading && data && ["content", "approvals"].includes(section) && <AssetLibrary key={section} data={data} reviewOnly={section === "approvals"} onRefresh={load} />}
     {!loading && data && FUTURE[section] && <Future title={FUTURE[section][0]} description={FUTURE[section][1]} />}
   </Layout>;
 }
