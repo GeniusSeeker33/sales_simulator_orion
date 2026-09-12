@@ -1,0 +1,62 @@
+// Pure projection of persisted evidence. No status is stored or inferred from edits to unrelated records.
+export const ATTENTION_LEVELS = {
+  critical: { label: 'Human action required', icon: '!', rank: 0 },
+  attention: { label: 'Review recommended', icon: '△', rank: 1 },
+  clear: { label: 'Clear', icon: '✓', rank: 2 },
+};
+
+export function deriveMarketingAttention(data) {
+  const items = [], workspace = data.workspace.id;
+  const campaigns = new Map(data.campaigns.map(c => [c.id, c]));
+  const assets = new Map(data.assets.map(a => [a.id, a]));
+  const resolvedThrough = new Map();
+  for (const event of data.attention_events) {
+    if (Number.isInteger(event.revision) && ['asset_saved', 'approved', 'changes_requested'].includes(event.action)) {
+      resolvedThrough.set(event.asset_id, Math.max(resolvedThrough.get(event.asset_id) || 0, event.revision));
+    }
+  }
+  const add = item => items.push({ ...item, campaign: campaigns.get(item.campaign_id)?.name || 'Campaign unavailable' });
+  for (const campaign of data.campaigns) {
+    if (campaign.workspace_id === workspace && ['in_review', 'changes_requested'].includes(campaign.approval_state)) {
+      add({ id: `campaign:${campaign.id}`, campaign_id: campaign.id, name: 'Campaign approval', severity: 'critical',
+        reason: campaign.approval_state === 'in_review' ? 'Campaign is awaiting a human approval decision.' : 'Campaign changes are requested.',
+        timestamp: campaign.updated_at || campaign.created_at, href: `/marketing/campaigns/${campaign.id}`, action: 'Open campaign', scope: 'campaigns' });
+    }
+  }
+  for (const asset of data.assets) {
+    if (asset.workspace_id !== workspace) continue;
+    const base = { id: `asset:${asset.id}`, campaign_id: asset.campaign_id, asset_id: asset.id, name: asset.name, timestamp: asset.updated_at || asset.created_at, href: `/marketing/campaigns/${asset.campaign_id}?asset=${asset.id}`, action: 'Review', scope: 'approvals' };
+    if (asset.approval_state === 'in_review') add({ ...base, severity: 'critical', reason: 'Asset is awaiting a human review decision.' });
+    else if (asset.approval_state === 'changes_requested') add({ ...base, severity: 'critical', reason: 'Human requested changes are awaiting a response or revision.' });
+  }
+  for (const run of data.attention_runs) {
+    if (run.workspace_id !== workspace) continue;
+    const base = { id: `run:${run.id}`, run_id: run.id, campaign_id: run.campaign_id, asset_id: run.asset_id || run.outcome_asset_id, name: `${run.agent_key}: ${run.purpose}`, timestamp: run.ended_at || run.started_at, href: `/marketing/agents?run=${run.id}`, action: 'Inspect run', scope: 'agents' };
+    if (['failed', 'started', 'cancelled'].includes(run.status)) {
+      add({ ...base, severity: 'critical', reason: run.status === 'failed' ? 'Agent run failed; operator inspection is required.' : 'Run has no confirmed successful outcome. Inspect before retrying.' });
+    } else if (run.status === 'succeeded' && run.agent_key === 'strategist') {
+      add({ ...base, severity: 'attention', reason: 'Strategist proposal is available. No acknowledgment or explicit action linkage is recorded.' });
+    } else if (run.status === 'succeeded' && run.agent_key === 'guardian') {
+      // Submission increments revision too: only a content save or human decision supersedes QA.
+      const superseded = Number.isInteger(run.asset_revision) && resolvedThrough.get(run.asset_id) > run.asset_revision;
+      if (superseded) continue;
+      if (!assets.has(run.asset_id) || !Number.isInteger(run.asset_revision) || !run.recommendation) {
+        add({ ...base, severity: 'critical', reason: 'Guardian context is incomplete; inspect the recorded evidence.' });
+      } else if (run.recommendation === 'needs_changes' || run.qa_failed) {
+        add({ ...base, severity: 'critical', reason: 'Guardian identified changes needed; no newer content or human decision resolves this assessment.' });
+      } else if (run.has_findings) {
+        add({ ...base, severity: 'attention', reason: 'Guardian findings merit human inspection; the recommendation is advisory.' });
+      }
+    }
+  }
+  return items.sort((a, b) => ATTENTION_LEVELS[a.severity].rank - ATTENTION_LEVELS[b.severity].rank
+    || (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0) || a.id.localeCompare(b.id));
+}
+
+export function attentionLevel(items) {
+  return items.some(i => i.severity === 'critical') ? 'critical' : items.length ? 'attention' : 'clear';
+}
+
+export function attentionCounts(items) {
+  return { approvals: items.filter(i => i.scope === 'approvals').length, agents: items.filter(i => i.scope === 'agents').length };
+}

@@ -64,7 +64,7 @@ The following are architectural extension points, not current capabilities:
 - continuous agent orchestration and automated recovery;
 - self-service workspace membership and settings administration.
 
-The first governed agent run layer is documented in [Marketing agent runs](marketing-agent-runs.md). Agents prepare work only within the governed write boundary. They must not approve campaigns, activate them, or publish assets. Any future orchestration must run through a trusted server-side path with a valid, caller-attributed agent run; the browser has no agent write mode.
+Workspace-wide attention signals and human-to-Creator revision handoffs are documented in [Human attention and governed revisions](marketing-attention-and-revisions.md). The first governed agent run layer is documented in [Marketing agent runs](marketing-agent-runs.md). Agents prepare work only within the governed write boundary. They must not approve campaigns, activate them, or publish assets. Any future orchestration must run through a trusted server-side path with a valid, caller-attributed agent run; the browser has no agent write mode.
 
 ## Implementation references
 

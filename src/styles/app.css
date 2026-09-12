@@ -1508,3 +1508,16 @@ button:hover {
   .marketing-form-grid { grid-template-columns: 1fr; }
   .marketing-wide { grid-column: auto; }
 }
+
+/* Severity always includes text/icon; borders and color reinforce the labels. */
+.marketing-attention-label { display: inline-flex; gap: 6px; align-items: center; border: 1px solid currentColor; border-radius: 8px; padding: 4px 8px; font-size: .8rem; font-weight: 700; }
+.marketing-attention-label.critical { color: #fecaca; background: #5d202a; }
+.marketing-attention-label.attention { color: #fef08a; background: #4c3b13; }
+.marketing-attention-label.clear { color: #bbf7d0; background: #15432e; }
+.marketing-attention-panel { border: 1px solid #94a3b8; }
+.marketing-attention-list { list-style: none; padding: 0; display: grid; gap: 12px; }
+.marketing-attention-item { display: grid; gap: 10px; padding: 16px; border: 1px solid #64748b; border-left-width: 5px; border-radius: 8px; overflow-wrap: anywhere; }
+.marketing-attention-item.critical { border-left-color: #f87171; }
+.marketing-attention-item.attention { border-left-color: #facc15; }
+.marketing-attention-item .marketing-attention-label, .marketing-attention-item .btn-secondary { justify-self: start; }
+.marketing-nav .marketing-attention-label { margin-left: 6px; }

@@ -13,7 +13,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -22,6 +22,8 @@ for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
 }
 const signatures = {
   read_marketing_workspace: ['p_workspace'],
+  read_marketing_attention_workspace: ['p_workspace'],
+  read_marketing_agent_run: ['p_workspace', 'p_run'],
   read_marketing_agent_runs: ['p_workspace', 'p_campaign'],
   save_marketing_campaign: ['p_id', 'p_workspace', 'p_expected_revision', 'p_payload'],
   save_marketing_brief: ['p_workspace', 'p_campaign', 'p_expected_revision', 'p_payload'],

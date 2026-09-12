@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../api/marketing-agent-run.js';
 import { validateOutput } from '../api/_lib/marketing-agents.js';
+import { deriveMarketingAttention } from '../src/lib/marketingAttention.js';
 
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const workspace = '4f52494f-4e00-4000-8000-000000000001', campaign = id(10), other = id(20);
@@ -24,7 +25,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   for (let n = 1; n <= 4; n++) await db.query('insert into auth.users values($1)', [id(n)]);
   await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')", [other]);
   await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$3,'contributor'),($1,$4,'approver'),($1,$5,'viewer'),($2,$6,'admin')", [workspace, other, id(1), id(2), id(3), id(4)]);
@@ -44,7 +45,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
   const invoke = async ({ body = request(), human = 1, auth = true, token = 'verified', output = plan, modelError = false, beforeOutput, status = 'completed', rpcOverride } = {}) => {
     const handler = createHandler({
       makeClient: (_url, key) => key === 'public' ? { auth: { getUser: async supplied => { assert.equal(supplied, token); return { data: { user: auth ? { id: id(human) } : null }, error: !auth }; } } } : { rpc: rpcOverride || rpc },
-      makeModel: () => ({ responses: { create: async options => { calls++; assert.equal(options.store, false); assert.equal(options.text.format.strict, true); assert.ok(!JSON.stringify(options).includes('server-secret')); if (beforeOutput) await beforeOutput(); if (modelError) throw new Error('SECRET provider detail'); return { status, output_text: typeof output === 'string' ? output : JSON.stringify(output), usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 } }; } } }),
+      makeModel: () => ({ responses: { create: async options => { calls++; assert.equal(options.store, false); assert.equal(options.text.format.strict, true); assert.ok(!JSON.stringify(options).includes('server-secret')); if (beforeOutput) await beforeOutput(JSON.parse(options.input[1].content)); if (modelError) throw new Error('SECRET provider detail'); return { status, output_text: typeof output === 'string' ? output : JSON.stringify(output), usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 } }; } } }),
     });
     const res = { setHeader() {}, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
     await handler({ method: 'POST', headers: { authorization: token ? `Bearer ${token}` : '' }, body }, res);
@@ -116,6 +117,84 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     await db.exec('reset role');
     await assert.rejects(db.query("select marketing.write_asset_as_agent($1,$2,$3,2,'approve','{}',$4)", [workspace, campaign, created.outcome_asset_id, created.id]), /Agents cannot/);
     await assert.rejects(db.query("select marketing.write_asset_as_agent($1,$2,$3,2,'request_changes','{}',$4)", [workspace, campaign, created.outcome_asset_id, created.id]), /Agents cannot/);
+  });
+  await t.test('governed revision hands off human and Guardian feedback, preserves content and attributes a new run', async () => {
+    const original = (await invoke({ body: request('creator'), output: draft })).body.run;
+    const qa = (await invoke({ body: request('guardian', { asset_id: original.outcome_asset_id }), output: { ...guardian, recommendation: 'needs_changes', findings: [{ category: 'cta', severity: 'warning', finding: 'Explain the guided demo.' }] } })).body.run;
+    await asUser(2);
+    await db.query("select public.write_marketing_asset($1,$2,$3,2,'request_changes',$4)", [workspace, campaign, original.outcome_asset_id, { notes: 'Mention a guided demo; preserve the CTA.' }]);
+    const workspaceData = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.ok(deriveMarketingAttention(workspaceData).some(i => i.id === `asset:${original.outcome_asset_id}`));
+    assert.ok(!deriveMarketingAttention(workspaceData).some(i => i.run_id === qa.id));
+    const revisionRequest = { ...request('creator'), asset_type: undefined, revision_asset_id: original.outcome_asset_id, expected_asset_revision: 3,
+      expected_campaign_revision: workspaceData.campaigns.find(c => c.id === campaign).revision, supplemental_instructions: 'Keep it concise.' };
+    // JSON requests do not contain undefined keys.
+    delete revisionRequest.asset_type;
+    const revised = await invoke({ body: revisionRequest, output: { ...draft, content: 'Book a demo — a guided walkthrough.' }, beforeOutput: async context => {
+      assert.equal(context.asset.content, draft.content); assert.equal(context.asset.revision, 3);
+      assert.equal(context.human_change_request.notes, 'Mention a guided demo; preserve the CTA.');
+      assert.equal(context.guardian_assessment.run_id, qa.id); assert.equal(context.guardian_assessment.asset_revision, 2);
+      assert.equal(context.guardian_assessment.output_metadata.result.findings[0].finding, 'Explain the guided demo.');
+      assert.equal(context.request.supplemental_instructions, 'Keep it concise.'); assert.equal(context.campaign.primary_cta, 'Book a demo');
+    } });
+    assert.equal(revised.statusCode, 200); assert.equal(revised.body.run.outcome_asset_id, original.outcome_asset_id); assert.notEqual(revised.body.run.id, original.id);
+    await db.exec('reset role');
+    const current = (await db.query('select * from marketing.assets where id=$1', [original.outcome_asset_id])).rows[0];
+    assert.equal(current.revision, 5); assert.equal(current.approval_state, 'in_review'); assert.equal(current.approved_by, null); assert.equal(current.agent_run_id, original.id);
+    const history = (await db.query('select * from marketing.workflow_history where asset_id=$1 order by id', [original.outcome_asset_id])).rows;
+    assert.deepEqual(history.map(h => h.action), ['asset_saved', 'submitted', 'changes_requested', 'asset_saved', 'submitted']);
+    assert.equal(history[0].snapshot.content, draft.content); assert.equal(history[2].notes, 'Mention a guided demo; preserve the CTA.');
+    assert.equal(history[3].agent_run_id, revised.body.run.id); assert.equal(history[3].actor_type, 'agent'); assert.equal(history[4].agent_run_id, revised.body.run.id);
+    assert.equal((await db.query('select output_metadata from marketing.agent_runs where id=$1', [qa.id])).rows[0].output_metadata.result.recommendation, 'needs_changes');
+    assert.equal((await invoke({ body: revisionRequest, output: draft })).statusCode, 403);
+    await asUser(2);
+    await db.query("select public.write_marketing_asset($1,$2,$3,5,'request_changes',$4)", [workspace, campaign, current.id, { notes: 'Shorten it.' }]);
+    const secondRequest = { ...revisionRequest, expected_asset_revision: 6, submit_for_review: false };
+    assert.equal((await invoke({ body: secondRequest, human: 3 })).statusCode, 403);
+    assert.equal((await invoke({ body: { ...secondRequest, workspace_id: other }, human: 4 })).statusCode, 403);
+    assert.equal((await invoke({ body: { ...secondRequest, actor_type: 'agent' } })).statusCode, 400);
+    const stale = await invoke({ body: secondRequest, output: draft, beforeOutput: async () => {
+      await asUser(1); await db.query("select public.write_marketing_asset($1,$2,$3,6,'save',$4)", [workspace, campaign, current.id, { ...draft, content: 'Human revised instead.' }]);
+    } });
+    assert.equal(stale.body.run.status, 'failed'); assert.equal(stale.body.run.error_code, 'result_rejected');
+    await db.exec('reset role'); assert.equal((await db.query('select content from marketing.assets where id=$1', [current.id])).rows[0].content, 'Human revised instead.');
+  });
+  await t.test('attention covers old runs beyond activity pagination and reads remain workspace isolated', async () => {
+    await db.exec('reset role');
+    await db.query("insert into marketing.agent_runs(id,workspace_id,campaign_id,agent_key,purpose,status,initiated_by) select gen_random_uuid(),$1,$2,'strategist','Legacy proposal','succeeded',$3 from generate_series(1,55)", [workspace, campaign, id(1)]);
+    await asUser(1);
+    const result = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.ok(result.attention_runs.length > 55); assert.equal((await db.query('select public.read_marketing_agent_runs($1,null) data', [workspace])).rows[0].data.length, 50);
+    assert.ok(deriveMarketingAttention(result).some(i => i.id === `run:${result.attention_runs.find(r => r.status === 'failed').id}`));
+    assert.equal((await db.query('select public.read_marketing_agent_run($1,$2) data', [workspace, created.id])).rows[0].data.id, created.id);
+    await asUser(4);
+    await assert.rejects(db.query('select public.read_marketing_attention_workspace($1)', [workspace]), /unavailable/);
+    await assert.rejects(db.query('select public.read_marketing_agent_run($1,$2)', [other, created.id]), /unavailable/);
+  });
+  await t.test('revision save-only, stale campaign and malformed revision output are governed', async () => {
+    const original = (await invoke({ body: request('creator'), output: draft })).body.run;
+    await asUser(2);
+    await db.query("select public.write_marketing_asset($1,$2,$3,2,'request_changes',$4)", [workspace, campaign, original.outcome_asset_id, { notes: 'Shorten the copy.' }]);
+    const c = (await db.query('select revision from marketing.campaigns where id=$1', [campaign])).rows[0];
+    const body = { workspace_id: workspace, campaign_id: campaign, agent_key: 'creator', purpose: 'Revise', revision_asset_id: original.outcome_asset_id,
+      expected_asset_revision: 3, expected_campaign_revision: c.revision, submit_for_review: false };
+    assert.equal((await invoke({ body: { ...body, expected_asset_revision: 2 }, output: draft })).statusCode, 409);
+    const malformed = await invoke({ body, output: { ...draft, approval_state: 'approved' } });
+    assert.equal(malformed.body.run.error_code, 'invalid_output');
+    const stale = await invoke({ body, output: draft, beforeOutput: async () => {
+      await db.exec('reset role'); await db.query('update marketing.campaigns set revision=revision+1 where id=$1', [campaign]);
+    } });
+    assert.equal(stale.body.run.error_code, 'result_rejected');
+    const saved = await invoke({ body: { ...body, expected_campaign_revision: c.revision + 1 }, output: draft, beforeOutput: async context => { assert.equal(context.guardian_assessment, null); } });
+    assert.equal(saved.statusCode, 200); await db.exec('reset role');
+    const a = (await db.query('select * from marketing.assets where id=$1', [original.outcome_asset_id])).rows[0];
+    assert.equal(a.revision, 4); assert.equal(a.approval_state, 'draft'); assert.equal(a.approved_by, null);
+    assert.equal((await db.query("select count(*) n from marketing.workflow_history where asset_id=$1 and action='approved'", [a.id])).rows[0].n, 0);
+    await asUser(2);
+    await db.query("select public.write_marketing_asset($1,$2,$3,null,'save',$4)", [workspace, campaign, id(101), draft]);
+    await db.query("select public.write_marketing_asset($1,$2,$3,1,'submit','{}')", [workspace, campaign, id(101)]);
+    await db.query("select public.write_marketing_asset($1,$2,$3,2,'request_changes',$4)", [workspace, campaign, id(101), { notes: 'Human-created draft changes.' }]);
+    assert.equal((await invoke({ body: { ...body, revision_asset_id: id(101), expected_campaign_revision: c.revision + 1 }, output: draft })).statusCode, 403);
   });
   await t.test('submission failure rolls back the new asset and its history', async () => {
     const before = await count('assets'), history = await count('workflow_history');

@@ -35,6 +35,7 @@ export function createHandler({ makeClient = createClient, makeModel = () => new
     try {
       context = await rpc('start_marketing_agent_run', { p_id: runId, p_human: human, p_request: request, p_version: INSTRUCTION_VERSION, p_model: MODEL });
     } catch (error) {
+      if (error.code === '40001') return res.status(409).json({ error: 'Campaign or asset changed. Refresh before starting a revision.' });
       return res.status(error.code === '42501' ? 403 : 503).json({ error: error.code === '42501' ? 'Marketing agent access denied' : 'Agent run could not be started' });
     }
     let usage = {}, phase = 'model_failed';
@@ -48,7 +49,7 @@ export function createHandler({ makeClient = createClient, makeModel = () => new
       phase = 'invalid_output';
       if (response.status !== 'completed' || !response.output_text) throw new Error('Incomplete model response');
       const output = validateOutput(request.agent_key, JSON.parse(response.output_text));
-      if (request.agent_key === 'creator' && output.asset_type !== request.asset_type) throw new Error('Wrong requested asset type');
+      if (request.agent_key === 'creator' && output.asset_type !== (request.revision_asset_id ? context.asset.asset_type : request.asset_type)) throw new Error('Wrong requested asset type');
       const qa = request.agent_key === 'guardian' ? deterministicQA(context) : [];
       if (qa.some(check => !check.passed)) output.recommendation = 'needs_changes';
       phase = 'persistence_failed';

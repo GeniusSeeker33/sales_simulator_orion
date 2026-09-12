@@ -1,35 +1,40 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ASSET_TYPES, readMarketingAgentRuns, runMarketingAgent } from '../../lib/marketing';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ASSET_TYPES, readMarketingAgentRun, readMarketingAgentRuns, runMarketingAgent } from '../../lib/marketing';
+import { AttentionIndicator } from './MarketingAttention';
 
 const label = value => value.replaceAll('_', ' ');
 const date = value => value ? new Date(value).toLocaleString() : '—';
 
 export default function MarketingAgents({ data, campaign, onRefresh }) {
+  const [params] = useSearchParams(), selectedRun = params.get('run');
   const [runs, setRuns] = useState([]), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let current = true;
-    readMarketingAgentRuns(data.workspace.id, campaign?.id).then(result => { if (current) { setRuns(result); setError(''); } })
+    (selectedRun ? readMarketingAgentRun(data.workspace.id, selectedRun).then(run => [run]) : readMarketingAgentRuns(data.workspace.id, campaign?.id)).then(result => { if (current) { setRuns(result); setError(''); } })
       .catch(e => { if (current) setError(e.message); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [data.workspace.id, campaign?.id, revision]);
-  const refresh = () => setRevision(value => value + 1);
+  }, [data.workspace.id, campaign?.id, revision, selectedRun, data]);
+  const refresh = () => { setRevision(value => value + 1); };
   return <section className="card marketing-workflow">
-    <div className="section-header"><div><h2>{campaign ? 'Campaign agents' : 'Agents'}</h2><p>Human initiated work. Plans and QA recommendations are advisory; asset approval requires a separate human decision.</p></div><button className="btn-secondary" onClick={refresh}>Refresh runs</button></div>
+    <div className="section-header"><div><h2>{campaign ? 'Campaign agents' : 'Agents'}</h2><p>Human initiated work. Plans and QA recommendations are advisory; asset approval requires a separate human decision.</p></div><button className="btn-secondary" onClick={() => { refresh(); onRefresh().catch(e => setError(e.message)); }}>Refresh runs</button></div>
     {campaign && data.role !== 'viewer' && <AgentForm key={campaign.id} data={data} campaign={campaign} onDone={async () => { refresh(); await onRefresh(); }} />}
     {error && <p role="alert" className="marketing-error">{error}</p>}
     {loading ? <p>Loading agent runs…</p> : !runs.length && <p>No agent runs yet. Open a campaign to explicitly initiate one.</p>}
     <p className="section-subtext">Most recent 50 runs. Usage and cost appear only when available. A started run has no confirmed outcome; refresh before initiating another.</p>
-    {runs.map(run => <details className="marketing-record" key={run.id}>
-      <summary>{label(run.agent_key)} · {run.status} · {run.purpose}</summary>
+    {selectedRun && <Link to="/marketing/agents">All recent runs</Link>}
+    {runs.map(run => <details className="marketing-record" open={selectedRun === run.id ? true : undefined} key={run.id}>
+      <summary>{label(run.agent_key)} · {run.status} · {run.purpose} · <AttentionIndicator items={data.attention_runs.some(item => item.id === run.id && item.status === run.status) ? data.attention.filter(item => item.run_id === run.id) : [{ severity: "critical" }]} /></summary>
+
       <p>Campaign: <Link to={`/marketing/campaigns/${run.campaign_id}`}>{data.campaigns.find(c => c.id === run.campaign_id)?.name || run.campaign_id}</Link></p>
       <p>Initiated by {run.initiated_by} · Run {run.id}</p>
       <p>Started {date(run.started_at)} · Completed {date(run.ended_at)}</p>
       <p>{run.provider || 'Provider unavailable'} / {run.model || 'Model unavailable'} · Instructions {run.instruction_version || 'Legacy'}</p>
       <p>Tokens: input {run.usage?.input_tokens ?? '—'}, output {run.usage?.output_tokens ?? '—'}, total {run.usage?.total_tokens ?? '—'} · Cost: {run.cost_usd == null ? 'Unavailable' : `$${Number(run.cost_usd).toFixed(6)} USD`}</p>
       {run.error_code && <p className="marketing-error">Run failed: {label(run.error_code)}. No agent results applied.</p>}
-      {run.outcome_asset_id && <p>Created asset: {run.outcome_asset_id}. Open campaign assets to review it.</p>}
+      {run.outcome_asset_id && <p>Outcome asset: <Link to={`/marketing/campaigns/${run.campaign_id}?asset=${run.outcome_asset_id}`}>{run.outcome_asset_id}</Link></p>}
+      {run.input_metadata?.human_change_request && <details><summary>Revision handoff evidence</summary><p>Human requested changes: {run.input_metadata.human_change_request.notes}</p><p>Prior asset revision {run.input_metadata.asset.revision}</p><pre className="marketing-asset-content">{run.input_metadata.asset.content}</pre><p>Supplemental instructions: {run.input_metadata.request.supplemental_instructions || 'None'}</p>{run.input_metadata.guardian_assessment && <><Link to={`/marketing/agents?run=${run.input_metadata.guardian_assessment.run_id}`}>Inspect prior Guardian assessment</Link><Outcome output={run.input_metadata.guardian_assessment.output_metadata} /></>}</details>}
       <Outcome output={run.output_metadata} />
     </details>)}
   </section>;
