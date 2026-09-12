@@ -50,7 +50,7 @@ const agentHandler = createHandler({
     const outputs = {
       strategist: { summary: 'Proposed demo execution plan', steps: [{ title: 'Draft copy', rationale: 'Explain the offer' }], proposed_tasks: ['Prepare demo copy'] },
       creator: { name: 'Creator browser draft', asset_type: context.request.asset_type, content: 'Book your guided demo.' },
-      guardian: { summary: 'Review audience and CTA before approval.', recommendation: 'needs_changes', findings: [{ category: 'audience', severity: 'warning', finding: 'Confirm audience suitability.' }] },
+      guardian: { summary: 'Review audience and CTA before approval.', recommendation: 'needs_changes', findings: [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Confirm audience suitability.' }] },
     };
     return { status: 'completed', output_text: JSON.stringify(outputs[context.request.agent_key]), usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } };
   } } }),
