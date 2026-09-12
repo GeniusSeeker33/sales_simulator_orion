@@ -28,6 +28,8 @@ This map is the canonical entry point for documentation in the surviving Genius 
 | [Training and progression record model](training/training-progression-record-model.md) | **Canonical:** training, coaching, evidence, review, and progression records. |
 | [Orion sales competencies](training/orion-sales-competencies.md) | **Canonical:** versioned competency framework. |
 | [Orion L1–L5 framework](training/orion-l1-l5.md) | **Canonical:** progression-level requirements. |
+| [Sales Academy to production-level transition](orion-sales-academy-production-level-transition.md) | **Supporting operational analysis:** separates Academy/ramp status, individual competency evidence, overall B1–B5 behavioral review, and approved L1–L5 progression. |
+| [Anthony AE checklist competency map](anthony-ae-checklist-competency-map.md) | **Supporting operational analysis:** maps checklist work to potential evidence opportunities without defining a competing competency framework or scoring rule. |
 | [Attributable coaching sessions](attributable-coaching-sessions.md) | **Implementation evidence:** coaching attribution and records. |
 | [Competency evidence deployment](competency-evidence-deployment.md) | **Implementation evidence:** competency evidence behavior. |
 | [Competency-band review deployment](competency-band-review-deployment.md) | **Implementation evidence:** human review of competency bands. |
