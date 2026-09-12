@@ -4,6 +4,7 @@ import { ASSET_TYPES, TASK_STATUSES, readMarketingAssetHistory, saveMarketingBri
 
 import { AttentionIndicator } from "./MarketingAttention";
 import TaskOrchestration from "./TaskOrchestration";
+import { ConstraintEditor, ConstraintManager } from "./HumanConstraints";
 import CreatorRevision from "./CreatorRevision";
 const label = value => value.replaceAll("_", " ");
 const briefFields = [
@@ -109,6 +110,9 @@ function AssetDetail({ data, asset, onRefresh }) {
   const campaign = data.campaigns.find(c => c.id === asset.campaign_id);
   const canApprove = ["approver", "admin"].includes(data.role);
   const canWrite = data.role !== "viewer" && asset.publication_state === "unpublished";
+  const currentConstraints = (data.human_constraint_sets || []).find(s => s.asset_id === asset.id && !s.superseded);
+  const [constraintBaseId] = useState(currentConstraints?.id || null);
+  const [constraints, setConstraints] = useState(() => (currentConstraints?.constraints || []).map(rule => Object.fromEntries(Object.entries(rule).filter(([key]) => key !== 'id'))));
   const [notes, setNotes] = useState("");
   const [action, setAction] = useState("approve");
   return <div className="marketing-workflow">
@@ -118,11 +122,13 @@ function AssetDetail({ data, asset, onRefresh }) {
     </details>
     <p className="section-subtext">Created by {asset.created_by} via {asset.created_via} · {new Date(asset.created_at).toLocaleString()}</p>
     <pre className="marketing-asset-content">{asset.content || "Empty draft"}</pre>
+    <ConstraintManager key={currentConstraints?.id || "none"} data={data} asset={asset} onRefresh={onRefresh} />
     {canWrite && asset.approval_state !== "in_review" && <details><summary>Edit draft{asset.approval_state === "approved" ? " (resets approval)" : ""}</summary><AssetEditor data={data} campaignId={campaign.id} asset={asset} onRefresh={onRefresh} /></details>}
     {canWrite && ["draft", "changes_requested"].includes(asset.approval_state) && <MutationForm button="Submit for review" onSave={async () => { await writeMarketingAsset(data.workspace.id, campaign.id, asset, "submit", {}); await onRefresh(); }}><p>Submit this saved revision for human QA review.</p></MutationForm>}
-    {canApprove && asset.approval_state === "in_review" && <MutationForm button="Record human decision" onSave={async () => { await writeMarketingAsset(data.workspace.id, campaign.id, asset, action, { notes }); await onRefresh(); }}>
+    {canApprove && asset.approval_state === "in_review" && <MutationForm button="Record human decision" onSave={async () => { await writeMarketingAsset(data.workspace.id, campaign.id, asset, action, { notes, ...(action === "request_changes" ? { human_constraints: constraints, constraint_set_id: constraintBaseId } : {}) }); await onRefresh(); }}>
       <label className="form-field"><span>Review decision</span><select value={action} onChange={e => setAction(e.target.value)}><option value="approve">Approve</option><option value="request_changes">Request changes</option></select></label>
       <label className="form-field"><span>Review notes / requested changes</span><textarea rows="3" required={action === "request_changes"} maxLength="8000" value={notes} onChange={e => setNotes(e.target.value)} /></label>
+      {action === "request_changes" && <ConstraintEditor value={constraints} onChange={setConstraints} />}
       <p className="marketing-boundary">Your decision and the reviewed asset revision will be preserved in the audit history.</p>
     </MutationForm>}
     {!canApprove && asset.approval_state === "in_review" && <p>A workspace approver or admin must review this asset.</p>}

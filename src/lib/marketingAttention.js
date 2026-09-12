@@ -73,8 +73,24 @@ export function deriveMarketingAttention(data, now = Date.now()) {
     if (!severity || sameAssetGate) continue;
     const reason = stale ? 'Task, campaign or asset changed. Inspect the orchestration.' : uncertain ? 'Stage outcome is uncertain. Inspect before restarting.'
       : o.reason || ({ awaiting_plan: 'Strategist plan requires your decision.', awaiting_review: 'Ready for your review. Send the asset to Approval.', changes_needed: 'Guardian or human requested changes. Choose a revision or review manually.', awaiting_approval: 'Asset is awaiting actual human approval.', completed: 'Agent work completed; the task remains open.' }[o.state] || 'Orchestration requires human inspection.');
-    add({ id: `orchestration:${o.id}`, orchestration_id: o.id, campaign_id: o.campaign_id, task_id: o.task_id, name: task?.title || 'Agent task', severity, reason,
+    add({ id: `orchestration:${o.id}`, orchestration_id: o.id, campaign_id: o.campaign_id, task_id: o.task_id, asset_id: o.asset_id, name: task?.title || 'Agent task', severity, reason,
       timestamp: o.updated_at, href: `/marketing/campaigns/${o.campaign_id}?task=${o.task_id}`, action: 'Open task', scope: 'agents' });
+  }
+  for (const assessment of data.asset_constraint_checks || []) {
+    const asset = assets.get(assessment.asset_id);
+    if (!asset || asset.workspace_id !== workspace || asset.revision !== assessment.revision) continue;
+    const failures = assessment.checks.filter(q => !q.passed);
+    const advisory = assessment.checks.some(q => q.review_required) && asset.approval_state !== 'approved';
+    if (!failures.length && !advisory) continue;
+    const existing = items.find(i => i.asset_id === asset.id && (i.severity === 'critical' || !failures.length));
+    if (existing) {
+      if (failures.length && existing.orchestration_id) existing.reason = `Human constraint failed: ${failures.map(q => q.detail).join('; ')}`;
+      continue;
+    }
+    add({ id: `constraints:${asset.id}`, campaign_id: asset.campaign_id, asset_id: asset.id, name: asset.name,
+      severity: failures.length ? 'critical' : 'attention',
+      reason: failures.length ? `Human constraint failed: ${failures.map(q => q.detail).join('; ')}` : 'Structured constraints require human semantic review; no deterministic violation found.',
+      timestamp: asset.updated_at, href: `/marketing/campaigns/${asset.campaign_id}?asset=${asset.id}`, action: 'Review', scope: 'approvals' });
   }
   return items.sort((a, b) => ATTENTION_LEVELS[a.severity].rank - ATTENTION_LEVELS[b.severity].rank
     || (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0) || a.id.localeCompare(b.id));

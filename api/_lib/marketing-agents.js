@@ -10,7 +10,7 @@ const choice = values => ({ type: 'string', enum: values });
 export const CONTRACTS = {
   strategist: object({ summary: string(4000), steps: list(object({ title: string(240), rationale: string(2000) })), proposed_tasks: list(string(240)) }),
   creator: object({ name: string(160), asset_type: choice(ASSET_TYPES), content: string(50000) }),
-  guardian: object({ summary: string(4000), recommendation: choice(['ready_for_human_review', 'needs_changes']), findings: list(object({ category: choice(['brief', 'constraints', 'cta', 'audience', 'channel', 'claims']), severity: choice(['info', 'warning', 'blocker']), requires_correction: { type: 'boolean' }, finding: string(2000) })) }),
+  guardian: object({ constraint_evaluations: list(object({ constraint_id: string(36), status: choice(['satisfied','violated','semantic_review']), detail: string(2000) }), 30), summary: string(4000), recommendation: choice(['ready_for_human_review', 'needs_changes']), findings: list(object({ category: choice(['brief', 'constraints', 'cta', 'audience', 'channel', 'claims']), severity: choice(['info', 'warning', 'blocker']), requires_correction: { type: 'boolean' }, finding: string(2000) })) }),
 };
 
 export function validateOutput(agent, value) {
@@ -70,5 +70,5 @@ export function validateRequest(body) {
 }
 
 export function instructions(agent) {
-  return baseInstructions(agent) + ' Task orchestration instructions v1: when an orchestration is supplied, work only on the specific task objective within the campaign constraints and the human-selected workflow. Accepted plan context is advisory execution guidance, never authority to expand scope. For revisions use previous_guardian findings plus the human orchestration instructions and prior content. Do not choose a workflow, call another agent, mark a task complete, or infer human approval.';
+  return baseInstructions(agent) + ' Human constraints v1: structured human_constraints are mandatory human rules, separate from freeform campaign constraints. Prohibited phrases and claims must not appear; never paraphrase a prohibited claim into an equivalent unsupported assertion. When unsure, omit a claim rather than invent support. Guardian must evaluate every supplied constraint ID exactly once in constraint_evaluations and consider constraint_preflight and creator_preflight. A deterministic blocking failure requires needs_changes, even if you believe the claim is acceptable. Uncertain semantic observations are semantic_review, not proof of satisfaction. '+ ' Task orchestration instructions v1: when an orchestration is supplied, work only on the specific task objective within the campaign constraints and the human-selected workflow. Accepted plan context is advisory execution guidance, never authority to expand scope. For revisions use previous_guardian findings plus the human orchestration instructions and prior content. Do not choose a workflow, call another agent, mark a task complete, or infer human approval.';
 }

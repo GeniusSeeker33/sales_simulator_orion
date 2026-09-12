@@ -87,3 +87,7 @@ export async function commandMarketingOrchestration(request) {
   if (!response.ok) throw new Error(result.error || 'Orchestration unavailable.');
   return result.orchestration;
 }
+
+export function saveMarketingHumanConstraints(workspaceId, asset, expectedSetId, constraints) {
+  return rpc('save_marketing_human_constraints', { p_workspace: workspaceId, p_asset: asset.id, p_expected_revision: asset.revision, p_expected_set: expectedSetId, p_constraints: constraints });
+}
