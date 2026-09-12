@@ -25,7 +25,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   for (let n = 1; n <= 4; n++) await db.query('insert into auth.users values($1)', [id(n)]);
   await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')", [other]);
   await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$3,'contributor'),($1,$4,'approver'),($1,$5,'viewer'),($2,$6,'admin')", [workspace, other, id(1), id(2), id(3), id(4)]);
@@ -230,6 +230,74 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     assert.equal((await db.query('select * from marketing.agent_run_history')).rows.length, 0);
     await assert.rejects(db.query('select public.read_marketing_agent_runs($1,null)', [workspace]), /unavailable/);
     await asUser(3); assert.ok((await db.query('select public.read_marketing_agent_runs($1,null) data', [workspace])).rows[0].data.length > 0);
+  });
+  await t.test('human resolutions validate persisted selections, roles, isolation and immutable evidence', async () => {
+    const resolve = async (run, action, selection = [], w = workspace) => (await db.query('select public.resolve_marketing_agent_run($1,$2,$3,$4,$5) data', [w, run.id, action, selection, 'Human reviewed this proposal.'])).rows[0].data;
+    const proposal = (await invoke({ output: { ...plan, proposed_tasks: ['First task', 'Second task'] } })).body.run;
+    await asUser(0); await assert.rejects(resolve(proposal, 'accept_plan'), /permission denied/);
+    await asUser(3); await assert.rejects(resolve(proposal, 'accept_plan'), /unavailable/);
+    await asUser(4); await assert.rejects(resolve(proposal, 'accept_plan'), /unavailable/);
+    await assert.rejects(resolve(proposal, 'accept_plan', [], other), /unavailable/);
+    await asUser(1);
+    const before = await count('campaign_tasks'); await asUser(1);
+    for (const selection of [['Injected arbitrary task'], [0, 'Injected task'], [0, 999], [0, 0], [-1], [0.5], [], { title: 'Injected' }]) await assert.rejects(resolve(proposal, 'create_tasks', selection), /Invalid/);
+    await assert.rejects(resolve(proposal, 'approve'), /Invalid/);
+    assert.equal(await count('campaign_tasks'), before); await asUser(1);
+    const record = await resolve(proposal, 'create_tasks', [1]);
+    assert.equal(record.actor_user_id, id(1)); assert.equal(record.agent_run_id, proposal.id); assert.equal(record.campaign_id, campaign); assert.equal(record.workspace_id, workspace); assert.ok(record.occurred_at);
+    const task = (await db.query('select * from marketing.campaign_tasks where id=$1', [record.created_task_ids[0]])).rows[0];
+    assert.equal(task.title, 'Second task'); assert.equal(task.status, 'todo'); assert.equal(task.owner_user_id, null); assert.equal(task.due_on, null); assert.equal(task.created_by, id(1));
+    const history = (await db.query('select * from marketing.workflow_history where task_id=$1', [task.id])).rows[0];
+    assert.equal(history.actor_type, 'human'); assert.equal(history.actor_user_id, id(1));
+    await assert.rejects(resolve(proposal, 'dismiss'), /already resolved/);
+    const snapshot = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.ok(snapshot.resolutions.some(r => r.id === record.id)); assert.ok(!deriveMarketingAttention(snapshot).some(i => i.run_id === proposal.id));
+    await assert.rejects(db.query('insert into marketing.agent_run_resolutions(id) values($1)', [id(800)]), /permission denied/);
+    await asUser(4); await assert.rejects(db.query('select public.read_marketing_attention_workspace($1)', [workspace]), /unavailable/);
+    await db.exec('reset role');
+    assert.deepEqual((await db.query('select to_jsonb(r) data from marketing.agent_runs r where id=$1', [proposal.id])).rows[0].data, proposal);
+    await assert.rejects(db.query("update marketing.agent_runs set purpose='erase' where id=$1", [proposal.id]), /immutable|append-only/i);
+    await assert.rejects(db.query("update marketing.agent_run_resolutions set note='erase' where id=$1", [record.id]), /immutable|append-only/i);
+    await assert.rejects(db.query('delete from marketing.agent_run_resolutions where id=$1', [record.id]), /immutable|append-only/i);
+    await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$2,'admin')", [workspace, id(4)]);
+    for (const [human, action] of [[1, 'accept_plan'], [2, 'dismiss'], [4, 'accept_plan']]) {
+      const run = (await invoke()).body.run; await asUser(human);
+      const resolved = await resolve(run, action); assert.equal(resolved.action, action); assert.equal(resolved.actor_user_id, id(human)); assert.deepEqual(resolved.created_task_ids, []);
+    }
+  });
+  await t.test('Guardian human submission checks current revision and preserves a separate approval decision', async () => {
+    const makeReady = async () => {
+      const creator = (await invoke({ body: request('creator', { submit_for_review: false }), output: draft })).body.run;
+      const run = (await invoke({ body: request('guardian', { asset_id: creator.outcome_asset_id }), output: guardian })).body.run;
+      assert.equal(run.output_metadata.result.recommendation, 'ready_for_human_review');
+      return run;
+    };
+    const submit = run => db.query("select public.resolve_marketing_agent_run($1,$2,'send_to_approval','[]',null)", [workspace, run.id]);
+    const run = await makeReady();
+    await asUser(3); await assert.rejects(submit(run), /unavailable/);
+    await asUser(1);
+    let data = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.equal(deriveMarketingAttention(data).find(i => i.run_id === run.id).severity, 'attention');
+    await submit(run);
+    data = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    const asset = data.assets.find(a => a.id === run.input_metadata.asset.id);
+    assert.equal(asset.approval_state, 'in_review'); assert.equal(asset.approved_by, null);
+    assert.ok(!deriveMarketingAttention(data).some(i => i.run_id === run.id)); assert.equal(deriveMarketingAttention(data).find(i => i.asset_id === asset.id).severity, 'critical');
+    await assert.rejects(submit(run), /already resolved/);
+    await assert.rejects(db.query("select public.write_marketing_asset($1,$2,$3,$4,'approve','{}')", [workspace, campaign, asset.id, asset.revision]), /approv|permission|role/i);
+    await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'approve','{}')", [workspace, campaign, asset.id, asset.revision]);
+    data = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.ok(!deriveMarketingAttention(data).some(i => i.asset_id === asset.id));
+    assert.deepEqual((await db.query('select public.read_marketing_agent_run($1,$2) data', [workspace, run.id])).rows[0].data, run);
+    const history = (await db.query('select action,actor_type from marketing.workflow_history where asset_id=$1 order by id', [asset.id])).rows;
+    assert.deepEqual(history, [{ action: 'asset_saved', actor_type: 'agent' }, { action: 'submitted', actor_type: 'human' }, { action: 'approved', actor_type: 'human' }]);
+    for (const action of ['save', 'submit']) {
+      const stale = await makeReady(); await asUser(1);
+      await db.query('select public.write_marketing_asset($1,$2,$3,1,$4,$5)', [workspace, campaign, stale.input_metadata.asset.id, action, action === 'save' ? { ...draft, content: 'Newer content' } : {}]);
+      await assert.rejects(submit(stale), /changed or already submitted/);
+      const fresh = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+      assert.ok(!fresh.resolutions.some(r => r.agent_run_id === stale.id));
+    }
   });
   await t.test('hosted CTA regression persists advisory readiness and leaves human approval separate', async () => {
     await asUser(1);

@@ -45,3 +45,21 @@ test('campaign approval gates cannot appear clear without assets or runs', () =>
   const items = deriveMarketingAttention(data({ assets: [], attention_runs: [], campaigns: [{ id: 'c', workspace_id: 'w', name: 'Campaign', approval_state: 'in_review', updated_at: '2026-09-12T10:00:00Z' }] }));
   assert.equal(items.length, 1); assert.equal(items[0].severity, 'critical'); assert.equal(items[0].action, 'Open campaign');
 });
+
+test('resolution evidence clears only its workspace run and current ready drafts recommend submission', () => {
+  const proposal = { ...run, agent_key: 'strategist' };
+  for (const action of ['accept_plan', 'dismiss', 'create_tasks']) {
+    const snapshot = data({ attention_runs: [proposal], resolutions: [{ workspace_id: 'w', agent_run_id: run.id, action }] });
+    assert.deepEqual(attentionCounts(deriveMarketingAttention(snapshot)), { approvals: 0, agents: 0 });
+    snapshot.resolutions[0].workspace_id = 'foreign'; assert.equal(deriveMarketingAttention(snapshot).length, 1);
+  }
+  const ready = { ...run, asset_revision: 3, recommendation: 'ready_for_human_review', has_findings: false };
+  const snapshot = data({ attention_runs: [ready] });
+  assert.equal(deriveMarketingAttention(snapshot)[0].severity, 'attention');
+  snapshot.assets = [{ ...asset, revision: 4, approval_state: 'in_review' }];
+  snapshot.resolutions = [{ workspace_id: 'w', agent_run_id: ready.id, action: 'send_to_approval' }];
+  assert.deepEqual(attentionCounts(deriveMarketingAttention(snapshot)), { approvals: 1, agents: 0 });
+  snapshot.assets = [{ ...asset, revision: 5, approval_state: 'approved' }];
+  snapshot.attention_events = [{ asset_id: asset.id, revision: 5, action: 'approved' }];
+  assert.equal(attentionLevel(deriveMarketingAttention(snapshot)), 'clear');
+});

@@ -9,6 +9,7 @@ export function deriveMarketingAttention(data) {
   const items = [], workspace = data.workspace.id;
   const campaigns = new Map(data.campaigns.map(c => [c.id, c]));
   const assets = new Map(data.assets.map(a => [a.id, a]));
+  const resolvedRuns = new Set((data.resolutions || []).filter(r => r.workspace_id === workspace).map(r => r.agent_run_id));
   const resolvedThrough = new Map();
   for (const event of data.attention_events) {
     if (Number.isInteger(event.revision) && ['asset_saved', 'approved', 'changes_requested'].includes(event.action)) {
@@ -35,6 +36,7 @@ export function deriveMarketingAttention(data) {
     if (['failed', 'started', 'cancelled'].includes(run.status)) {
       add({ ...base, severity: 'critical', reason: run.status === 'failed' ? 'Agent run failed; operator inspection is required.' : 'Run has no confirmed successful outcome. Inspect before retrying.' });
     } else if (run.status === 'succeeded' && run.agent_key === 'strategist') {
+      if (resolvedRuns.has(run.id)) continue;
       add({ ...base, severity: 'attention', reason: 'Strategist proposal is available. No acknowledgment or explicit action linkage is recorded.' });
     } else if (run.status === 'succeeded' && run.agent_key === 'guardian') {
       // Submission increments revision too: only a content save or human decision supersedes QA.
@@ -44,6 +46,10 @@ export function deriveMarketingAttention(data) {
         add({ ...base, severity: 'critical', reason: 'Guardian context is incomplete; inspect the recorded evidence.' });
       } else if (run.recommendation === 'needs_changes' || run.qa_failed) {
         add({ ...base, severity: 'critical', reason: 'Guardian identified changes needed; no newer content or human decision resolves this assessment.' });
+      } else if (resolvedRuns.has(run.id)) {
+        continue;
+      } else if (run.recommendation === 'ready_for_human_review' && assets.get(run.asset_id).approval_state === 'draft' && assets.get(run.asset_id).revision === run.asset_revision) {
+        add({ ...base, severity: 'attention', reason: 'Guardian recommends human review. Send the current draft to Approval.' });
       } else if (run.has_findings) {
         add({ ...base, severity: 'attention', reason: 'Guardian findings merit human inspection; the recommendation is advisory.' });
       }
