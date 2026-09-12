@@ -1,6 +1,6 @@
 # Marketing Command Center Foundation
 
-**Status:** implemented repository foundation; environment deployment is not implied. Publishing, cross-channel ingestion/reporting, and agent orchestration are future work.
+**Status:** implemented repository foundation; environment deployment is not implied. Explicit governed agent runs are implemented; publishing and cross-channel ingestion/reporting remain future work.
 
 ## Purpose
 
@@ -61,10 +61,10 @@ The following are architectural extension points, not current capabilities:
 
 - channel connectors and publishing execution;
 - cross-channel event ingestion, analytics, and reporting;
-- server-side agent orchestration and operational agent-run lifecycle management;
+- continuous agent orchestration and automated recovery;
 - self-service workspace membership and settings administration.
 
-Future agents may prepare or revise work only within the governed write boundary. They must not approve campaigns, activate them, or publish assets. Any future orchestration must run through a trusted server-side path with a valid, caller-attributed agent run; the browser has no agent write mode.
+The first governed agent run layer is documented in [Marketing agent runs](marketing-agent-runs.md). Agents prepare work only within the governed write boundary. They must not approve campaigns, activate them, or publish assets. Any future orchestration must run through a trusted server-side path with a valid, caller-attributed agent run; the browser has no agent write mode.
 
 ## Implementation references
 

@@ -7,8 +7,9 @@ import CampaignWorkflow, { AssetLibrary } from "../../components/marketing/Campa
 import { useAuth } from "../../context/AuthContext";
 import { readMarketingWorkspace, saveMarketingCampaign } from "../../lib/marketing";
 
+import MarketingAgents from "../../components/marketing/MarketingAgents";
 const FUTURE = {
-  agents: ["Agents", "Agent orchestration is deferred; agent-run attribution and safety constraints are ready."],
+
   analytics: ["Analytics", "Cross-channel event ingestion and reporting are deferred; attribution-ready events are modeled."],
   settings: ["Settings", "Workspace membership and configuration remain administrator-provisioned for now."],
 };
@@ -32,7 +33,7 @@ export default function MarketingWorkspace() {
   const campaign = useMemo(() => data?.campaigns?.find(c => c.id === campaignId), [data, campaignId]);
   const canApprove = ["approver", "admin"].includes(data?.role);
   async function save(item) { await saveMarketingCampaign(data.workspace.id, item, campaign?.revision ?? null); await load(); navigate(`/marketing/campaigns/${item.id}`); }
-  if (!section || !["overview", "campaigns", "content", "approvals", ...Object.keys(FUTURE)].includes(section)) return <Navigate to="/marketing/overview" replace />;
+  if (!section || !["overview", "campaigns", "content", "approvals", "agents", ...Object.keys(FUTURE)].includes(section)) return <Navigate to="/marketing/overview" replace />;
   return <Layout title="Marketing Command Center">
     <div className="marketing-heading"><div><span className="marketing-eyebrow">{data?.workspace?.name || "Workspace"}</span><p>Plan accountable, attributable campaigns with a human approval boundary.</p></div>{data && <span className="status-pill status-neutral">{label(data.role)}</span>}</div>
     <MarketingNav />
@@ -40,11 +41,12 @@ export default function MarketingWorkspace() {
     {error && <div className="card marketing-error"><strong>Workspace unavailable.</strong><p>{error}</p><p>A marketing administrator must provision workspace membership.</p></div>}
     {!loading && data && section === "overview" && <Overview campaigns={data.campaigns} />}
     {!loading && data && section === "campaigns" && (campaignId === "new" || campaign ?
-      campaign ? <><CampaignWorkflow data={data} campaign={campaign} onRefresh={load} /><details className="card marketing-record"><summary>Campaign settings & campaign approval</summary><CampaignForm key={`${campaign.id}:${campaign.revision}`} campaign={campaign} currentUserId={session.id} canApprove={canApprove} canWrite={data.role !== "viewer"} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /></details></> :
+      campaign ? <><CampaignWorkflow data={data} campaign={campaign} onRefresh={load} /><MarketingAgents key={campaign.id} data={data} campaign={campaign} onRefresh={load} /><details className="card marketing-record"><summary>Campaign settings & campaign approval</summary><CampaignForm key={`${campaign.id}:${campaign.revision}`} campaign={campaign} currentUserId={session.id} canApprove={canApprove} canWrite={data.role !== "viewer"} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /></details></> :
       <CampaignForm key="new" currentUserId={session.id} canApprove={canApprove} canWrite={data.role !== "viewer"} onSave={save} onCancel={() => navigate("/marketing/campaigns")} /> :
       campaignId ? <div className="card marketing-error">Campaign not found. <Link to="/marketing/campaigns">Return to campaigns</Link>.</div> :
       <Campaigns campaigns={data.campaigns} canWrite={data.role !== "viewer"} />)}
     {!loading && data && ["content", "approvals"].includes(section) && <AssetLibrary key={section} data={data} reviewOnly={section === "approvals"} onRefresh={load} />}
+    {!loading && data && section === "agents" && <MarketingAgents data={data} />}
     {!loading && data && FUTURE[section] && <Future title={FUTURE[section][0]} description={FUTURE[section][1]} />}
   </Layout>;
 }

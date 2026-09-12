@@ -50,3 +50,20 @@ export function writeMarketingAsset(workspaceId, campaignId, asset, action, payl
 export function readMarketingAssetHistory(workspaceId, assetId) {
   return rpc("read_marketing_asset_history", { p_workspace: workspaceId, p_asset: assetId });
 }
+
+export function readMarketingAgentRuns(workspaceId, campaignId = null) {
+  return rpc('read_marketing_agent_runs', { p_workspace: workspaceId, p_campaign: campaignId });
+}
+
+export async function runMarketingAgent(request) {
+  if (!learnerClient) throw new Error('Marketing storage is not configured.');
+  const { data: { session } } = await learnerClient.auth.getSession();
+  if (!session) throw new Error('Sign in to initiate an agent run.');
+  const response = await fetch('/api/marketing-agent-run', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(request),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `Agent run failed (${result.run?.error_code || 'unavailable'}).`);
+  return result.run;
+}
