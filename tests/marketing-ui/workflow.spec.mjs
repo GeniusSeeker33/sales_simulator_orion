@@ -37,7 +37,7 @@ test('campaign brief through human approval with real local SQL RPCs', async ({ 
   await page.getByRole('combobox', { name: 'Review decision', exact: true }).selectOption('request_changes');
   await page.getByLabel('Review notes / requested changes').fill('Mention a guided demo.');
   await page.getByRole('button', { name: 'Record human decision' }).click();
-  await expect(page.getByText('No assets awaiting review.', { exact: true })).toBeVisible();
+  await expect(summary()).toContainText('changes requested');
   await go(1, '/marketing/content');
   await summary().click();
   await page.getByText('Edit draft', { exact: true }).click();

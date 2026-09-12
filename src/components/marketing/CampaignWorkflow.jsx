@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ASSET_TYPES, TASK_STATUSES, readMarketingAssetHistory, saveMarketingBrief, saveMarketingTask, splitList, writeMarketingAsset } from "../../lib/marketing";
 
+import { AttentionIndicator } from "./MarketingAttention";
+import CreatorRevision from "./CreatorRevision";
 const label = value => value.replaceAll("_", " ");
 const briefFields = [
   ["objectives", "Campaign objectives (comma separated)", 4000],
@@ -35,7 +37,7 @@ export default function CampaignWorkflow({ data, campaign, onRefresh }) {
   const assets = data.assets.filter(a => a.campaign_id === campaign.id);
   const canWrite = data.role !== "viewer";
   return <div className="marketing-workflow">
-    <section className="card"><h2>{campaign.name}</h2><p className="marketing-eyebrow">Brief → Tasks → Assets → QA → Approval</p>
+    <section className="card"><h2>{campaign.name}</h2><AttentionIndicator items={data.attention.filter(item => item.campaign_id === campaign.id)} /><p className="marketing-eyebrow">Brief → Tasks → Assets → QA → Approval</p>
       <p>{tasks.filter(t => t.status === "done").length}/{tasks.length} tasks done · {assets.length} assets · {assets.filter(a => a.approval_state === "in_review").length} awaiting QA · {assets.filter(a => a.approval_state === "approved").length} approved</p>
       <p className="section-subtext">Asset approval records a human review decision. Campaign approval and activation remain separate campaign decisions.</p>
     </section>
@@ -88,11 +90,12 @@ function TaskForm({ data, campaign, task, canWrite, onRefresh }) {
 }
 
 export function AssetLibrary({ data, campaign, reviewOnly = false, onRefresh }) {
-  const assets = data.assets.filter(a => (!campaign || a.campaign_id === campaign.id) && (!reviewOnly || a.approval_state === "in_review"));
+  const [params] = useSearchParams();
+  const assets = data.assets.filter(a => (!campaign || a.campaign_id === campaign.id) && (!reviewOnly || ["in_review", "changes_requested"].includes(a.approval_state)));
   return <section className="card"><h2>{reviewOnly ? "Approvals" : campaign ? "Assets, QA & approval" : "Content"}</h2>
-    <p>{reviewOnly ? "Assets awaiting human review across this workspace. Open an asset to inspect its brief, content and review history." : "Text drafts and creative briefs linked to their campaign."}</p>
+    <p>{reviewOnly ? "Assets awaiting human review or a requested revision across this workspace. Open an asset to inspect its brief, content and review history." : "Text drafts and creative briefs linked to their campaign."}</p>
     {!assets.length && <p className="marketing-empty">{reviewOnly ? "No assets awaiting review." : "No assets yet. Create a draft from a campaign."}</p>}
-    {assets.map(asset => <details className="marketing-record" key={`${asset.id}:${asset.revision}`}><summary>{asset.name} · {label(asset.asset_type)} · {label(asset.approval_state)}</summary>
+    {assets.map(asset => <details className="marketing-record" open={params.get("asset") === asset.id ? true : undefined} key={`${asset.id}:${asset.revision}`}><summary>{asset.name} · {label(asset.asset_type)} · {label(asset.approval_state)} · <AttentionIndicator items={data.attention.filter(item => item.asset_id === asset.id)} /></summary>
       <AssetDetail data={data} asset={asset} onRefresh={onRefresh} />
     </details>)}
     {campaign && data.role !== "viewer" && <details key={`new:${campaign.id}:${assets.length}`} className="marketing-record"><summary>Add draft asset</summary><AssetEditor data={data} campaignId={campaign.id} onRefresh={onRefresh} /></details>}
@@ -120,6 +123,7 @@ function AssetDetail({ data, asset, onRefresh }) {
       <p className="marketing-boundary">Your decision and the reviewed asset revision will be preserved in the audit history.</p>
     </MutationForm>}
     {!canApprove && asset.approval_state === "in_review" && <p>A workspace approver or admin must review this asset.</p>}
+    {canWrite && asset.created_via === "agent" && asset.approval_state === "changes_requested" && <CreatorRevision data={data} campaign={campaign} asset={asset} onRefresh={onRefresh} />}
     <AssetHistory workspaceId={data.workspace.id} assetId={asset.id} />
   </div>;
 }
@@ -149,7 +153,7 @@ function AssetHistory({ workspaceId, assetId }) {
     {!history && !error && <p>Loading history…</p>}
     {history?.length === 0 && <p>No workflow history recorded for this legacy asset.</p>}
     {history?.map(h => <article className="marketing-record" key={h.id}><strong>{label(h.action)} · revision {h.snapshot.revision}</strong>
-      <p>{h.actor_user_id} ({h.actor_type}) · {new Date(h.occurred_at).toLocaleString()}</p><p className="marketing-preserve">{h.notes || "No review notes"}</p>
+      <p>{h.actor_user_id} ({h.actor_type}) · {new Date(h.occurred_at).toLocaleString()}</p>{h.agent_run_id && <Link to={`/marketing/agents?run=${h.agent_run_id}`}>Inspect agent run {h.agent_run_id}</Link>}<p className="marketing-preserve">{h.notes || "No review notes"}</p>
       <details><summary>Recorded asset content</summary><pre className="marketing-asset-content">{h.snapshot.content}</pre></details>
     </article>)}
   </details>;

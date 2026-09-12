@@ -1,4 +1,5 @@
 import { learnerClient } from "./learnerClient.js";
+import { deriveMarketingAttention } from './marketingAttention.js';
 
 export const CAMPAIGN_STATUSES = ["draft", "planned", "active", "paused", "completed", "cancelled"];
 export const APPROVAL_STATES = ["draft", "in_review", "changes_requested", "approved"];
@@ -21,8 +22,9 @@ async function rpc(name, args) {
   return data;
 }
 
-export function readMarketingWorkspace(workspaceId = null) {
-  return rpc("read_marketing_workspace", { p_workspace: workspaceId });
+export async function readMarketingWorkspace(workspaceId = null) {
+  const data = await rpc('read_marketing_attention_workspace', { p_workspace: workspaceId });
+  return { ...data, attention: deriveMarketingAttention(data) };
 }
 
 export function saveMarketingCampaign(workspaceId, campaign, expectedRevision = null) {
@@ -53,6 +55,10 @@ export function readMarketingAssetHistory(workspaceId, assetId) {
 
 export function readMarketingAgentRuns(workspaceId, campaignId = null) {
   return rpc('read_marketing_agent_runs', { p_workspace: workspaceId, p_campaign: campaignId });
+}
+
+export function readMarketingAgentRun(workspaceId, runId) {
+  return rpc('read_marketing_agent_run', { p_workspace: workspaceId, p_run: runId });
 }
 
 export async function runMarketingAgent(request) {
