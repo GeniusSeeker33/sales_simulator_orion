@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ASSET_TYPES, TASK_STATUSES, readMarketingAssetHistory, saveMarketingBrief, saveMarketingTask, splitList, writeMarketingAsset } from "../../lib/marketing";
 
 import { AttentionIndicator } from "./MarketingAttention";
+import TaskOrchestration from "./TaskOrchestration";
 import CreatorRevision from "./CreatorRevision";
 const label = value => value.replaceAll("_", " ");
 const briefFields = [
@@ -33,6 +34,7 @@ function MutationForm({ children, onSave, disabled = false, button = "Save" }) {
 }
 
 export default function CampaignWorkflow({ data, campaign, onRefresh }) {
+  const [params] = useSearchParams();
   const tasks = data.tasks.filter(t => t.campaign_id === campaign.id);
   const assets = data.assets.filter(a => a.campaign_id === campaign.id);
   const canWrite = data.role !== "viewer";
@@ -46,8 +48,9 @@ export default function CampaignWorkflow({ data, campaign, onRefresh }) {
     </section>
     <section className="card"><h2>Tasks</h2>
       {!tasks.length && <p>No tasks yet. Add the steps needed to execute this brief.</p>}
-      {tasks.map(task => <details key={`${task.id}:${task.revision}`} className="marketing-record"><summary>{task.title} · {label(task.status)} · Due {task.due_on || "not set"}</summary>
+      {tasks.map(task => <details key={`${task.id}:${task.revision}`} open={params.get("task") === task.id ? true : undefined} className="marketing-record"><summary>{task.title} · {label(task.status)} · Due {task.due_on || "not set"}</summary>
         <TaskForm data={data} campaign={campaign} task={task} canWrite={canWrite} onRefresh={onRefresh} />
+        <TaskOrchestration data={data} campaign={campaign} task={task} onRefresh={onRefresh} />
       </details>)}
       {canWrite && <details key={`new:${campaign.id}:${tasks.length}`} className="marketing-record"><summary>Add task</summary><TaskForm data={data} campaign={campaign} canWrite onRefresh={onRefresh} /></details>}
     </section>

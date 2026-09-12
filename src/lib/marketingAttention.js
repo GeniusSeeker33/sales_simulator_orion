@@ -5,7 +5,7 @@ export const ATTENTION_LEVELS = {
   clear: { label: 'Clear', icon: '✓', rank: 2 },
 };
 
-export function deriveMarketingAttention(data) {
+export function deriveMarketingAttention(data, now = Date.now()) {
   const items = [], workspace = data.workspace.id;
   const campaigns = new Map(data.campaigns.map(c => [c.id, c]));
   const assets = new Map(data.assets.map(a => [a.id, a]));
@@ -54,6 +54,27 @@ export function deriveMarketingAttention(data) {
         add({ ...base, severity: 'attention', reason: 'Guardian findings merit human inspection; the recommendation is advisory.' });
       }
     }
+  }
+  const orchestrations = (data.orchestrations || []).filter(o => o.workspace_id === workspace);
+  const linkedRuns = new Set(orchestrations.flatMap(o => o.run_ids));
+  // Replace stage-level signals with one task action; retain an existing asset approval gate.
+  for (let i = items.length - 1; i >= 0; i--) if (linkedRuns.has(items[i].run_id)) items.splice(i, 1);
+  for (const o of orchestrations) {
+    const task = (data.tasks || []).find(t => t.id === o.task_id), asset = assets.get(o.asset_id);
+    const terminal = ['completed', 'cancelled', 'failed', 'blocked'].includes(o.state);
+    const running = o.state.endsWith('_running');
+    const stale = !terminal && (task?.revision !== o.task_revision || campaigns.get(o.campaign_id)?.revision !== o.campaign_revision
+      || (asset && asset.revision !== o.asset_revision));
+    const uncertain = running && now - Date.parse(o.updated_at) > 120000;
+    const severity = stale || uncertain || ['awaiting_plan', 'awaiting_review', 'changes_needed', 'awaiting_approval', 'failed', 'blocked'].includes(o.state)
+      ? 'critical' : o.state === 'completed' && task?.status !== 'done' ? 'attention' : null;
+    const sameAssetGate = !stale && !uncertain && ['changes_needed', 'awaiting_approval'].includes(o.state)
+      && o.asset_id && items.some(item => item.id === `asset:${o.asset_id}`);
+    if (!severity || sameAssetGate) continue;
+    const reason = stale ? 'Task, campaign or asset changed. Inspect the orchestration.' : uncertain ? 'Stage outcome is uncertain. Inspect before restarting.'
+      : o.reason || ({ awaiting_plan: 'Strategist plan requires your decision.', awaiting_review: 'Ready for your review. Send the asset to Approval.', changes_needed: 'Guardian or human requested changes. Choose a revision or review manually.', awaiting_approval: 'Asset is awaiting actual human approval.', completed: 'Agent work completed; the task remains open.' }[o.state] || 'Orchestration requires human inspection.');
+    add({ id: `orchestration:${o.id}`, orchestration_id: o.id, campaign_id: o.campaign_id, task_id: o.task_id, name: task?.title || 'Agent task', severity, reason,
+      timestamp: o.updated_at, href: `/marketing/campaigns/${o.campaign_id}?task=${o.task_id}`, action: 'Open task', scope: 'agents' });
   }
   return items.sort((a, b) => ATTENTION_LEVELS[a.severity].rank - ATTENTION_LEVELS[b.severity].rank
     || (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0) || a.id.localeCompare(b.id));

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../../api/marketing-agent-run.js';
+import { createHandler as createOrchestrationHandler } from '../../api/marketing-orchestration.js';
 
 const fixture = name => fileURLToPath(new URL(name, import.meta.url));
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -13,7 +14,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -34,10 +35,10 @@ const signatures = {
 };
 let pending = Promise.resolve();
 Object.assign(process.env, { LEARNER_SUPABASE_URL: 'https://synthetic.invalid', LEARNER_SUPABASE_PUBLISHABLE_KEY: 'synthetic-public', LEARNER_SUPABASE_SERVICE_ROLE_KEY: 'synthetic-server' });
-const agentHandler = createHandler({
+const agentDependencies = {
   makeClient: (_url, key) => key === 'synthetic-public' ? { auth: { getUser: async token => ({ data: { user: /^[123]$/.test(token) ? { id: id(Number(token)) } : null } }) } } : {
     rpc: async (name, args) => {
-      const keys = { start_marketing_agent_run: ['p_id', 'p_human', 'p_request', 'p_version', 'p_model'], finish_marketing_agent_run: ['p_id', 'p_output', 'p_qa', 'p_usage', 'p_error'] }[name];
+      const keys = { command_marketing_orchestration: ['p_human', 'p_request'], finish_marketing_orchestration_stage: ['p_id', 'p_run', 'p_output', 'p_qa', 'p_usage', 'p_error'], start_marketing_agent_run: ['p_id', 'p_human', 'p_request', 'p_version', 'p_model'], finish_marketing_agent_run: ['p_id', 'p_output', 'p_qa', 'p_usage', 'p_error'] }[name];
       try {
         await db.exec('reset role; set role service_role');
         const result = await db.query(`select public.${name}(${keys.map((_, i) => `$${i + 1}`).join(',')}) data`, keys.map(k => args[k]));
@@ -53,21 +54,23 @@ const agentHandler = createHandler({
       creator: { name: 'Creator browser draft', asset_type: context.request.asset_type, content: 'Book your guided demo.' },
       guardian: { summary: 'Review audience and CTA before approval.', recommendation: 'needs_changes', findings: [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Confirm audience suitability.' }] },
     };
-    if (context.request.purpose === 'Ready for approval') outputs.guardian = { summary: 'Ready for a human decision.', recommendation: 'ready_for_human_review', findings: [] };
+    if (context.request.purpose === 'Ready for approval' || context.orchestration) outputs.guardian = { summary: 'Ready for a human decision.', recommendation: 'ready_for_human_review', findings: [] };
     return { status: 'completed', output_text: JSON.stringify(outputs[context.request.agent_key]), usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } };
   } } }),
-});
+};
+const agentHandler = createHandler(agentDependencies);
+const orchestrationHandler = createOrchestrationHandler(agentDependencies);
 export default defineConfig({
   plugins: [react(), {
     name: 'synthetic-marketing-db',
     configureServer(server) {
-      server.middlewares.use('/api/marketing-agent-run', (req, res) => {
+      for (const [path, handler] of [['/api/marketing-agent-run', agentHandler], ['/api/marketing-orchestration', orchestrationHandler]]) server.middlewares.use(path, (req, res) => {
         const execute = async () => {
           let body = ''; for await (const chunk of req) body += chunk;
           req.body = JSON.parse(body);
           res.status = code => { res.statusCode = code; return res; };
           res.json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); return res; };
-          await agentHandler(req, res);
+          await handler(req, res);
         };
         pending = pending.then(execute, execute);
       });
