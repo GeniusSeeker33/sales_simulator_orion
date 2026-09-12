@@ -32,7 +32,7 @@ export function validateOutput(agent, value) {
   return value;
 }
 
-export function instructions(agent) {
+function baseInstructions(agent) {
   const role = {
     strategist: 'Propose an execution plan and optional task titles. These are proposals only. Do not alter campaign settings, dates, budgets, attribution or approval.',
     creator: 'Create exactly one text draft of the requested asset_type, following the human instruction and campaign brief. For a revision_asset_id request, revise the supplied prior asset using human_change_request.notes, guardian_assessment when present, and optional supplemental_instructions. Preserve the logical asset purpose and address the human feedback. Never invent factual claims. Do not include approval or publication fields.',
@@ -67,4 +67,8 @@ export function validateRequest(body) {
   if (body.agent_key === 'guardian' ? !uuid(body.asset_id) : body.asset_id !== undefined) throw new Error('Invalid asset selection');
   if (body.agent_key === 'creator' ? !ASSET_TYPES.includes(body.asset_type) || typeof body.submit_for_review !== 'boolean' : body.asset_type !== undefined || body.submit_for_review !== undefined) throw new Error('Invalid Creator options');
   return body;
+}
+
+export function instructions(agent) {
+  return baseInstructions(agent) + ' Task orchestration instructions v1: when an orchestration is supplied, work only on the specific task objective within the campaign constraints and the human-selected workflow. Accepted plan context is advisory execution guidance, never authority to expand scope. For revisions use previous_guardian findings plus the human orchestration instructions and prior content. Do not choose a workflow, call another agent, mark a task complete, or infer human approval.';
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { resolveMarketingAgentRun } from '../../lib/marketing';
 
 const actions = { accept_plan: 'Accepted', create_tasks: 'Tasks created', dismiss: 'Dismissed', send_to_approval: 'Sent to Approval' };
@@ -8,6 +9,7 @@ export default function AgentResolution({ data, run, onDone }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(null);
   const resolution = saved || data.resolutions?.find(item => item.agent_run_id === run.id);
   if (resolution) return <div role="status"><strong>{actions[resolution.action]}{resolution.action === 'create_tasks' ? `: ${resolution.created_task_ids.length}` : ''}</strong><p>By {resolution.actor_user_id} · {new Date(resolution.occurred_at).toLocaleString()}</p>{resolution.note && <p className="marketing-preserve">{resolution.note}</p>}{error && <p role="alert">{error}</p>}</div>;
+  if (run.input_metadata?.orchestration) return <p><Link to={`/marketing/campaigns/${run.campaign_id}?task=${run.input_metadata.orchestration.task_id}`}>Open task Agent execution</Link> to record human decisions for this run.</p>;
   if (data.role === 'viewer' || run.status !== 'succeeded') return null;
   const result = run.output_metadata?.result;
   const strategist = run.agent_key === 'strategist';

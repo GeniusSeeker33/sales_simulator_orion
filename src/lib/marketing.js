@@ -77,3 +77,13 @@ export async function runMarketingAgent(request) {
 export function resolveMarketingAgentRun(workspaceId, runId, action, selection = [], note = '') {
   return rpc('resolve_marketing_agent_run', { p_workspace: workspaceId, p_run: runId, p_action: action, p_selection: selection, p_note: note });
 }
+
+export async function commandMarketingOrchestration(request) {
+  if (!learnerClient) throw new Error('Marketing storage is not configured.');
+  const { data: { session } } = await learnerClient.auth.getSession();
+  if (!session) throw new Error('Sign in to assign agent work.');
+  const response = await fetch('/api/marketing-orchestration', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(request) });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Orchestration unavailable.');
+  return result.orchestration;
+}
