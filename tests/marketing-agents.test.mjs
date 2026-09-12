@@ -120,7 +120,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
   });
   await t.test('governed revision hands off human and Guardian feedback, preserves content and attributes a new run', async () => {
     const original = (await invoke({ body: request('creator'), output: draft })).body.run;
-    const qa = (await invoke({ body: request('guardian', { asset_id: original.outcome_asset_id }), output: { ...guardian, recommendation: 'needs_changes', findings: [{ category: 'cta', severity: 'warning', finding: 'Explain the guided demo.' }] } })).body.run;
+    const qa = (await invoke({ body: request('guardian', { asset_id: original.outcome_asset_id }), output: { ...guardian, recommendation: 'needs_changes', findings: [{ category: 'cta', severity: 'warning', requires_correction: true, finding: 'Explain the guided demo.' }] } })).body.run;
     await asUser(2);
     await db.query("select public.write_marketing_asset($1,$2,$3,2,'request_changes',$4)", [workspace, campaign, original.outcome_asset_id, { notes: 'Mention a guided demo; preserve the CTA.' }]);
     const workspaceData = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
@@ -230,6 +230,28 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     assert.equal((await db.query('select * from marketing.agent_run_history')).rows.length, 0);
     await assert.rejects(db.query('select public.read_marketing_agent_runs($1,null)', [workspace]), /unavailable/);
     await asUser(3); assert.ok((await db.query('select public.read_marketing_agent_runs($1,null) data', [workspace])).rows[0].data.length > 0);
+  });
+  await t.test('hosted CTA regression persists advisory readiness and leaves human approval separate', async () => {
+    await asUser(1);
+    const c = (await db.query('select revision from marketing.campaigns where id=$1', [campaign])).rows[0];
+    await db.query('select public.save_marketing_brief($1,$2,$3,$4)', [workspace, campaign, c.revision, { objectives: ['Dealer applications'], target_audiences: ['Dealers'], channels: ['social'], primary_cta: 'Apply to become an Orion Wholesale dealer at Join-Orion.com.' }]);
+    const text = 'Take the first step by applying at Join-Orion.com to begin the dealer qualification process.';
+    const creator = (await invoke({ body: request('creator'), output: { ...draft, content: text } })).body.run;
+    const reviewed = await invoke({ body: request('guardian', { asset_id: creator.outcome_asset_id }), output: { summary: 'CTA is semantically suitable.', recommendation: 'needs_changes', findings: [{ category: 'cta', severity: 'info', requires_correction: false, finding: 'CTA wording differs but directs dealer applications to the correct destination.' }] } });
+    assert.equal(reviewed.statusCode, 200);
+    assert.equal(reviewed.body.run.output_metadata.result.recommendation, 'ready_for_human_review');
+    assert.ok(reviewed.body.run.output_metadata.deterministic_qa.every(q => q.passed));
+    await asUser(2);
+    const data = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    const a = data.assets.find(asset => asset.id === creator.outcome_asset_id);
+    assert.equal(a.approval_state, 'in_review'); assert.equal(a.approved_by, null); assert.equal(a.content, text);
+    const attention = deriveMarketingAttention(data);
+    assert.equal(attention.find(i => i.run_id === reviewed.body.run.id).severity, 'attention');
+    assert.equal(attention.find(i => i.id === `asset:${a.id}`).severity, 'critical');
+    await db.query("select public.write_marketing_asset($1,$2,$3,2,'approve',$4)", [workspace, campaign, a.id, { notes: 'Human approved equivalent CTA.' }]);
+    const approved = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
+    assert.ok(!deriveMarketingAttention(approved).some(i => i.run_id === reviewed.body.run.id || i.id === `asset:${a.id}`));
+    assert.equal(approved.assets.find(asset => asset.id === a.id).approved_by, id(2));
   });
 });
 

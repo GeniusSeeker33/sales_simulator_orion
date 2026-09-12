@@ -50,7 +50,7 @@ function Outcome({ output }) {
     {result.content && <><h4>{result.name}</h4><pre className="marketing-asset-content">{result.content}</pre></>}
     {result.recommendation && <p><strong>Advisory recommendation: {label(result.recommendation)}</strong> · Not human approval.</p>}
     {result.findings?.map((finding, i) => <p key={i}><strong>{finding.category} · {finding.severity}:</strong> {finding.finding}</p>)}
-    {output.deterministic_qa?.length > 0 && <><h4>Deterministic QA for the recorded revision</h4><ul>{output.deterministic_qa.map(check => <li key={check.rule}>{check.passed ? 'Pass' : 'Needs attention'}: {check.detail}</li>)}</ul></>}
+    {output.deterministic_qa?.length > 0 && <><h4>Deterministic QA for the recorded revision</h4><ul>{output.deterministic_qa.map(check => <li key={check.rule}>{check.review_required ? 'Human semantic review' : check.passed ? 'Pass' : 'Needs attention'}: {check.detail}</li>)}</ul></>}
   </div>;
 }
 
