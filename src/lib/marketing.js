@@ -73,3 +73,7 @@ export async function runMarketingAgent(request) {
   if (!response.ok) throw new Error(result.error || `Agent run failed (${result.run?.error_code || 'unavailable'}).`);
   return result.run;
 }
+
+export function resolveMarketingAgentRun(workspaceId, runId, action, selection = [], note = '') {
+  return rpc('resolve_marketing_agent_run', { p_workspace: workspaceId, p_run: runId, p_action: action, p_selection: selection, p_note: note });
+}
