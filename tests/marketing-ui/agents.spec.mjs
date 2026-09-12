@@ -1,0 +1,45 @@
+import { test, expect } from '@playwright/test';
+
+test('explicit agent actions feed the governed workflow and visible run outcomes', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/tests/marketing-ui/index.html?user=1&path=/marketing/campaigns/new');
+  await page.getByLabel('Name', { exact: true }).fill('Agent browser campaign');
+  await page.getByRole('button', { name: 'Save campaign', exact: true }).click();
+  await page.getByLabel('Purpose / authorized instruction').fill('Propose a demo plan');
+  await page.getByRole('button', { name: 'Ask Strategist', exact: true }).click();
+  await expect(page.locator('summary').filter({ hasText: 'strategist · succeeded' })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'strategist · succeeded' }).click();
+  await expect(page.getByText('Proposed demo execution plan', { exact: true })).toBeVisible();
+  await page.getByLabel('Agent action').selectOption('creator');
+  await page.getByLabel('Purpose / authorized instruction').fill('Draft demo copy');
+  await page.getByLabel('Submit the new draft for human review').check();
+  await page.getByRole('button', { name: 'Create draft with Creator', exact: true }).click();
+  const asset = page.locator('summary').filter({ hasText: 'Creator browser draft · social copy · in review' });
+  await expect(asset).toBeVisible(); await asset.click();
+  await expect(page.getByText(/Created by .* via agent/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Record human decision' })).toHaveCount(0);
+  await page.getByLabel('Agent action').selectOption('guardian');
+  await page.getByLabel('Asset to review').selectOption({ label: 'Creator browser draft · revision 2' });
+  await page.getByLabel('Purpose / authorized instruction').fill('Review this draft');
+  await page.getByRole('button', { name: 'Run Guardian QA', exact: true }).click();
+  const guardian = page.locator('summary').filter({ hasText: 'guardian · succeeded' });
+  await expect(guardian).toBeVisible(); await guardian.click();
+  await expect(page.getByText('Advisory recommendation: needs changes', { exact: true })).toBeVisible();
+  await expect(asset).toBeVisible();
+  await page.getByLabel('Agent action').selectOption('strategist');
+  await page.getByLabel('Purpose / authorized instruction').fill('Fail model');
+  await page.getByRole('button', { name: 'Ask Strategist', exact: true }).click();
+  await expect(page.locator('summary').filter({ hasText: 'strategist · failed' })).toBeVisible();
+  await page.getByRole('link', { name: 'Agents', exact: true }).click();
+  await expect(page.locator('summary').filter({ hasText: 'creator · succeeded' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/marketing-ui/agents-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: 'test-results/marketing-ui/agents-mobile.png', fullPage: true });
+  // A separate authenticated human decision closes this test's review item.
+  await page.goto('/tests/marketing-ui/index.html?user=2&path=/marketing/approvals');
+  await page.locator('summary').filter({ hasText: 'Creator browser draft · social copy · in review' }).click();
+  await page.getByLabel('Review notes / requested changes').fill('Human reviewed the generated draft.');
+  await page.getByRole('button', { name: 'Record human decision' }).click();
+  await expect(page.locator('summary').filter({ hasText: 'Creator browser draft · social copy · in review' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

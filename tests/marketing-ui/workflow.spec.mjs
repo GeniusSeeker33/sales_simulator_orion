@@ -41,8 +41,8 @@ test('campaign brief through human approval with real local SQL RPCs', async ({ 
   await go(1, '/marketing/content');
   await summary().click();
   await page.getByText('Edit draft', { exact: true }).click();
-  await page.getByRole('textbox', { name: 'Draft content', exact: true }).fill('Book your guided demo.');
-  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await summary().locator('..').getByRole('textbox', { name: 'Draft content', exact: true }).fill('Book your guided demo.');
+  await summary().locator('..').getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(summary()).toContainText('draft');
   await summary().click();
   await page.getByRole('button', { name: 'Submit for review', exact: true }).click();
@@ -55,7 +55,7 @@ test('campaign brief through human approval with real local SQL RPCs', async ({ 
   await page.getByRole('link', { name: 'Content', exact: true }).click();
   await expect(summary()).toContainText('approved');
   await summary().click();
-  await page.getByText('Review & revision history', { exact: true }).click();
+  await summary().locator('..').getByText('Review & revision history', { exact: true }).click();
   await expect(page.getByText('Ready; CTA verified.', { exact: true })).toBeVisible();
   await expect(page.getByText('Mention a guided demo.', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/marketing-ui/approved-desktop.png', fullPage: true });
