@@ -9,6 +9,7 @@ test("marketing campaigns are workspace scoped, audited, and human approved", as
   try {
     await db.exec("create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;");
     await db.exec(await readFile(new URL("../supabase/migrations/20260911120000_marketing_command_center.sql",import.meta.url),"utf8"));
+    await db.exec(await readFile(new URL("../supabase/migrations/20260912111609_marketing_campaign_workflow.sql",import.meta.url),"utf8"));
     for(const n of [1,2,3,4]) await db.query("insert into auth.users values($1)",[id(n)]);
     const orion="4f52494f-4e00-4000-8000-000000000001", other=id(20);
     await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')",[other]);

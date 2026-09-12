@@ -2,6 +2,8 @@ import { learnerClient } from "./learnerClient.js";
 
 export const CAMPAIGN_STATUSES = ["draft", "planned", "active", "paused", "completed", "cancelled"];
 export const APPROVAL_STATES = ["draft", "in_review", "changes_requested", "approved"];
+export const TASK_STATUSES = ["todo", "in_progress", "blocked", "done"];
+export const ASSET_TYPES = ["social_copy", "email_copy", "web_copy", "print_copy", "image_brief", "video_brief"];
 
 export function splitList(value = "") {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
@@ -24,10 +26,27 @@ export function readMarketingWorkspace(workspaceId = null) {
 }
 
 export function saveMarketingCampaign(workspaceId, campaign, expectedRevision = null) {
+  const { id, ...payload } = campaign;
   return rpc("save_marketing_campaign", {
-    p_id: campaign.id,
+    p_id: id,
     p_workspace: workspaceId,
     p_expected_revision: expectedRevision,
-    p_payload: campaign,
+    p_payload: payload,
   });
+}
+
+export function saveMarketingBrief(workspaceId, campaign, payload) {
+  return rpc("save_marketing_brief", { p_workspace: workspaceId, p_campaign: campaign.id, p_expected_revision: campaign.revision, p_payload: payload });
+}
+
+export function saveMarketingTask(workspaceId, campaignId, task, payload) {
+  return rpc("save_marketing_task", { p_workspace: workspaceId, p_campaign: campaignId, p_id: task.id, p_expected_revision: task.revision ?? null, p_payload: payload });
+}
+
+export function writeMarketingAsset(workspaceId, campaignId, asset, action, payload) {
+  return rpc("write_marketing_asset", { p_workspace: workspaceId, p_campaign: campaignId, p_id: asset.id, p_expected_revision: asset.revision ?? null, p_action: action, p_payload: payload });
+}
+
+export function readMarketingAssetHistory(workspaceId, assetId) {
+  return rpc("read_marketing_asset_history", { p_workspace: workspaceId, p_asset: assetId });
 }
