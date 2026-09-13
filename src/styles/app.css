@@ -1521,3 +1521,21 @@ button:hover {
 .marketing-attention-item.attention { border-left-color: #facc15; }
 .marketing-attention-item .marketing-attention-label, .marketing-attention-item .btn-secondary { justify-self: start; }
 .marketing-nav .marketing-attention-label { margin-left: 6px; }
+
+/* Current agent work is separate from immutable technical history. */
+.marketing-agent-center { display: grid; gap: 24px; }
+.marketing-work-card { margin: 16px 0; background: var(--bg-card, #142032); }
+.marketing-work-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.marketing-work-card h3, .marketing-work-card h4, .marketing-work-card p { margin: 0; }
+.marketing-work-card > .btn-primary { justify-self: start; }
+.marketing-work-card details { min-width: 0; }
+.marketing-work-card details > * { margin-top: 12px; }
+.marketing-stage-pipeline { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 8px 0; }
+.marketing-stage-pipeline li { border: 1px solid #64748b; border-radius: 8px; padding: 8px 12px; }
+.marketing-stage-pipeline small { display: block; margin-top: 4px; }
+.marketing-stage-pipeline .stage-done { background: #15432e; color: #bbf7d0; }
+.marketing-stage-pipeline .stage-failed, .marketing-stage-pipeline .stage-action { background: #5d202a; color: #fecaca; }
+.marketing-stage-pipeline .stage-unknown { background: #4c3b13; color: #fef08a; }
+.marketing-stage-pipeline .stage-pending, .marketing-stage-pipeline .stage-working { background: #1e293b; color: #e2e8f0; }
+.marketing-history-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.marketing-constraint-failures { color: #fecaca; }

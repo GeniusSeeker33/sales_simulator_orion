@@ -100,6 +100,7 @@ export function AssetLibrary({ data, campaign, reviewOnly = false, onRefresh }) 
     <p>{reviewOnly ? "Assets awaiting human review or a requested revision across this workspace. Open an asset to inspect its brief, content and review history." : "Text drafts and creative briefs linked to their campaign."}</p>
     {!assets.length && <p className="marketing-empty">{reviewOnly ? "No assets awaiting review." : "No assets yet. Create a draft from a campaign."}</p>}
     {assets.map(asset => <details className="marketing-record" open={params.get("asset") === asset.id ? true : undefined} key={`${asset.id}:${asset.revision}`}><summary>{asset.name} · {label(asset.asset_type)} · {label(asset.approval_state)} · <AttentionIndicator items={data.attention.filter(item => item.asset_id === asset.id)} /></summary>
+      {params.get("asset") === asset.id && params.get("revision") && Number(params.get("revision")) !== asset.revision && <p role="status">This link referred to revision {params.get("revision")}. The asset is now revision {asset.revision}; review the current content below before deciding. Earlier revisions remain in Asset history.</p>}
       <AssetDetail data={data} asset={asset} onRefresh={onRefresh} />
     </details>)}
     {campaign && data.role !== "viewer" && <details key={`new:${campaign.id}:${assets.length}`} className="marketing-record"><summary>Add draft asset</summary><AssetEditor data={data} campaignId={campaign.id} onRefresh={onRefresh} /></details>}
