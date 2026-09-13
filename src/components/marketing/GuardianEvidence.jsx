@@ -23,6 +23,13 @@ export default function GuardianEvidence({ evidence }) {
     {evidence.technical_reason && <p>Technical reason: {evidence.technical_reason} — {explanations[evidence.technical_reason] || 'Inspect the recorded review evidence.'}</p>}
     <p>Started: {new Date(evidence.started_at).toLocaleString()} · Completed: {evidence.ended_at ? new Date(evidence.ended_at).toLocaleString() : 'Not completed'}</p>
     {evidence.inconsistencies?.length > 0 && <section aria-label="Guardian review inconsistency"><h4>Guardian review inconsistency</h4>{evidence.inconsistencies.map((issue, index) => <div key={index}><p>Rule: {issue.rule}</p><p>Narrative assessment: {issue.narrative_status}</p><p>Structured assessment: {issue.structured_status}</p></div>)}<p>Action: Guardian review must be retried.</p></section>}
+    {evidence.retry_authorization && <section aria-label="Guardian retry authorization"><h4>Human-requested Guardian review</h4>
+      <p>Event: {evidence.retry_authorization.event}</p>
+      <p>Authorization: {evidence.retry_authorization.id} · Requested by {evidence.retry_authorization.actor_user_id} · {new Date(evidence.retry_authorization.occurred_at).toLocaleString()}</p>
+      <p>Same asset revision: {evidence.retry_authorization.asset_revision} · Revision cycles: {evidence.retry_authorization.revision_cycles}/3</p>
+      <p>Task revision: {evidence.retry_authorization.task_revision} · Campaign revision: {evidence.retry_authorization.campaign_revision}</p>
+      <p>Same policy snapshot: {evidence.retry_authorization.policy_versions.join(' + ') || 'No structured policy versions'}</p>
+    </section>}
     {evidence.retry_of && <p>Retry of <Link to={`/marketing/agents?run=${evidence.retry_of}`}>{evidence.retry_of}</Link></p>}
   </section>;
 }

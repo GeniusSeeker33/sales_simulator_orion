@@ -26,6 +26,7 @@ export function deriveAgentWork(data) {
     const items = signals.filter(i => i.orchestration_id === o.id || (!i.orchestration_id && i.asset_id && assetOwners.get(i.asset_id) === o.id));
     items.forEach(i => consumed.add(i.id));
     const guided = data.guided_work?.find(c => c.orchestration_id === o.id);
+    const reviewingAgain = o.state === 'guardian_running' && Boolean(guided?.guardian?.retry_authorization);
     const inconsistent = guided?.guardian?.technical_reason === 'guardian_semantic_structured_mismatch';
     const recoveryContext = data.orchestration_recovery?.find(c => c.orchestration_id === o.id);
     const recovery = inconsistent ? { ...recoveryContext, eligible: false, reason: 'Guardian review must be retried before a content revision.' } : recoveryContext;
@@ -36,7 +37,7 @@ export function deriveAgentWork(data) {
     const stale = !terminal(o.state) && (task.revision !== o.task_revision || campaigns.get(o.campaign_id).revision !== o.campaign_revision || !current);
     const uncertain = o.state.endsWith('_running') && items.some(i => i.orchestration_id === o.id && i.severity === 'critical');
     const inspect = (stale || uncertain) && !recovery?.eligible;
-    const state = inconsistent ? 'Guardian review inconsistent' : recovery?.eligible && o.state === 'failed' ? 'Recoverable Guardian failure' : inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
+    const state = reviewingAgain ? 'Guardian reviewing again' : inconsistent ? 'Guardian review inconsistent' : recovery?.eligible && o.state === 'failed' ? 'Recoverable Guardian failure' : inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
     const action = inconsistent ? (guided.guardian_retry?.eligible ? 'Retry Guardian' : 'Inspect Guardian') : recovery?.eligible && o.state === 'failed' ? 'Review recovery' : inspect ? 'Inspect Failure' : failures.length ? 'Review Constraint Failure' : ({ awaiting_plan: 'Review Plan', awaiting_review: 'Review Asset', awaiting_approval: 'Approve / Request Changes', changes_needed: 'Send Revision to Creator', failed: 'Inspect Failure', blocked: 'Inspect Failure', completed: task.status !== 'done' ? 'Mark Task Complete' : 'View history', cancelled: 'View history' }[o.state] || 'View progress');
     const pipeline = derivePipeline(data, o, runs, asset, checks, stale || !current);
     work.push({ id: o.id, orchestration: o, campaign: campaigns.get(o.campaign_id), task, asset, items, failures, checks, stale, recovery,
