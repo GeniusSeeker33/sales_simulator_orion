@@ -23,7 +23,7 @@ export function ConstraintEditor({ value, onChange }) {
 export function ConstraintChecks({ checks = [] }) {
   if (!checks.length) return null;
   return <ul>{checks.map((q, i) => <li key={`${q.constraint_id}:${i}`}>
-    <strong>{!q.passed ? 'Human constraint failed' : q.review_required ? 'Semantic review recommended' : 'Deterministic check passed'}</strong>: {q.detail}
+    {q.source_scope && <span>{q.source_scope} rule · </span>}<strong>{!q.passed ? 'Human constraint failed' : q.review_required ? 'Semantic review recommended' : 'Deterministic check passed'}</strong>: {q.detail}
     {q.matched_text && <p>Detected: “{q.matched_text}”{q.normalized_offset ? ` · Normalized text position ${q.normalized_offset}` : ''}</p>}
     {q.excerpt && <blockquote>{q.excerpt}</blockquote>}
   </li>)}</ul>;

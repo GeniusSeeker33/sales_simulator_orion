@@ -71,7 +71,8 @@ export function deriveMarketingAttention(data, now = Date.now()) {
     const sameAssetGate = !stale && !uncertain && ['changes_needed', 'awaiting_approval'].includes(o.state)
       && o.asset_id && items.some(item => item.id === `asset:${o.asset_id}`);
     if (!severity || sameAssetGate) continue;
-    const reason = stale ? 'Task, campaign or asset changed. Inspect the orchestration.' : uncertain ? 'Stage outcome is uncertain. Inspect before restarting.'
+    const guardian = data.guided_work?.find(c => c.orchestration_id === o.id)?.guardian;
+    const reason = guardian?.status === 'failed' && ['failed','blocked'].includes(o.state) ? 'Technical review issue: Guardian could not complete. Retry or inspect the review.' : stale ? 'Task, campaign or asset changed. Inspect the orchestration.' : uncertain ? 'Stage outcome is uncertain. Inspect before restarting.'
       : o.reason || ({ awaiting_plan: 'Strategist plan requires your decision.', awaiting_review: 'Ready for your review. Send the asset to Approval.', changes_needed: 'Guardian or human requested changes. Choose a revision or review manually.', awaiting_approval: 'Asset is awaiting actual human approval.', completed: 'Agent work completed; the task remains open.' }[o.state] || 'Orchestration requires human inspection.');
     add({ id: `orchestration:${o.id}`, orchestration_id: o.id, campaign_id: o.campaign_id, task_id: o.task_id, asset_id: o.asset_id, name: task?.title || 'Agent task', severity, reason,
       timestamp: o.updated_at, href: `/marketing/campaigns/${o.campaign_id}?task=${o.task_id}`, action: 'Open task', scope: 'agents' });

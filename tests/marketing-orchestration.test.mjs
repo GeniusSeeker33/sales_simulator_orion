@@ -43,7 +43,8 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
       if (mode === 'failure' || mode === 'guardian_failure' && agent === 'guardian') throw new Error('private provider error');
       const output = agent === 'strategist' ? { summary: 'Task execution plan', steps: [{ title: 'Write task copy', rationale: 'Follow task scope' }], proposed_tasks: ['Prepare copy'] }
         : agent === 'creator' ? { name: 'Orchestrated draft', asset_type: context.request.asset_type, content: creatorContent }
-        : { constraint_evaluations: (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: 'satisfied', detail: 'Model believes satisfied.' })), summary: 'QA', recommendation: mode === 'changes' ? 'needs_changes' : 'ready_for_human_review', findings: mode === 'changes' ? [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Explain dealer benefit.' }] : [] };
+        : { constraint_evaluations: (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: c.constraint_type === 'human_instruction' ? 'semantic_review' : 'satisfied', detail: 'Model believes satisfied.' })), summary: 'QA', recommendation: mode === 'changes' ? 'needs_changes' : 'ready_for_human_review', findings: mode === 'changes' ? [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Explain dealer benefit.' }] : [] };
+      if (mode === 'coverage' && agent === 'guardian') output.constraint_evaluations = [];
       return { status: 'completed', output_text: mode === 'malformed' ? '{bad' : JSON.stringify(output), usage: { input_tokens: 50, output_tokens: 25, total_tokens: 75 } };
     } } }) });
   const invoke = async (body, human = 1) => { const res = { setHeader() {}, status(n) { this.statusCode = n; return this; }, json(data) { this.body = data; return this; } }; await handler({ method: 'POST', headers: { authorization: `Bearer ${human}` }, body }, res); return res; };
@@ -348,8 +349,9 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     const projected = deriveAgentWork({ ...data, attention: deriveMarketingAttention(data) }).needsYou.filter(x => x.asset?.id === a.id);
     assert.equal(projected.length, 1); assert.equal(projected[0].orchestration.id, original.id);
     await asUser(2); const guidedData = (await db.query('select public.read_marketing_attention_workspace($1) data', [w])).rows[0].data;
-    const guided = guidedData.guided_work.find(x => x.orchestration_id === original.id); assert.ok(guided.actions.includes('request_changes'));
-    const recovered = (await invoke({ workspace_id:w,id:original.id,action:'review',expected_revision:original.revision,asset_revision:guided.asset_revision,task_revision:guided.task_revision,campaign_revision:guided.campaign_revision,constraint_set_ids:guided.constraint_set_ids,decision:'request_changes',notes:'Continue this revision in the original task workflow.' },2)).body.orchestration;
+    const guided = guidedData.guided_work.find(x => x.orchestration_id === original.id); assert.deepEqual(guided.actions,[]); assert.match(guided.guardian_retry.reason,/asset changed/);
+    await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'request_changes',$5)", [w,c,a.id,detached.revision,{notes:'Continue this revision in the original task workflow.'}]);
+    data=await snapshot(); const recovered=(await invoke(revisionCommand(original,data))).body.orchestration;
     assert.equal(recovered.id, original.id); assert.equal(recovered.asset_revision, detached.revision + 2); assert.equal(recovered.state, 'awaiting_review');
     const next = await failedGuardian(); data = await requestChanges(next); const pending = id(sequence++), current = data.assets.find(x => x.id === next.asset_id);
     await db.exec('reset role');
@@ -430,9 +432,65 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     const stale=(await invoke(await assignment())).body.orchestration;assert.equal(stale.state,'failed');assert.equal(stale.asset_id,null);
     mode='guardian_rejected';o=(await invoke(await assignment())).body.orchestration;assert.equal(o.state,'failed');mode='ready';
     await asUser(2);data=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
-    const ctx=data.guided_work.find(x=>x.orchestration_id===o.id);assert.ok(ctx.actions.includes('request_changes'));
-    const res=await invoke({workspace_id:w,id:o.id,action:'review',expected_revision:o.revision,asset_revision:ctx.asset_revision,task_revision:ctx.task_revision,campaign_revision:ctx.campaign_revision,constraint_set_ids:ctx.constraint_set_ids,decision:'request_changes',notes:'Keep the destination, clarify the benefit.'},2);
+    const ctx=data.guided_work.find(x=>x.orchestration_id===o.id);assert.ok(ctx.actions.includes('retry_guardian'));
+    const res=await invoke({workspace_id:w,id:o.id,action:'retry_guardian',expected_revision:o.revision,asset_revision:ctx.asset_revision,task_revision:ctx.task_revision,campaign_revision:ctx.campaign_revision,constraint_set_ids:ctx.constraint_set_ids},2);
     assert.equal(res.statusCode,200);assert.equal(res.body.orchestration.id,o.id);assert.equal(res.body.orchestration.state,'awaiting_review');
+  });
+
+  const retryCommand = async o => {
+    await asUser(2); const data=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
+    const ctx=data.guided_work.find(x=>x.orchestration_id===o.id).guardian_retry;
+    return {workspace_id:w,id:o.id,action:'retry_guardian',expected_revision:o.revision,asset_revision:ctx.asset_revision,task_revision:ctx.task_revision,campaign_revision:ctx.campaign_revision,constraint_set_ids:ctx.constraint_set_ids};
+  };
+  await t.test('hosted compatibility whitelist regression, semantic evaluations and same-revision Guardian retry', async()=>{
+    mode='ready';creatorContent='Book your demo.';
+    await db.exec('reset role');const signature='marketing.finish_marketing_agent_run_before_constraints(uuid,jsonb,jsonb,jsonb,text)';
+    const correct=(await db.query('select pg_get_functiondef($1::regprocedure) definition',[signature])).rows[0].definition;
+    await db.exec(correct.replace("('summary','recommendation','findings','constraint_evaluations')","('summary','recommendation','findings')"));
+    let original=(await invoke(await assignment())).body.orchestration;assert.equal(original.state,'failed');
+    await db.exec('reset role');assert.equal((await db.query('select error_code from marketing.agent_runs where id=$1',[original.active_run_id])).rows[0].error_code,'result_rejected');
+    // Apply the same explicit canonical repair shipped in the new migration, not a relaxed validator.
+    const migration=await readFile(new URL('../supabase/migrations/20260913210952_marketing_guardian_retry.sql',import.meta.url),'utf8');
+    await db.exec(migration.slice(migration.indexOf('create or replace function marketing.finish_marketing_agent_run_before_constraints'),migration.indexOf('end $$;')+7));
+    const req=await retryCommand(original);calls=[];const res=await invoke(req,2);assert.equal(res.statusCode,200);const o=res.body.orchestration;
+    assert.equal(o.state,'awaiting_review');assert.equal(o.id,original.id);assert.equal(o.asset_revision,original.asset_revision);assert.equal(o.revision_cycles,original.revision_cycles);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    await db.exec('reset role');
+    assert.deepEqual(calls[0].context.human_constraint_sets,(await db.query('select input_metadata from marketing.agent_runs where id=$1',[original.active_run_id])).rows[0].input_metadata.human_constraint_sets);
+    assert.equal((await invoke(req,2)).body.orchestration.run_ids.length,o.run_ids.length);assert.equal(calls.length,1);
+    await db.exec('reset role');const before=(await db.query('select * from marketing.agent_runs where id=$1',[original.active_run_id])).rows[0];assert.equal(before.status,'failed');assert.deepEqual(before.output_metadata,{});
+    const auth=(await db.query('select * from marketing.guardian_retry_authorizations where prior_run_id=$1',[before.id])).rows[0];assert.equal(auth.actor_user_id,id(2));assert.equal(auth.new_run_id,o.active_run_id);
+    await assert.rejects(db.query('delete from marketing.guardian_retry_authorizations where id=$1',[auth.id]),/append-only/);
+    const data=await snapshot();const items=deriveMarketingAttention(data);assert.equal(items.filter(i=>i.orchestration_id===o.id||i.asset_id===o.asset_id).length,1);assert.equal(deriveAgentWork({...data,attention:items}).all.filter(x=>x.orchestration?.id===o.id).length,1);
+  });
+  await t.test('retry at cycle one keeps 1/3, ignores old callbacks, preserves safe diagnostics and blocks unauthorized/stale inputs',async()=>{
+    mode='changes';let o=(await invoke(await assignment())).body.orchestration;mode='guardian_rejected';o=(await action(o,'revise')).body.orchestration;assert.equal(o.state,'failed');assert.equal(o.revision_cycles,1);mode='ready';
+    const req=await retryCommand(o);
+    for(const human of [3,4,'invalid'])assert.ok((await invoke(req,human)).statusCode>=400);
+    assert.equal((await invoke({...req,asset_revision:999},2)).statusCode,409);assert.equal((await invoke({...req,actor_type:'agent'},2)).statusCode,400);
+    beforeModel=async()=>{const response=await rpc('finish_marketing_orchestration_stage',{p_id:o.id,p_run:o.active_run_id,p_output:null,p_qa:[],p_usage:{},p_error:'persistence_failed'});assert.equal(response.data.orchestration.state,'guardian_running');};
+    calls=[];const res=await invoke(req,2);assert.equal(res.statusCode,200);assert.equal(res.body.orchestration.state,'awaiting_review');assert.equal(res.body.orchestration.revision_cycles,1);assert.equal(res.body.orchestration.asset_revision,o.asset_revision);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    await asUser(2);const details=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,o.active_run_id])).rows[0].data;assert.equal(details.guardian_evidence.technical_reason,'guardian_output_schema_invalid');
+    await db.exec('reset role');await assert.rejects(db.query("update marketing.agent_run_diagnostics set reason='guardian_model_failed' where agent_run_id=$1",[o.active_run_id]),/append-only/);
+    for(const changed of ['asset','task','campaign','policy']){
+      const failed=await failedGuardian();const request=await retryCommand(failed);await asUser(2);
+      if(changed==='asset')await db.query("select public.write_marketing_asset($1,$2,$3,$4,'save',$5)",[w,c,failed.asset_id,failed.asset_revision,{name:'Changed draft',asset_type:'social_copy',content:'Book your updated demo.'}]);
+      if(changed==='task')await db.query('select public.save_marketing_task($1,$2,$3,$4,$5)',[w,c,failed.task_id,failed.task_revision,{title:'Changed task',status:'todo'}]);
+      if(changed==='campaign')await db.query('select public.save_marketing_brief($1,$2,$3,$4)',[w,c,failed.campaign_revision,{primary_cta:'Book another demo',target_audiences:['Dealers'],channels:['social']}]);
+      if(changed==='policy'){
+        const current=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data.policy_versions.find(p=>!p.superseded&&!p.campaign_id);
+        await db.query('select public.save_marketing_policy($1,null,$2,$3)',[w,current.id,[{constraint_type:'human_instruction',value:'Use only current verified information.'}]]);
+      }
+      calls=[];assert.equal((await invoke(request,2)).statusCode,409);assert.equal(calls.length,0);
+      const data=await snapshot();const ctx=data.guided_work.find(x=>x.orchestration_id===failed.id);assert.equal(ctx.guardian_retry.eligible,false);assert.match(ctx.guardian_retry.reason,new RegExp(changed==='policy'?'Policy':changed,'i'));
+    }
+    await asUser(1);await assert.rejects(db.query('select public.command_marketing_orchestration($1,$2)',[id(1),req]),/permission denied/);await assert.rejects(db.query('select * from marketing.guardian_retry_authorizations'),/permission denied/);
+  });
+
+  await t.test('constraint coverage failures get a safe reason; semantic human instructions are accepted',async()=>{
+    mode='coverage';const failed=(await invoke(await assignment())).body.orchestration;assert.equal(failed.state,'failed');await asUser(2);
+    let run=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,failed.active_run_id])).rows[0].data;assert.equal(run.error_code,'invalid_output');assert.equal(run.guardian_evidence.technical_reason,'constraint_evaluation_mismatch');
+    mode='ready';const next=(await invoke(await retryCommand(failed),2)).body.orchestration;assert.equal(next.state,'awaiting_review');await asUser(2);
+    run=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,next.active_run_id])).rows[0].data;assert.ok(run.output_metadata.result.constraint_evaluations.some(e=>e.status==='semantic_review'));assert.equal(run.guardian_evidence.retry_of,failed.active_run_id);
   });
 
 });
