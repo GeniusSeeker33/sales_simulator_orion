@@ -1,3 +1,4 @@
+import { guardianInconsistencies, GUARDIAN_CONSISTENCY_VERSION, GUARDIAN_INCONSISTENCY } from './marketing-guardian-consistency.js';
 import { CONTRACTS, MODEL, deterministicQA, instructions, validateOutput } from './marketing-agents.js';
 import { calibrateGuardian } from './marketing-guardian-qa.js';
 
@@ -20,6 +21,8 @@ export async function inferMarketing({ model, request, context, onUsage = () => 
     if (output.constraint_evaluations.length !== ids.size || new Set(output.constraint_evaluations.map(e => e.constraint_id)).size !== ids.size
       || output.constraint_evaluations.some(e => !ids.has(e.constraint_id))) throw new Error('Invalid constraint evaluation coverage');
     onPhase('invalid_output');
+    const inconsistencies = guardianInconsistencies(output, context, qa);
+    if (inconsistencies.length) return { output: { result: output, inconsistencies, validation_version: GUARDIAN_CONSISTENCY_VERSION }, qa, usage, error: GUARDIAN_INCONSISTENCY };
     output = calibrateGuardian(output, qa);
     output.constraint_evaluations = output.constraint_evaluations.map(e => qa.some(q => q.constraint_id === e.constraint_id && !q.passed) ? { ...e, status: 'violated', detail: qa.find(q => q.constraint_id === e.constraint_id && !q.passed).detail } : e);
     if (output.constraint_evaluations.some(e => e.status === 'violated')) output.recommendation = 'needs_changes';

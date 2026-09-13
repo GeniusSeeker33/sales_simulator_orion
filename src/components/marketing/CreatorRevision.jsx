@@ -18,6 +18,9 @@ export default function CreatorRevision({ data, campaign, asset, onRefresh }) {
     } catch (e) { setError(e.message); }
     finally { try { await onRefresh(); } catch { setError('Refresh failed. Inspect the run before retrying.'); } setBusy(false); }
   }
+  if (data.guided_work?.find(c => c.orchestration_id === orchestration?.id)?.guardian?.technical_reason === 'guardian_semantic_structured_mismatch') {
+    return <p>Guardian review needs retry. <Link to={`/marketing/campaigns/${campaign.id}?task=${orchestration.task_id}`}>Open task workflow</Link></p>;
+  }
   return <form className="marketing-form" onSubmit={revise}>
     <h4>{orchestration ? 'Revise with Agent Team' : 'Send requested changes to Creator'}</h4>
     {orchestration && <><p>This revision will continue the existing task workflow. Creator and constraint preflight run before Guardian; human approval remains a separate decision.</p><p>Revision cycles {orchestration.revision_cycles}/3 · <Link to={`/marketing/campaigns/${campaign.id}?task=${orchestration.task_id}`}>Open task workflow</Link></p>{recovery?.human_change_request && <p>Latest human requested changes: {recovery.human_change_request.notes}</p>}{!recovery?.eligible && <p>{recovery?.reason || 'Refresh to inspect workflow recovery availability.'}</p>}</>}

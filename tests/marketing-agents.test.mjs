@@ -25,7 +25,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql', '20260913221028_marketing_guardian_consistency.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   for (let n = 1; n <= 4; n++) await db.query('insert into auth.users values($1)', [id(n)]);
   await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')", [other]);
   await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$3,'contributor'),($1,$4,'approver'),($1,$5,'viewer'),($2,$6,'admin')", [workspace, other, id(1), id(2), id(3), id(4)]);
@@ -306,7 +306,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     await db.query('select public.save_marketing_brief($1,$2,$3,$4)', [workspace, campaign, c.revision, { objectives: ['Dealer applications'], target_audiences: ['Dealers'], channels: ['social'], primary_cta: 'Apply to become an Orion Wholesale dealer at Join-Orion.com.' }]);
     const text = 'Take the first step by applying at Join-Orion.com to begin the dealer qualification process.';
     const creator = (await invoke({ body: request('creator'), output: { ...draft, content: text } })).body.run;
-    const reviewed = await invoke({ body: request('guardian', { asset_id: creator.outcome_asset_id }), output: { summary: 'CTA is semantically suitable.', recommendation: 'needs_changes', findings: [{ category: 'cta', severity: 'info', requires_correction: false, finding: 'CTA wording differs but directs dealer applications to the correct destination.' }] } });
+    const reviewed = await invoke({ body: request('guardian', { asset_id: creator.outcome_asset_id }), output: { summary: 'CTA is semantically suitable.', recommendation: 'ready_for_human_review', findings: [{ category: 'cta', severity: 'info', requires_correction: false, finding: 'CTA wording differs but directs dealer applications to the correct destination.' }] } });
     assert.equal(reviewed.statusCode, 200);
     assert.equal(reviewed.body.run.output_metadata.result.recommendation, 'ready_for_human_review');
     assert.ok(reviewed.body.run.output_metadata.deterministic_qa.every(q => q.passed));
@@ -321,6 +321,14 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     const approved = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
     assert.ok(!deriveMarketingAttention(approved).some(i => i.run_id === reviewed.body.run.id || i.id === `asset:${a.id}`));
     assert.equal(approved.assets.find(asset => asset.id === a.id).approved_by, id(2));
+    const inconsistent = await invoke({ body: request('guardian', { asset_id: creator.outcome_asset_id }), output: { summary: 'CTA is semantically suitable.', recommendation: 'needs_changes', findings: [] } });
+    assert.equal(inconsistent.statusCode, 409); assert.equal(inconsistent.body.run.status, 'failed');
+    await asUser(2);
+    const detail = (await db.query('select public.read_marketing_agent_run($1,$2) data', [workspace,inconsistent.body.run.id])).rows[0].data;
+    assert.equal(detail.guardian_evidence.technical_reason,'guardian_semantic_structured_mismatch');
+    const attentionData = (await db.query('select public.read_marketing_attention_workspace($1) data',[workspace])).rows[0].data;
+    assert.match(deriveMarketingAttention(attentionData).find(i=>i.run_id===inconsistent.body.run.id).reason,/Guardian review issue/);
+
   });
 });
 

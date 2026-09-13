@@ -44,6 +44,8 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
       const output = agent === 'strategist' ? { summary: 'Task execution plan', steps: [{ title: 'Write task copy', rationale: 'Follow task scope' }], proposed_tasks: ['Prepare copy'] }
         : agent === 'creator' ? { name: 'Orchestrated draft', asset_type: context.request.asset_type, content: creatorContent }
         : { constraint_evaluations: (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: c.constraint_type === 'human_instruction' ? 'semantic_review' : 'satisfied', detail: 'Model believes satisfied.' })), summary: 'QA', recommendation: mode === 'changes' ? 'needs_changes' : 'ready_for_human_review', findings: mode === 'changes' ? [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Explain dealer benefit.' }] : [] };
+      if (mode === 'inconsistent' && agent === 'guardian') { output.constraint_evaluations[0].status = 'violated'; output.constraint_evaluations[0].detail = 'The email copy no longer contains unverified comparative claims.'; output.recommendation = 'needs_changes'; }
+      if (mode === 'consistent_violation' && agent === 'guardian') { output.constraint_evaluations[0].status = 'violated'; output.constraint_evaluations[0].detail = 'The phrase "competitive wholesale firearms" is an unsupported comparative claim.'; output.recommendation = 'needs_changes'; }
       if (mode === 'coverage' && agent === 'guardian') output.constraint_evaluations = [];
       return { status: 'completed', output_text: mode === 'malformed' ? '{bad' : JSON.stringify(output), usage: { input_tokens: 50, output_tokens: 25, total_tokens: 75 } };
     } } }) });
@@ -491,6 +493,50 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     let run=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,failed.active_run_id])).rows[0].data;assert.equal(run.error_code,'invalid_output');assert.equal(run.guardian_evidence.technical_reason,'constraint_evaluation_mismatch');
     mode='ready';const next=(await invoke(await retryCommand(failed),2)).body.orchestration;assert.equal(next.state,'awaiting_review');await asUser(2);
     run=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,next.active_run_id])).rows[0].data;assert.ok(run.output_metadata.result.constraint_evaluations.some(e=>e.status==='semantic_review'));assert.equal(run.guardian_evidence.retry_of,failed.active_run_id);
+  });
+
+  await t.test('inconsistent Guardian at cycle 1 fails atomically, authorizes only retry, and preserves immutable evidence',async()=>{
+    mode='changes'; let o=(await invoke(await assignment())).body.orchestration;
+    mode='inconsistent'; calls=[]; o=(await action(o,'revise')).body.orchestration;
+    assert.equal(o.state,'failed'); assert.equal(o.revision_cycles,1); assert.deepEqual(calls.map(c=>c.agent),['creator','guardian']);
+    let data=await snapshot(); const ctx=data.guided_work.find(g=>g.orchestration_id===o.id);
+    assert.deepEqual(ctx.actions,['retry_guardian']); assert.equal(ctx.guardian.technical_reason,'guardian_semantic_structured_mismatch');
+    assert.equal(ctx.guardian.inconsistencies[0].structured_status,'violated');
+    assert.match(ctx.reason,/not been sent back for revision/);
+    const items=deriveMarketingAttention(data).filter(i=>i.orchestration_id===o.id||i.asset_id===o.asset_id);
+    assert.equal(items.length,1); assert.equal(items[0].severity,'critical'); assert.match(items[0].reason,/Guardian review issue/);
+    const req=await retryCommand(o); const assetBefore=data.assets.find(a=>a.id===o.asset_id);
+    for(const human of [3,4,'invalid']) assert.ok((await invoke(req,human)).statusCode>=400);
+    assert.equal((await invoke({...req,workspace_id:id(999)},2)).statusCode,403);
+    for(const action of ['revise','review']) assert.equal((await invoke({...req,action,...(action==='review'?{decision:'request_changes',notes:'Rewrite'}:{})},2)).statusCode,409);
+    await db.exec('reset role'); const evidence=(await db.query('select * from marketing.guardian_consistency_evidence where agent_run_id=$1',[o.active_run_id])).rows[0];
+    const assetHistory=(await db.query('select * from marketing.workflow_history where asset_id=$1 order by id',[o.asset_id])).rows;
+    assert.equal(evidence.original_result.constraint_evaluations[0].status,'violated'); assert.ok(evidence.deterministic_qa.every(q=>q.passed));
+    await assert.rejects(db.query('delete from marketing.guardian_consistency_evidence where agent_run_id=$1',[o.active_run_id]),/append-only/);
+    await asUser(1); await assert.rejects(db.query('select * from marketing.guardian_consistency_evidence'),/permission denied/);
+    mode='ready'; calls=[]; const next=(await invoke(req,2)).body.orchestration;
+    assert.equal(next.state,'awaiting_review'); assert.equal(next.id,o.id); assert.equal(next.asset_revision,o.asset_revision); assert.equal(next.revision_cycles,1); assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    data=await snapshot(); assert.deepEqual(data.assets.find(a=>a.id===o.asset_id),assetBefore);
+    assert.equal((await invoke(req,2)).body.orchestration.run_ids.length,next.run_ids.length); assert.equal(calls.length,1);
+    await db.exec('reset role'); assert.deepEqual((await db.query('select * from marketing.workflow_history where asset_id=$1 order by id',[o.asset_id])).rows,assetHistory); assert.deepEqual((await db.query('select * from marketing.guardian_consistency_evidence where agent_run_id=$1',[o.active_run_id])).rows[0],evidence);
+  });
+  await t.test('inconsistent review retry rejects changed asset and policy without inference',async()=>{
+    for(const changed of ['asset','policy']) {
+      mode='inconsistent'; const o=(await invoke(await assignment())).body.orchestration; assert.equal(o.state,'failed'); const req=await retryCommand(o);
+      await asUser(2);
+      if(changed==='asset') await db.query("select public.write_marketing_asset($1,$2,$3,$4,'save',$5)",[w,c,o.asset_id,o.asset_revision,{name:'Updated',asset_type:'social_copy',content:'Book your updated demo.'}]);
+      else { const current=(await snapshot()).policy_versions.find(p=>!p.superseded&&!p.campaign_id); await asUser(2); await db.query('select public.save_marketing_policy($1,null,$2,$3)',[w,current.id,[{constraint_type:'human_instruction',value:'Only substantiated claims.'}]]); }
+      calls=[]; assert.equal((await invoke(req,2)).statusCode,409); assert.equal(calls.length,0);
+    }
+    mode='ready';
+  });
+
+  await t.test('a matching semantic violation still authorizes human requested changes, not retry',async()=>{
+    mode='consistent_violation';const o=(await invoke(await assignment())).body.orchestration;assert.equal(o.state,'changes_needed');
+    const data=await snapshot();const ctx=data.guided_work.find(g=>g.orchestration_id===o.id);
+    assert.equal(ctx.guardian.status,'succeeded');assert.equal(ctx.guardian.recommendation,'needs_changes');assert.deepEqual(ctx.guardian.inconsistencies,[]);
+    await asUser(2);const manager=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
+    assert.deepEqual(manager.guided_work.find(g=>g.orchestration_id===o.id).actions,['request_changes']);mode='ready';
   });
 
 });

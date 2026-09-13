@@ -41,9 +41,9 @@ export function createHandler({ makeClient = createClient, makeModel = () => new
     }
     let usage = {}, phase = 'model_failed';
     try {
-      const { output, qa } = await inferMarketing({ model: makeModel(), request, context, onUsage: value => { usage = value; }, onPhase: value => { phase = value; } });
+      const { output, qa, error: reviewError } = await inferMarketing({ model: makeModel(), request, context, onUsage: value => { usage = value; }, onPhase: value => { phase = value; } });
       phase = 'persistence_failed';
-      const run = await rpc('finish_marketing_agent_run', { p_id: runId, p_output: output, p_qa: qa, p_usage: usage, p_error: null });
+      const run = await rpc('finish_marketing_agent_run', { p_id: runId, p_output: output, p_qa: qa, p_usage: usage, p_error: reviewError || null });
       return res.status(run.status === 'succeeded' ? 200 : 409).json({ run });
     } catch {
       try {

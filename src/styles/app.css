@@ -1541,3 +1541,5 @@ button:hover {
 .marketing-constraint-failures { color: #fecaca; }
 
 .marketing-stage-pipeline .stage-technical { background: #5d202a; color: #fecaca; }
+
+.marketing-stage-pipeline .stage-inconsistent { border-color: #b45309; background: #fffbeb; color: #92400e; }

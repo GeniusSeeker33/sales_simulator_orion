@@ -98,3 +98,12 @@ test('failed workflow owns newer human approval revisions by lineage, never a du
   d.orchestration_recovery = [{ orchestration_id: 'o', eligible: true }];
   work = project(d); assert.equal(work.needsYou.length, 1); assert.equal(work.needsYou[0].state, 'Recoverable Guardian failure');
 });
+
+test('inconsistent Guardian has one critical work item and never exposes Creator recovery', () => {
+ const d=fixture('failed');d.attention_runs[3]={...d.attention_runs[3],status:'failed',recommendation:null,review_issue:true};
+ d.guided_work=[{orchestration_id:'o',guardian:{status:'failed',technical_reason:'guardian_semantic_structured_mismatch'},guardian_retry:{eligible:true}}];
+ d.orchestration_recovery=[{orchestration_id:'o',eligible:true}];
+ const model=project(d);assert.equal(model.needsYou.length,1);assert.equal(model.needsYou[0].state,'Guardian review inconsistent');
+ assert.equal(model.needsYou[0].action,'Retry Guardian');assert.equal(model.needsYou[0].recovery.eligible,false);assert.match(model.needsYou[0].reason,/Guardian review issue/);
+ assert.equal(model.needsYou[0].pipeline.find(s=>s.label==='Constraint Check').status,'done');assert.equal(model.needsYou[0].pipeline.find(s=>s.label==='Guardian').status,'inconsistent');
+});
