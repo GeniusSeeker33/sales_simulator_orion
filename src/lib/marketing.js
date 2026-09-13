@@ -91,3 +91,7 @@ export async function commandMarketingOrchestration(request) {
 export function saveMarketingHumanConstraints(workspaceId, asset, expectedSetId, constraints) {
   return rpc('save_marketing_human_constraints', { p_workspace: workspaceId, p_asset: asset.id, p_expected_revision: asset.revision, p_expected_set: expectedSetId, p_constraints: constraints });
 }
+
+export function saveMarketingPolicy(workspaceId, campaignId, expectedSet, rules) {
+  return rpc('save_marketing_policy', { p_workspace: workspaceId, p_campaign: campaignId, p_expected_set: expectedSet, p_rules: rules });
+}

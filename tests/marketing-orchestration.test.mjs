@@ -347,8 +347,9 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     assert.equal(detached.revision, a.revision + 2); assert.equal(detached.approval_state, 'in_review');
     const projected = deriveAgentWork({ ...data, attention: deriveMarketingAttention(data) }).needsYou.filter(x => x.asset?.id === a.id);
     assert.equal(projected.length, 1); assert.equal(projected[0].orchestration.id, original.id);
-    await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'request_changes',$5)", [w, c, a.id, detached.revision, { notes: 'Continue this revision in the original task workflow.' }]);
-    data = await snapshot(); const recovered = (await invoke(revisionCommand(original, data))).body.orchestration;
+    await asUser(2); const guidedData = (await db.query('select public.read_marketing_attention_workspace($1) data', [w])).rows[0].data;
+    const guided = guidedData.guided_work.find(x => x.orchestration_id === original.id); assert.ok(guided.actions.includes('request_changes'));
+    const recovered = (await invoke({ workspace_id:w,id:original.id,action:'review',expected_revision:original.revision,asset_revision:guided.asset_revision,task_revision:guided.task_revision,campaign_revision:guided.campaign_revision,constraint_set_ids:guided.constraint_set_ids,decision:'request_changes',notes:'Continue this revision in the original task workflow.' },2)).body.orchestration;
     assert.equal(recovered.id, original.id); assert.equal(recovered.asset_revision, detached.revision + 2); assert.equal(recovered.state, 'awaiting_review');
     const next = await failedGuardian(); data = await requestChanges(next); const pending = id(sequence++), current = data.assets.find(x => x.id === next.asset_id);
     await db.exec('reset role');
@@ -374,6 +375,64 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     }
     assert.equal((await db.query("select relrowsecurity from pg_class where oid='marketing.orchestration_revision_authorizations'::regclass")).rows[0].relrowsecurity, true);
     mode = 'ready';
+  });
+
+  await t.test('inherited policies, atomic guided review, approval, attribution and immutable evidence', async () => {
+    mode = 'ready'; creatorContent = 'Book your demo.';
+    await asUser(2);
+    const workspacePolicy = (await db.query('select public.save_marketing_policy($1,null,null,$2) data', [w, [{constraint_type:'prohibited_phrase',value:'guaranteed riches'},{constraint_type:'human_instruction',value:'Do not invent financial terms.'}]])).rows[0].data;
+    const campaignPolicy = (await db.query('select public.save_marketing_policy($1,$2,null,$3) data', [w,c,[{constraint_type:'approved_destination',value:'Join-Orion.com'}]])).rows[0].data;
+    for (const human of [1,3,4]) { await asUser(human); await assert.rejects(db.query('select public.save_marketing_policy($1,null,$2,$3)', [w,workspacePolicy.id,[]]), /permission/i); }
+    calls=[]; let o = (await invoke(await assignment('strategist_creator_guardian'))).body.orchestration;
+    assert.equal(calls[0].context.human_constraints.length,3);
+    assert.deepEqual(new Set(calls[0].context.human_constraint_sets.map(s=>s.source_scope)),new Set(['Workspace','Campaign']));
+    o=(await action(o,'accept')).body.orchestration;
+    assert.equal(o.state,'awaiting_review'); assert.equal(calls.length,3);
+    assert.ok(calls.every(call=>call.context.human_constraints.length===3));
+    const readAs = async human => { await asUser(human);return (await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data; };
+    let data=await readAs(2),ctx=data.guided_work.find(x=>x.orchestration_id===o.id);
+    assert.ok(ctx.actions.includes('approve'));
+    const request=(decision,context=ctx,orch=o)=>({workspace_id:w,id:orch.id,action:'review',expected_revision:orch.revision,asset_revision:context.asset_revision,task_revision:context.task_revision,campaign_revision:context.campaign_revision,constraint_set_ids:context.constraint_set_ids,decision,notes:'Clarify the dealer benefit.',review_constraints:[{constraint_type:'prohibited_phrase',value:'best ever'}]});
+    assert.equal((await invoke(request('request_changes'),1)).statusCode,403);
+    assert.equal((await invoke(request('request_changes'),4)).statusCode,403);
+    assert.equal((await invoke({...request('request_changes'),asset_revision:999},2)).statusCode,409);
+    const before=(await readAs(2)).human_constraint_sets.length;
+    assert.equal((await invoke({...request('request_changes'),review_constraints:[{constraint_type:'approve'}]},2)).statusCode,409);
+    assert.equal((await readAs(2)).human_constraint_sets.length,before);
+    const feedback=request('request_changes');let res=await invoke(feedback,2);assert.equal(res.statusCode,200);o=res.body.orchestration;assert.equal(o.state,'awaiting_review');assert.equal(o.revision_cycles,1);
+    const creator=calls.at(-2).context;
+    assert.equal(creator.human_constraints.length,4);assert.equal(creator.prior_human_change_requests[0].notes,'Clarify the dealer benefit.');assert.ok(creator.previous_guardian);assert.equal(creator.asset.id,o.asset_id);
+    const count=calls.length;await invoke(feedback,2);assert.equal(calls.length,count);
+    data=await readAs(2);ctx=data.guided_work.find(x=>x.orchestration_id===o.id);
+    const setCount=data.human_constraint_sets.length;
+    res=await invoke(request('request_changes'),2);assert.equal(res.statusCode,200);o=res.body.orchestration;data=await readAs(2);assert.equal(data.human_constraint_sets.length,setCount,'unchanged asset rules do not create duplicate versions');
+    ctx=data.guided_work.find(x=>x.orchestration_id===o.id);
+    const approval=request('approve');res=await invoke(approval,2);assert.equal(res.statusCode,200);o=res.body.orchestration;assert.equal(o.state,'completed');
+    data=await readAs(2);const a=data.assets.find(x=>x.id===o.asset_id);assert.equal(a.approval_state,'approved');assert.equal(a.approved_by,id(2));assert.equal(data.tasks.find(x=>x.id===o.task_id).status,'todo');
+    await invoke(approval,2);assert.equal(calls.length,count+2);
+    await db.exec('reset role');const history=(await db.query('select * from marketing.workflow_history where asset_id=$1 order by id',[a.id])).rows;
+    assert.equal(history.filter(h=>h.action==='approved').length,1);assert.equal(history.filter(h=>h.action==='changes_requested').length,2);assert.equal(history.filter(h=>h.action==='asset_saved').length,3);
+    assert.ok(history.filter(h=>h.action==='asset_saved').every(h=>h.actor_type==='agent'&&h.agent_run_id));
+    await assert.rejects(db.query('delete from marketing.policy_versions where id=$1',[workspacePolicy.id]),/append-only/);
+    await assert.rejects(db.query("update marketing.policy_versions set constraints='[]' where id=$1",[campaignPolicy.id]),/append-only/);
+    for(const role of ['anon','authenticated','service_role']) for(const fn of ['marketing.guided_work_context(uuid,uuid)','marketing.effective_constraint_sets(uuid,uuid,uuid,uuid)','marketing.command_marketing_orchestration_before_guided(uuid,jsonb)']) assert.equal((await db.query("select has_function_privilege($1,$2,'execute') allowed",[role,fn])).rows[0].allowed,false);
+    await asUser(4);const outside=(await db.query('select public.read_marketing_attention_workspace($1) data',[other])).rows[0].data;assert.deepEqual(outside.policy_versions,[]);assert.deepEqual(outside.guided_work,[]);
+    await asUser(2);await db.query('select public.save_marketing_policy($1,null,$2,$3)',[w,workspacePolicy.id,[]]);await db.query('select public.save_marketing_policy($1,$2,$3,$4)',[w,c,campaignPolicy.id,[]]);
+  });
+  await t.test('policy preflight, supersession during inference and legacy guided recovery fail safely', async () => {
+    mode='ready';creatorContent='Book your demo.';
+    await asUser(2);let data=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
+    const current=data.policy_versions.find(s=>!s.superseded&&!s.campaign_id);
+    const p=(await db.query('select public.save_marketing_policy($1,null,$2,$3) data',[w,current.id,[{constraint_type:'approved_destination',value:'Join-Orion.com'}]])).rows[0].data;
+    creatorContent='Book your demo at fake.example/deal';let o=(await invoke(await assignment())).body.orchestration;assert.equal(o.state,'changes_needed');assert.equal(o.run_ids.length,1);assert.equal(o.constraint_preflight[0].passed,false);
+    creatorContent='Book your demo at Join-Orion.com';o=(await action(o,'revise')).body.orchestration;assert.equal(o.state,'awaiting_review');
+    beforeModel=async()=>{await asUser(2);await db.query('select public.save_marketing_policy($1,null,$2,$3)',[w,p.id,[{constraint_type:'human_instruction',value:'Use verified details only.'}]]);};
+    const stale=(await invoke(await assignment())).body.orchestration;assert.equal(stale.state,'failed');assert.equal(stale.asset_id,null);
+    mode='guardian_rejected';o=(await invoke(await assignment())).body.orchestration;assert.equal(o.state,'failed');mode='ready';
+    await asUser(2);data=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
+    const ctx=data.guided_work.find(x=>x.orchestration_id===o.id);assert.ok(ctx.actions.includes('request_changes'));
+    const res=await invoke({workspace_id:w,id:o.id,action:'review',expected_revision:o.revision,asset_revision:ctx.asset_revision,task_revision:ctx.task_revision,campaign_revision:ctx.campaign_revision,constraint_set_ids:ctx.constraint_set_ids,decision:'request_changes',notes:'Keep the destination, clarify the benefit.'},2);
+    assert.equal(res.statusCode,200);assert.equal(res.body.orchestration.id,o.id);assert.equal(res.body.orchestration.state,'awaiting_review');
   });
 
 });

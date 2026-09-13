@@ -6,11 +6,12 @@ import { inferMarketing } from './_lib/marketing-inference.js';
 export const config = { maxDuration: 120 };
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function validCommand(body) {
-  const keys = ['workspace_id', 'id', 'action', 'campaign_id', 'task_id', 'task_revision', 'campaign_revision', 'workflow', 'asset_type', 'expected_revision', 'instructions', 'asset_revision', 'constraint_set_ids'];
+  const keys = ['workspace_id', 'id', 'action', 'campaign_id', 'task_id', 'task_revision', 'campaign_revision', 'workflow', 'asset_type', 'expected_revision', 'instructions', 'asset_revision', 'constraint_set_ids', 'decision', 'notes', 'review_constraints'];
   return body && !Array.isArray(body) && Object.keys(body).every(k => keys.includes(k)) && uuid(body.workspace_id) && uuid(body.id)
-    && ['start', 'accept', 'revise', 'submit', 'inspect', 'stop', 'complete_task'].includes(body.action)
+    && ['start', 'accept', 'revise', 'submit', 'inspect', 'stop', 'complete_task', 'review'].includes(body.action)
     && (body.instructions === undefined || typeof body.instructions === 'string' && body.instructions.length <= 4000)
-    && (body.action !== 'revise' || Number.isSafeInteger(body.asset_revision) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision) && Array.isArray(body.constraint_set_ids) && body.constraint_set_ids.length <= 30 && body.constraint_set_ids.every(uuid))
+    && (!['revise', 'review'].includes(body.action) || Number.isSafeInteger(body.asset_revision) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision) && Array.isArray(body.constraint_set_ids) && body.constraint_set_ids.length <= 30 && body.constraint_set_ids.every(uuid))
+    && (body.action !== 'review' || ['approve', 'request_changes'].includes(body.decision) && typeof body.notes === 'string' && body.notes.length <= 4000 && (body.review_constraints === undefined || Array.isArray(body.review_constraints) && body.review_constraints.length <= 30))
     && (body.action === 'start' ? uuid(body.campaign_id) && uuid(body.task_id) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision)
       && ['strategist', 'creator_guardian', 'strategist_creator_guardian'].includes(body.workflow)
       && ['social_copy', 'email_copy', 'web_copy', 'print_copy', 'image_brief', 'video_brief'].includes(body.asset_type)

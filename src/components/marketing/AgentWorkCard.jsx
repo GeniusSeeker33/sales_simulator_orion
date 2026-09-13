@@ -1,3 +1,4 @@
+import GuidedWorkCard from './GuidedWorkCard';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { orchestrationRevisionRequest } from '../../lib/marketingRecovery';
@@ -13,7 +14,7 @@ export function StagePipeline({ stages }) {
   return <ol className="marketing-stage-pipeline" aria-label="Workflow pipeline">{stages.map(stage => <li key={stage.label} className={`stage-${stage.status}`}><span aria-hidden="true">{icons[stage.status]}</span> <span>{stage.label}</span><small>{labels[stage.status]}</small></li>)}</ol>;
 }
 
-export default function AgentWorkCard({ data, work, onRefresh, expanded = false, instructions: suppliedInstructions, onInstructionsChange }) {
+function TechnicalWorkCard({ data, work, onRefresh, expanded = false, instructions: suppliedInstructions, onInstructionsChange }) {
   const [open, setOpen] = useState(expanded), [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const o = work.orchestration, asset = work.asset;
@@ -71,4 +72,10 @@ function RunEvidence({ workspaceId, runId }) {
     return () => { current = false; };
   }, [workspaceId, runId]);
   return <section aria-label="Latest agent result"><h4>Latest agent result</h4>{state.runId !== runId ? <p>Loading recorded result…</p> : state.error ? <p role="alert">{state.error}</p> : <><p>{state.run.agent_key} · {state.run.status}</p><Outcome output={state.run.output_metadata} /></>}<Link to={`/marketing/agents?run=${runId}`}>Inspect full run</Link></section>;
+}
+
+export default function AgentWorkCard(props) {
+  const context = props.data.guided_work?.find(c => c.orchestration_id === props.work.orchestration?.id);
+  const technical = <TechnicalWorkCard {...props} />;
+  return context ? <GuidedWorkCard key={`${props.work.orchestration.id}:${context.expected_revision}`} {...props} context={context}>{technical}</GuidedWorkCard> : technical;
 }
