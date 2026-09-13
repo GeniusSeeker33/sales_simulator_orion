@@ -31,3 +31,15 @@ During the request and persisted Guardian execution, CHECK stays completed and R
 Database/API tests cover normal and legacy reviews, cycle 1/3 and the cycle limit, exact context and immutable content/history, active and completed duplicate requests, stale asset/task/campaign/policy denial, authentication/workspace boundaries, ready/needs_changes/inconsistent/technical-failure outcomes, and deterministic QA gating. Projection tests cover persisted and locally pending review stages. Browser coverage exercises both choices, the pending UI, unchanged revision 3 at cycle 1/3, a second recommendation, another re-review, authorization details, deduplicated navigation and final human approval.
 
 The migration is committed for the normal reviewed release process. No deployment or hosted data change is performed by this PR.
+
+## Legacy eligibility diagnosis and correction
+
+Read-only inspection of the deployed acceptance workflow confirmed that server eligibility denied the action and Guided Work correctly projected only `request_changes`. No prior retry event or authorization was required. The persisted revision had a `human-constraints-v1` comparative-claim failure matching `best` in the courtesy phrase `Best regards`; the current evaluator reproduced that false positive even though the effective policy snapshot matched.
+
+The comparative lexicon now excludes only the bounded phrase `best regards`, preserving match offsets and continuing to reject other comparative terms and additional occurrences of `best`. Explicit prohibited-phrase rules still apply to that phrase. Guardian semantic review and human approval remain required.
+
+Re-review retains the original complete, boolean deterministic QA gate. A historical failed policy check may be superseded for eligibility only by a freshly passing check with the same constraint ID and rule. Non-policy failures, unknown checks, missing/malformed evidence, current policy failures and changed policy snapshots still block execution. Neither historical QA nor asset content is rewritten. This applies equally to first re-reviews of legacy runs and later reviews, with no retry metadata prerequisite.
+
+Guided Work owns workflow decisions. Its nested technical history retains evidence and navigation but does not offer competing workflow mutation controls; the standalone technical fallback remains available when no guided projection exists.
+
+Regression fixtures persist historical results through real SQL completion with the old evaluator, then restore the current evaluator. They cover revision 3 at cycle 1/3, absence of retry authorization, visible and invokable re-review, Guardian-only execution, preserved content/evidence and duplicate protection. Existing suites cover stale contexts, authorization, private RPC denial and PR #36 consistency validation.

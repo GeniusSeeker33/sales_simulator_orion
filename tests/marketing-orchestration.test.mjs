@@ -1,3 +1,4 @@
+import { withLegacyConstraintEvaluator } from './fixtures/marketingLegacyGuardian.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
@@ -161,6 +162,9 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
       assert.equal(result.passed, false); assert.equal(result.matched_text, 'competitive wholesale firearms'); assert.ok(result.normalized_offset);
     }
     for (const term of ['competitive', 'best', 'leading', 'leader', 'superior']) assert.equal((await evaluate('no_unverified_comparative_claim', '', `Our ${term} inventory`)).passed, false);
+    assert.equal((await evaluate('no_unverified_comparative_claim', '', 'Best regards,\nThe team')).passed, true);
+    assert.equal((await evaluate('no_unverified_comparative_claim', '', 'Best regards. Our best inventory.')).passed, false);
+    assert.equal((await evaluate('prohibited_phrase', 'best regards', 'Best regards')).passed, false);
     for (const term of ['grow your business', 'success', 'increase sales', 'improve profit', 'outperform', 'win']) assert.equal((await evaluate('no_unverified_outcome_claim', '', term)).passed, false);
     for (const content of ['A satisfied dealer', 'Customer says: great service', '"They changed my business" — a dealer']) assert.equal((await evaluate('no_fabricated_testimonial', '', content)).passed, false);
     assert.equal((await evaluate('no_fabricated_testimonial', '', 'Review the dealer application.')).review_required, true);
@@ -639,6 +643,36 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
       const data=await snapshot();const ctx=data.guided_work.find(g=>g.orchestration_id===o.id);assert.equal(ctx.guardian_retry.eligible,false);assert.ok(!ctx.actions.includes('retry_guardian'));
       calls=[];assert.equal((await invoke(await retryCommand(o),2)).statusCode,409);assert.equal(calls.length,0);
     }
+  });
+
+  await t.test('persisted pre-37 Guardian QA false positive uses current checks without retry metadata', async () => {
+    const currentPolicy=(await snapshot()).policy_versions.find(p=>!p.superseded&&p.campaign_id===c);
+    await asUser(2);
+    const policy = (await db.query("select public.save_marketing_policy($1,$2,$3,$4) data", [w,c,currentPolicy?.id??null,[{constraint_type:'no_unverified_comparative_claim'}]])).rows[0].data;
+    assert.ok(policy);
+    mode='changes'; creatorContent='Book your demo. Best regards, the team.';
+    let original=(await invoke(await assignment('strategist_creator_guardian'))).body.orchestration;
+    original=(await action(original,'accept')).body.orchestration;
+    beforeModel=async function legacy(context) {
+      if(context.request.agent_key==='creator'){beforeModel=legacy;return;}
+      const output={summary:'Clarify the audience.',recommendation:'needs_changes',findings:[{category:'audience',severity:'warning',requires_correction:true,finding:'Explain the audience.'}],constraint_evaluations:context.human_constraints.map(c=>({constraint_id:c.id,status:'satisfied',detail:'Model believes satisfied.'}))};
+      await withLegacyConstraintEvaluator(db,()=>rpc('finish_marketing_orchestration_stage',{p_id:context.orchestration.id,p_run:context.orchestration.active_run_id,p_output:output,p_qa:deterministicQA(context),p_usage:{},p_error:null}));
+    };
+    const reviewContext=(await snapshot()).guided_work.find(g=>g.orchestration_id===original.id);
+    original=(await invoke({workspace_id:w,id:original.id,expected_revision:original.revision,action:'review',decision:'request_changes',notes:'Clarify the audience.',review_constraints:[],asset_revision:reviewContext.asset_revision,task_revision:reviewContext.task_revision,campaign_revision:reviewContext.campaign_revision,constraint_set_ids:reviewContext.constraint_set_ids},2)).body.orchestration;
+    assert.equal(original.asset_revision,3); assert.equal(original.revision_cycles,1);
+    let data=await snapshot(); const ctx=data.guided_work.find(g=>g.orchestration_id===original.id);
+    assert.equal(ctx.guardian_retry.eligible,true); assert.ok(ctx.actions.includes('retry_guardian'));
+    await asUser(2);const prior=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,original.active_run_id])).rows[0].data;
+    assert.equal(prior.guardian_evidence.retry_authorization,null);
+    assert.ok(prior.output_metadata.deterministic_qa.some(q=>q.passed===false&&q.matched_text==='best'));
+    const asset=data.assets.find(a=>a.id===original.asset_id), req=await retryCommand(original);
+    mode='ready'; calls=[];const next=(await invoke(req,2)).body.orchestration;
+    assert.equal(next.state,'awaiting_review');assert.equal(next.asset_revision,3);assert.equal(next.revision_cycles,1);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    data=await snapshot();assert.deepEqual(data.assets.find(a=>a.id===asset.id),asset);
+    await asUser(2);assert.deepEqual((await db.query('select public.read_marketing_agent_run($1,$2) data',[w,original.active_run_id])).rows[0].data,prior);
+    assert.deepEqual((await invoke(req,2)).body.orchestration.run_ids,next.run_ids);assert.equal(calls.length,1);
+    creatorContent='Book your demo.';
   });
 
 });
