@@ -14,12 +14,12 @@ export function StagePipeline({ stages }) {
   return <ol className="marketing-stage-pipeline" aria-label="Workflow pipeline">{stages.map(stage => <li key={stage.label} className={`stage-${stage.status}`}><span aria-hidden="true">{icons[stage.status]}</span> <span>{stage.label}</span><small>{labels[stage.status]}</small></li>)}</ol>;
 }
 
-function TechnicalWorkCard({ data, work, onRefresh, expanded = false, instructions: suppliedInstructions, onInstructionsChange }) {
+function TechnicalWorkCard({ data, work, onRefresh, expanded = false, historyOnly = false, instructions: suppliedInstructions, onInstructionsChange }) {
   const [open, setOpen] = useState(expanded), [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const o = work.orchestration, asset = work.asset;
   const instructions = suppliedInstructions ?? notes;
-  const canWrite = ['contributor', 'approver', 'admin'].includes(data.role);
+  const canWrite = !historyOnly && ['contributor', 'approver', 'admin'].includes(data.role);
   const canAdvance = canWrite && !work.stale;
   const assetHref = asset && assetRevisionLink(asset);
   const completeTask = o?.state === 'completed' && work.task.status !== 'done' && canWrite;
@@ -38,7 +38,7 @@ function TechnicalWorkCard({ data, work, onRefresh, expanded = false, instructio
     {work.failures.length > 0 && <ul className="marketing-constraint-failures">{work.failures.map((check, index) => <li key={check.constraint_id || index}>{constraintFailureLabel(check)}</li>)}</ul>}
     {o && <p>Revision cycles {o.revision_cycles}/3{asset ? ` · Result: ${asset.name} · revision ${asset.revision}` : ''}</p>}
     <time dateTime={work.timestamp}>{work.timestamp ? new Date(work.timestamp).toLocaleString() : 'Timestamp unavailable'}</time>
-    {!o || approval ? <Link className="btn-primary" to={approval ? assetHref : work.href}>{work.action}</Link> : <button type="button" className="btn-primary" disabled={busy} aria-expanded={completeTask ? undefined : open} onClick={() => completeTask ? command('complete_task') : setOpen(value => !value)}>{work.action}</button>}
+    {historyOnly ? <p>Workflow decisions are available in Guided Work above.</p> : !o || approval ? <Link className="btn-primary" to={approval ? assetHref : work.href}>{work.action}</Link> : <button type="button" className="btn-primary" disabled={busy} aria-expanded={completeTask ? undefined : open} onClick={() => completeTask ? command('complete_task') : setOpen(value => !value)}>{work.action}</button>}
     {error && <p role="alert" className="marketing-error">{error}</p>}
     {o && <details open={open} onToggle={e => setOpen(e.currentTarget.open)}><summary>Workflow details & actions</summary>
       {asset && <><Link to={assetHref}>Review asset manually · revision {asset.revision}</Link><pre className="marketing-asset-content">{asset.content}</pre></>}
@@ -76,6 +76,6 @@ function RunEvidence({ workspaceId, runId }) {
 
 export default function AgentWorkCard(props) {
   const context = props.data.guided_work?.find(c => c.orchestration_id === props.work.orchestration?.id);
-  const technical = <TechnicalWorkCard {...props} />;
+  const technical = <TechnicalWorkCard {...props} historyOnly={Boolean(context)} />;
   return context ? <GuidedWorkCard key={`${props.work.orchestration.id}:${context.expected_revision}`} {...props} context={context}>{technical}</GuidedWorkCard> : technical;
 }

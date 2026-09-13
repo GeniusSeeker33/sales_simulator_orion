@@ -1,3 +1,4 @@
+import { withLegacyConstraintEvaluator } from '../fixtures/marketingLegacyGuardian.mjs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +15,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql', '20260913221028_marketing_guardian_consistency.sql', '20260913224854_marketing_guardian_rereview.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql', '20260913221028_marketing_guardian_consistency.sql', '20260913224854_marketing_guardian_rereview.sql', '20260913232954_marketing_legacy_guardian_rereview.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -38,6 +39,7 @@ const signatures = {
 let pending = Promise.resolve();
 const consistencyWorkflows = new Set();
 const rereviewWorkflows = new Map();
+const legacyGuardianRuns = new Set();
 const rejectedGuardianRuns = new Set(), failedGuardianWorkflows = new Set();
 Object.assign(process.env, { LEARNER_SUPABASE_URL: 'https://synthetic.invalid', LEARNER_SUPABASE_PUBLISHABLE_KEY: 'synthetic-public', LEARNER_SUPABASE_SERVICE_ROLE_KEY: 'synthetic-server' });
 const agentDependencies = {
@@ -47,7 +49,8 @@ const agentDependencies = {
       try {
         if (name === 'finish_marketing_orchestration_stage' && args.p_output?.recommendation && rejectedGuardianRuns.has(args.p_run)) args = { ...args, p_output: { ...args.p_output, rejected_field: true } };
         await db.exec('reset role; set role service_role');
-        const result = await db.query(`select public.${name}(${keys.map((_, i) => `$${i + 1}`).join(',')}) data`, keys.map(k => args[k]));
+        const complete = () => db.query(`select public.${name}(${keys.map((_, i) => `$${i + 1}`).join(',')}) data`, keys.map(k => args[k]));
+        const result = legacyGuardianRuns.has(args.p_run) ? await withLegacyConstraintEvaluator(db, complete) : await complete();
         return { data: result.rows[0].data };
       } catch (error) { return { error }; }
     },
@@ -75,8 +78,10 @@ const agentDependencies = {
       }
     }
     if (context.orchestration?.instructions === 'Human Guardian re-review' && !rereviewWorkflows.has(context.orchestration.id)) rereviewWorkflows.set(context.orchestration.id,0);
+    if (rereviewWorkflows.has(context.orchestration?.id)) outputs.creator.content = 'Book your guided demo. Best regards, the team.';
     if (rereviewWorkflows.has(context.orchestration?.id) && context.request.agent_key === 'guardian') {
       const retry=context.request.purpose==='Retry review of the unchanged task asset';
+      if(!retry && context.orchestration.revision_cycles===1) legacyGuardianRuns.add(context.orchestration.active_run_id);
       if(retry) rereviewWorkflows.set(context.orchestration.id,rereviewWorkflows.get(context.orchestration.id)+1);
       if(rereviewWorkflows.get(context.orchestration.id)<2) outputs.guardian={...outputs.guardian,recommendation:'needs_changes',findings:[{category:'audience',severity:'warning',requires_correction:true,finding:retry?'Second assessment: clarify the verified dealer benefit.':'Clarify the dealer benefit.'}]};
     }
