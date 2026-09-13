@@ -14,7 +14,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -35,12 +35,14 @@ const signatures = {
   read_marketing_asset_history: ['p_workspace', 'p_asset'],
 };
 let pending = Promise.resolve();
+const rejectedGuardianRuns = new Set();
 Object.assign(process.env, { LEARNER_SUPABASE_URL: 'https://synthetic.invalid', LEARNER_SUPABASE_PUBLISHABLE_KEY: 'synthetic-public', LEARNER_SUPABASE_SERVICE_ROLE_KEY: 'synthetic-server' });
 const agentDependencies = {
   makeClient: (_url, key) => key === 'synthetic-public' ? { auth: { getUser: async token => ({ data: { user: /^[123]$/.test(token) ? { id: id(Number(token)) } : null } }) } } : {
     rpc: async (name, args) => {
       const keys = { command_marketing_orchestration: ['p_human', 'p_request'], finish_marketing_orchestration_stage: ['p_id', 'p_run', 'p_output', 'p_qa', 'p_usage', 'p_error'], start_marketing_agent_run: ['p_id', 'p_human', 'p_request', 'p_version', 'p_model'], finish_marketing_agent_run: ['p_id', 'p_output', 'p_qa', 'p_usage', 'p_error'] }[name];
       try {
+        if (name === 'finish_marketing_orchestration_stage' && args.p_output?.recommendation && rejectedGuardianRuns.has(args.p_run)) args = { ...args, p_output: { ...args.p_output, rejected_field: true } };
         await db.exec('reset role; set role service_role');
         const result = await db.query(`select public.${name}(${keys.map((_, i) => `$${i + 1}`).join(',')}) data`, keys.map(k => args[k]));
         return { data: result.rows[0].data };
@@ -49,6 +51,7 @@ const agentDependencies = {
   },
   makeModel: () => ({ responses: { create: async options => {
     const context = JSON.parse(options.input[1].content);
+    if (context.orchestration?.instructions === 'Reproduce Guardian result rejection' && context.request.agent_key === 'guardian') rejectedGuardianRuns.add(context.orchestration.active_run_id);
     if (context.request.purpose === 'Fail model') throw new Error('Synthetic model failure');
     const outputs = {
       strategist: { summary: 'Proposed demo execution plan', steps: [{ title: 'Draft copy', rationale: 'Explain the offer' }], proposed_tasks: ['Prepare demo copy'] },

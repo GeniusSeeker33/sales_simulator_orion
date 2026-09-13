@@ -16,26 +16,27 @@ export function deriveAgentWork(data) {
   const orchestrations = scoped(data.orchestrations).filter(o => campaigns.has(o.campaign_id) && tasks.has(o.task_id));
   const signals = (data.attention || []).filter(i => campaigns.has(i.campaign_id));
   const consumed = new Set(), work = [];
-  // A current asset gate belongs to its most recent matching workflow, never every historical run.
+  // Logical asset lineage survives human decisions and failed stages; revision equality is not ownership.
   const assetOwners = new Map();
   for (const o of [...orchestrations].sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at))) {
-    if (o.asset_id && assets.get(o.asset_id)?.revision === o.asset_revision) assetOwners.set(o.asset_id, o.id);
+    if (o.asset_id && assets.get(o.asset_id)?.campaign_id === o.campaign_id) assetOwners.set(o.asset_id, o.id);
   }
   for (const o of orchestrations) {
     const asset = assets.get(o.asset_id), task = tasks.get(o.task_id);
-    const items = signals.filter(i => i.orchestration_id === o.id || (!i.orchestration_id && !i.run_id && i.asset_id && assetOwners.get(i.asset_id) === o.id));
+    const items = signals.filter(i => i.orchestration_id === o.id || (!i.orchestration_id && i.asset_id && assetOwners.get(i.asset_id) === o.id));
     items.forEach(i => consumed.add(i.id));
+    const recovery = data.orchestration_recovery?.find(c => c.orchestration_id === o.id);
     const current = !asset || asset.revision === o.asset_revision;
-    const assessment = current && data.asset_constraint_checks?.find(a => a.asset_id === asset?.id && a.revision === asset?.revision);
-    const checks = current ? assessment?.checks || o.constraint_preflight || [] : [];
+    const assessment = data.asset_constraint_checks?.find(a => a.asset_id === asset?.id && a.revision === asset?.revision);
+    const checks = assessment?.checks || (current ? o.constraint_preflight || [] : []);
     const failures = checks.filter(q => q.passed === false);
     const stale = !terminal(o.state) && (task.revision !== o.task_revision || campaigns.get(o.campaign_id).revision !== o.campaign_revision || !current);
     const uncertain = o.state.endsWith('_running') && items.some(i => i.orchestration_id === o.id && i.severity === 'critical');
-    const inspect = stale || uncertain;
-    const state = inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
-    const action = inspect ? 'Inspect Failure' : failures.length ? 'Review Constraint Failure' : ({ awaiting_plan: 'Review Plan', awaiting_review: 'Review Asset', awaiting_approval: 'Approve / Request Changes', changes_needed: 'Send Revision to Creator', failed: 'Inspect Failure', blocked: 'Inspect Failure', completed: task.status !== 'done' ? 'Mark Task Complete' : 'View history', cancelled: 'View history' }[o.state] || 'View progress');
+    const inspect = (stale || uncertain) && !recovery?.eligible;
+    const state = recovery?.eligible && o.state === 'failed' ? 'Recoverable Guardian failure' : inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
+    const action = recovery?.eligible && o.state === 'failed' ? 'Review recovery' : inspect ? 'Inspect Failure' : failures.length ? 'Review Constraint Failure' : ({ awaiting_plan: 'Review Plan', awaiting_review: 'Review Asset', awaiting_approval: 'Approve / Request Changes', changes_needed: 'Send Revision to Creator', failed: 'Inspect Failure', blocked: 'Inspect Failure', completed: task.status !== 'done' ? 'Mark Task Complete' : 'View history', cancelled: 'View history' }[o.state] || 'View progress');
     const pipeline = derivePipeline(data, o, runs, asset, checks, stale || !current);
-    work.push({ id: o.id, orchestration: o, campaign: campaigns.get(o.campaign_id), task, asset, items, failures, checks, stale,
+    work.push({ id: o.id, orchestration: o, campaign: campaigns.get(o.campaign_id), task, asset, items, failures, checks, stale, recovery,
       state, action, severity: attentionLevel(items), timestamp: o.updated_at,
       reason: failures.length ? `Creator's current revision conflicts with ${failures.length} of your rules. ${pipeline.find(s => s.label === 'Guardian')?.status === 'pending' ? 'Guardian has not reviewed this revision.' : 'The recorded Guardian result does not resolve these rule failures.'}` : items.map(i => i.reason).join(' ') || o.reason || (o.state === 'completed' ? 'The governed workflow is complete.' : 'No human decision is currently blocking this workflow.'),
       group: items.length ? 'needsYou' : terminal(o.state) ? 'recentlyCompleted' : 'working',

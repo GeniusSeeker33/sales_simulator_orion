@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../api/marketing-orchestration.js';
+import { deriveAgentWork } from '../src/lib/marketingAgentWork.js';
 import { deriveMarketingAttention } from '../src/lib/marketingAttention.js';
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const w = '4f52494f-4e00-4000-8000-000000000001', c = id(10), other = id(11);
@@ -26,6 +27,7 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
   const rpc = async (name, args) => {
     try {
       await db.exec('reset role; set role service_role'); const keys = signatures[name];
+      if (mode === 'guardian_rejected' && name === 'finish_marketing_orchestration_stage' && args.p_output?.recommendation) args = { ...args, p_output: { ...args.p_output, rejected_field: true } };
       const data = (await db.query(`select public.${name}(${keys.map((_, i) => `$${i + 1}`).join(',')}) data`, keys.map(k => args[k]))).rows[0].data;
       if (loseCompletion && name === 'finish_marketing_orchestration_stage' && !args.p_error) { loseCompletion = false; throw new Error('Lost committed response'); }
       return { data };
@@ -51,7 +53,7 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     const campaign = (await db.query('select revision from marketing.campaigns where id=$1', [c])).rows[0];
     return { id: id(sequence++), workspace_id: w, campaign_id: c, task_id: task, task_revision: 1, campaign_revision: campaign.revision, workflow, asset_type: 'social_copy', action: 'start' };
   };
-  const action = (o, name, extra = {}) => invoke({ id: o.id, workspace_id: w, action: name, expected_revision: o.revision, ...extra });
+  const action = async (o, name, extra = {}) => { const data = name === 'revise' ? await snapshot() : null; const context = data?.orchestration_recovery.find(x => x.orchestration_id === o.id); return invoke({ id: o.id, workspace_id: w, action: name, expected_revision: o.revision, ...(context ? { asset_revision: context.asset_revision, task_revision: context.task_revision, campaign_revision: context.campaign_revision, constraint_set_ids: context.constraint_set_ids } : {}), ...extra }); };
   const snapshot = async () => { await asUser(1); return (await db.query('select public.read_marketing_attention_workspace($1) data', [w])).rows[0].data; };
   await t.test('authentication, membership, workspace/task matching and actor controls deny unsafe starts', async () => {
     const req = await assignment();
@@ -227,4 +229,151 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     await asUser(4); const foreign = (await db.query('select public.read_marketing_attention_workspace($1) data', [other])).rows[0].data;
     assert.equal(foreign.human_constraint_sets.length, 0);
   });
+  const requestChanges = async (o, rules = [{ constraint_type: 'prohibited_phrase', value: 'competitive wholesale firearms' }]) => {
+    await asUser(1);
+    const a = (await snapshot()).assets.find(a => a.id === o.asset_id);
+    if (a.approval_state !== 'in_review') await db.query("select public.write_marketing_asset($1,$2,$3,$4,'submit','{}')", [w, c, a.id, a.revision]);
+    const current = (await snapshot()).assets.find(item => item.id === o.asset_id);
+    await asUser(2);
+    await db.query("select public.write_marketing_asset($1,$2,$3,$4,'request_changes',$5)", [w, c, a.id, current.revision, { notes: 'Use factual dealer wording. Remove competitive claims.', human_constraints: rules, constraint_set_id: null }]);
+    return snapshot();
+  };
+  const revisionCommand = (o, data) => {
+    const ctx = data.orchestration_recovery.find(x => x.orchestration_id === o.id);
+    return { id: o.id, workspace_id: w, action: 'revise', expected_revision: o.revision, asset_revision: ctx.asset_revision, task_revision: ctx.task_revision, campaign_revision: ctx.campaign_revision, constraint_set_ids: ctx.constraint_set_ids, instructions: 'Follow the human requested changes.' };
+  };
+  const failedGuardian = async (workflow = 'creator_guardian') => {
+    mode = 'guardian_rejected'; creatorContent = 'Book your demo.';
+    let o = (await invoke(await assignment(workflow))).body.orchestration;
+    if (o.state === 'awaiting_plan') o = (await action(o, 'accept')).body.orchestration;
+    assert.equal(o.state, 'failed'); assert.equal(o.reason, 'result_rejected');
+    mode = 'ready'; return o;
+  };
+  await t.test('hosted failure: human-requested revision recovers the same workflow and exact asset through approval', async () => {
+    const original = await failedGuardian('strategist_creator_guardian'), oldRun = original.active_run_id;
+    let data = await requestChanges(original);
+    assert.equal(data.orchestrations.find(x => x.id === original.id).state, 'failed'); // human edits never auto-recover
+    const request = revisionCommand(original, data), oldAssetRevision = request.asset_revision;
+    assert.equal(data.orchestration_recovery.find(x => x.orchestration_id === original.id).eligible, true);
+    const project = data => deriveAgentWork({ ...data, attention: deriveMarketingAttention(data) }).all.filter(x => x.orchestration?.id === original.id || x.asset?.id === original.asset_id);
+    assert.equal(project(data).length, 1); assert.equal(project(data)[0].state, 'Recoverable Guardian failure');
+    await db.exec('reset role; set role service_role');
+    await assert.rejects(db.query("select public.start_marketing_agent_run($1,$2,$3,'marketing-v2','gpt-4.1-mini')", [id(sequence++), id(1), { workspace_id: w, campaign_id: c, agent_key: 'creator', purpose: 'Bypass team', revision_asset_id: original.asset_id, expected_asset_revision: oldAssetRevision, expected_campaign_revision: original.campaign_revision, supplemental_instructions: '', submit_for_review: true }]), /task workflow/);
+    calls = [];
+    beforeModel = async context => {
+      assert.equal(context.request.agent_key, 'creator'); assert.equal(context.orchestration.id, original.id);
+      // Duplicate click and refresh after initiation never own another inference call.
+      const duplicate = await invoke(request); assert.equal(duplicate.body.orchestration.state, 'creator_running');
+      const current = (await snapshot()).orchestrations.find(x => x.id === original.id);
+      assert.equal(current.revision_cycles, 1); assert.equal((await action(current, 'inspect')).body.orchestration.state, 'creator_running');
+      const late = await rpc('finish_marketing_orchestration_stage', { p_id: original.id, p_run: oldRun, p_output: null, p_qa: [], p_usage: {}, p_error: 'persistence_failed' });
+      assert.equal(late.data.orchestration.state, 'creator_running'); assert.equal(late.data.orchestration.active_run_id, context.orchestration.active_run_id);
+    };
+    let recovered = (await invoke(request)).body.orchestration;
+    assert.equal(recovered.state, 'awaiting_review'); assert.equal(recovered.id, original.id); assert.equal(recovered.task_id, original.task_id);
+    assert.equal(recovered.initiated_by, original.initiated_by); assert.equal(recovered.workflow, original.workflow);
+    assert.equal(recovered.asset_id, original.asset_id); assert.equal(recovered.asset_revision, oldAssetRevision + 1); assert.equal(recovered.revision_cycles, 1);
+    assert.deepEqual(recovered.run_ids.slice(0, original.run_ids.length), original.run_ids);
+    assert.deepEqual(calls.map(x => x.agent), ['creator', 'guardian']);
+    assert.equal(calls[0].context.human_change_request.notes, 'Use factual dealer wording. Remove competitive claims.');
+    assert.equal(calls[0].context.human_constraints.length, 1); assert.equal(calls[1].context.asset.revision, oldAssetRevision + 1);
+    assert.equal(calls[1].context.orchestration.id, original.id); assert.ok(calls[1].context.creator_preflight.every(q => q.passed));
+    await invoke(request); assert.equal(calls.length, 2);
+    data = await snapshot(); assert.equal(project(data).length, 1);
+    assert.equal(project(data)[0].pipeline.find(s => s.label === 'Guardian').status, 'done');
+    assert.equal(data.orchestrations.filter(x => x.task_id === original.task_id).length, 1);
+    recovered = (await action(recovered, 'submit')).body.orchestration;
+    data = await snapshot(); assert.equal(project(data).length, 1); assert.equal(project(data)[0].action, 'Approve / Request Changes');
+    await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'approve','{}')", [w, c, recovered.asset_id, recovered.asset_revision]);
+    data = await snapshot(); recovered = data.orchestrations.find(x => x.id === original.id);
+    assert.equal(recovered.state, 'completed'); assert.equal(data.tasks.find(x => x.id === original.task_id).status, 'todo');
+    await action(recovered, 'complete_task'); data = await snapshot(); assert.equal(project(data)[0].group, 'recentlyCompleted');
+    await db.exec('reset role');
+    const authorizations = (await db.query('select * from marketing.orchestration_revision_authorizations where orchestration_id=$1', [original.id])).rows;
+    assert.equal(authorizations.length, 1); assert.equal(authorizations[0].actor_user_id, id(1)); assert.ok(authorizations[0].human_decision_id);
+    assert.equal((await db.query('select status,error_code from marketing.agent_runs where id=$1', [oldRun])).rows[0].error_code, 'result_rejected');
+    assert.ok((await db.query("select 1 from marketing.orchestration_history where orchestration_id=$1 and snapshot->>'state'='failed'", [original.id])).rows.length);
+    await assert.rejects(db.query('delete from marketing.orchestration_revision_authorizations where orchestration_id=$1', [original.id]), /append-only/);
+    await assert.rejects(db.query("update marketing.orchestration_history set snapshot='{}' where orchestration_id=$1", [original.id]), /append-only/);
+  });
+  await t.test('recovered preflight failure persists Creator and stops before Guardian; a further explicit cycle succeeds', async () => {
+    const original = await failedGuardian(); const data = await requestChanges(original); calls = []; creatorContent = 'Competitive wholesale firearms. Book your demo.';
+    let o = (await invoke(revisionCommand(original, data))).body.orchestration;
+    assert.equal(o.id, original.id); assert.equal(o.state, 'changes_needed'); assert.equal(o.revision_cycles, 1); assert.equal(o.reason, 'Human constraint failed');
+    assert.deepEqual(calls.map(x => x.agent), ['creator']); assert.ok(o.constraint_preflight.some(q => !q.passed));
+    creatorContent = 'Book your dealer demo.'; calls = [];
+    o = (await action(o, 'revise')).body.orchestration;
+    assert.equal(o.id, original.id); assert.equal(o.revision_cycles, 2); assert.equal(o.state, 'awaiting_review'); assert.deepEqual(calls.map(x => x.agent), ['creator', 'guardian']);
+  });
+  await t.test('recovery denies stale versions, revoked roles, foreign workspace and a second active workflow', async () => {
+    const original = await failedGuardian(); let data = await requestChanges(original); const request = revisionCommand(original, data); calls = [];
+    for (const change of [{ asset_revision: request.asset_revision - 1 }, { task_revision: request.task_revision + 1 }, { campaign_revision: request.campaign_revision + 1 }, { constraint_set_ids: [] }]) assert.equal((await invoke({ ...request, ...change })).statusCode, 409);
+    for (const human of ['invalid', 3, 4]) assert.ok((await invoke(request, human)).statusCode >= 400);
+    assert.equal((await invoke({ ...request, workspace_id: other })).statusCode, 403);
+    await asUser(1); await db.query('select public.save_marketing_human_constraints($1,$2,$3,$4,$5)', [w, original.asset_id, request.asset_revision, request.constraint_set_ids[0], []]);
+    assert.equal((await invoke(request)).statusCode, 409); assert.equal(calls.length, 0);
+    data = await snapshot(); const fresh = revisionCommand(original, data);
+    await db.exec('reset role'); await db.query("update marketing.workspace_members set role='viewer' where workspace_id=$1 and user_id=$2", [w, id(1)]);
+    assert.equal((await invoke(fresh)).statusCode, 403);
+    await db.exec('reset role'); await db.query("update marketing.workspace_members set role='contributor' where workspace_id=$1 and user_id=$2", [w, id(1)]);
+    const next = await invoke({ id: id(sequence++), workspace_id: w, action: 'start', campaign_id: c, task_id: original.task_id, task_revision: 1, campaign_revision: original.campaign_revision, workflow: 'creator_guardian', asset_type: 'social_copy' });
+    assert.equal(next.statusCode, 200); const count = calls.length;
+    assert.equal((await invoke(fresh)).statusCode, 409); assert.equal(calls.length, count);
+    await asUser(4); const foreign = (await db.query('select public.read_marketing_attention_workspace($1) data', [other])).rows[0].data; assert.deepEqual(foreign.orchestration_recovery, []);
+    await asUser(1); await assert.rejects(db.query('select marketing.orchestration_revision_context($1,$2)', [original.id, id(1)]), /permission denied/);
+    await assert.rejects(db.query('select * from marketing.orchestration_revision_authorizations'), /permission denied/);
+  });
+  await t.test('cancelled, changed task and exhausted workflows cannot be revived', async () => {
+    const cancelled = (await action((await invoke(await assignment())).body.orchestration, 'stop')).body.orchestration;
+    let data = await requestChanges(cancelled); calls = [];
+    assert.equal((await invoke(revisionCommand(cancelled, data))).statusCode, 409); assert.equal(calls.length, 0);
+    const failed = await failedGuardian(); data = await requestChanges(failed);
+    await asUser(1); await db.query('select public.save_marketing_task($1,$2,$3,1,$4)', [w, c, failed.task_id, { title: 'Changed task scope', status: 'todo' }]);
+    calls = []; assert.equal((await invoke(revisionCommand(failed, data))).statusCode, 409); assert.equal(calls.length, 0);
+    mode = 'changes'; let o = (await invoke(await assignment())).body.orchestration;
+    for (let i = 0; i < 3; i++) o = (await action(o, 'revise')).body.orchestration;
+    const count = calls.length; assert.equal(o.revision_cycles, 3); assert.equal((await action(o, 'revise')).statusCode, 409); assert.equal(calls.length, count); mode = 'ready';
+  });
+
+  await t.test('legacy detached successful revision can be explicitly adopted; an old standalone in-flight revision cannot apply', async () => {
+    const original = await failedGuardian(); let data = await requestChanges(original);
+    const a = data.assets.find(x => x.id === original.asset_id), legacyId = id(sequence++);
+    const legacyRequest = { workspace_id: w, campaign_id: c, agent_key: 'creator', purpose: 'Legacy standalone revision', revision_asset_id: a.id, expected_asset_revision: a.revision, expected_campaign_revision: original.campaign_revision, supplemental_instructions: '', submit_for_review: true };
+    // Execute the retained pre-migration implementation as the fixture owner to reproduce already-hosted history.
+    await db.exec('reset role');
+    await db.query("select marketing.start_marketing_agent_run_before_recovery($1,$2,$3,'marketing-v2','gpt-4.1-mini')", [legacyId, id(1), legacyRequest]);
+    await db.query("select marketing.finish_marketing_agent_run_before_recovery($1,$2,'[]','{}',null)", [legacyId, { name: 'Legacy revised asset', asset_type: 'social_copy', content: 'Book your factual dealer demo.' }]);
+    data = await snapshot(); const detached = data.assets.find(x => x.id === a.id);
+    assert.equal(detached.revision, a.revision + 2); assert.equal(detached.approval_state, 'in_review');
+    const projected = deriveAgentWork({ ...data, attention: deriveMarketingAttention(data) }).needsYou.filter(x => x.asset?.id === a.id);
+    assert.equal(projected.length, 1); assert.equal(projected[0].orchestration.id, original.id);
+    await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'request_changes',$5)", [w, c, a.id, detached.revision, { notes: 'Continue this revision in the original task workflow.' }]);
+    data = await snapshot(); const recovered = (await invoke(revisionCommand(original, data))).body.orchestration;
+    assert.equal(recovered.id, original.id); assert.equal(recovered.asset_revision, detached.revision + 2); assert.equal(recovered.state, 'awaiting_review');
+    const next = await failedGuardian(); data = await requestChanges(next); const pending = id(sequence++), current = data.assets.find(x => x.id === next.asset_id);
+    await db.exec('reset role');
+    await db.query("select marketing.start_marketing_agent_run_before_recovery($1,$2,$3,'marketing-v2','gpt-4.1-mini')", [pending, id(1), { ...legacyRequest, revision_asset_id: current.id, expected_asset_revision: current.revision }]);
+    const denied = (await db.query("select public.finish_marketing_agent_run($1,$2,'[]','{}',null) data", [pending, { name: 'Late legacy revision', asset_type: 'social_copy', content: 'Book your demo.' }])).rows[0].data;
+    assert.equal(denied.status, 'failed'); assert.equal(denied.error_code, 'result_rejected');
+    data = await snapshot(); assert.equal(data.assets.find(x => x.id === current.id).revision, current.revision);
+  });
+
+  await t.test('corrupt stage lineage and private recovery helpers fail closed', async () => {
+    mode = 'changes';
+    const first = (await invoke(await assignment())).body.orchestration, second = (await invoke(await assignment())).body.orchestration;
+    await db.exec('reset role');
+    await db.query('update marketing.task_orchestrations set active_run_id=$2 where id=$1', [first.id, second.active_run_id]);
+    const data = await snapshot(), ctx = data.orchestration_recovery.find(x => x.orchestration_id === first.id);
+    assert.equal(ctx.eligible, false); assert.match(ctx.reason, /lineage/);
+    const count = calls.length; assert.equal((await action(data.orchestrations.find(x => x.id === first.id), 'revise')).statusCode, 409); assert.equal(calls.length, count);
+    await db.exec('reset role');
+    for (const role of ['anon','authenticated','service_role']) {
+      for (const fn of ['marketing.orchestration_revision_context(uuid,uuid)', 'marketing.command_marketing_orchestration_before_recovery(uuid,jsonb)', 'marketing.start_marketing_agent_run_before_recovery(uuid,uuid,jsonb,text,text)', 'marketing.finish_marketing_agent_run_before_recovery(uuid,jsonb,jsonb,jsonb,text)', 'marketing.finish_marketing_orchestration_stage_before_recovery(uuid,uuid,jsonb,jsonb,jsonb,text)']) {
+        assert.equal((await db.query("select has_function_privilege($1,$2,'execute') allowed", [role, fn])).rows[0].allowed, false);
+      }
+    }
+    assert.equal((await db.query("select relrowsecurity from pg_class where oid='marketing.orchestration_revision_authorizations'::regclass")).rows[0].relrowsecurity, true);
+    mode = 'ready';
+  });
+
 });
