@@ -1,3 +1,4 @@
+import GuardianEvidence from './GuardianEvidence';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ASSET_TYPES, readMarketingAgentRun, readMarketingAgentRuns, runMarketingAgent } from '../../lib/marketing';
@@ -43,6 +44,7 @@ export default function MarketingRunHistory({ data, campaign, onRefresh }) {
       {run.error_code && <p className="marketing-error">Run failed: {label(run.error_code)}. No agent results applied.</p>}
       {run.outcome_asset_id && <p>Outcome asset: <Link to={`/marketing/campaigns/${run.campaign_id}?asset=${run.outcome_asset_id}`}>{run.outcome_asset_id}</Link></p>}
       {run.input_metadata?.human_change_request && <details><summary>Revision handoff evidence</summary><p>Human requested changes: {run.input_metadata.human_change_request.notes}</p><p>Prior asset revision {run.input_metadata.asset.revision}</p><pre className="marketing-asset-content">{run.input_metadata.asset.content}</pre><p>Supplemental instructions: {run.input_metadata.request.supplemental_instructions || 'None'}</p>{run.input_metadata.guardian_assessment && <><Link to={`/marketing/agents?run=${run.input_metadata.guardian_assessment.run_id}`}>Inspect prior Guardian assessment</Link><Outcome output={run.input_metadata.guardian_assessment.output_metadata} /></>}</details>}
+      <GuardianEvidence evidence={run.guardian_evidence} />
       <Outcome output={run.output_metadata} />
       <AgentResolution data={data} run={run} onDone={onRefresh} />
     </details>)}

@@ -14,7 +14,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
  create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql']) {
+for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql']) {
   await db.exec(await readFile(fixture(`../../supabase/migrations/${name}`), 'utf8'));
 }
 for (const [n, role] of [[1, 'contributor'], [2, 'approver'], [3, 'viewer']]) {
@@ -36,7 +36,7 @@ const signatures = {
   read_marketing_asset_history: ['p_workspace', 'p_asset'],
 };
 let pending = Promise.resolve();
-const rejectedGuardianRuns = new Set();
+const rejectedGuardianRuns = new Set(), failedGuardianWorkflows = new Set();
 Object.assign(process.env, { LEARNER_SUPABASE_URL: 'https://synthetic.invalid', LEARNER_SUPABASE_PUBLISHABLE_KEY: 'synthetic-public', LEARNER_SUPABASE_SERVICE_ROLE_KEY: 'synthetic-server' });
 const agentDependencies = {
   makeClient: (_url, key) => key === 'synthetic-public' ? { auth: { getUser: async token => ({ data: { user: /^[123]$/.test(token) ? { id: id(Number(token)) } : null } }) } } : {
@@ -52,7 +52,7 @@ const agentDependencies = {
   },
   makeModel: () => ({ responses: { create: async options => {
     const context = JSON.parse(options.input[1].content);
-    if (context.orchestration?.instructions === 'Reproduce Guardian result rejection' && context.request.agent_key === 'guardian') rejectedGuardianRuns.add(context.orchestration.active_run_id);
+    if (context.orchestration?.instructions === 'Reproduce Guardian result rejection' && context.request.agent_key === 'guardian' && !failedGuardianWorkflows.has(context.orchestration.id)) { rejectedGuardianRuns.add(context.orchestration.active_run_id); failedGuardianWorkflows.add(context.orchestration.id); }
     if (context.request.purpose === 'Fail model') throw new Error('Synthetic model failure');
     const outputs = {
       strategist: { summary: 'Proposed demo execution plan', steps: [{ title: 'Draft copy', rationale: 'Explain the offer' }], proposed_tasks: ['Prepare demo copy'] },
@@ -60,6 +60,7 @@ const agentDependencies = {
       guardian: { summary: 'Review audience and CTA before approval.', recommendation: 'needs_changes', findings: [{ category: 'audience', severity: 'warning', requires_correction: true, finding: 'Confirm audience suitability.' }] },
     };
     if (context.request.purpose === 'Ready for approval' || context.orchestration) outputs.guardian = { summary: 'Ready for a human decision.', recommendation: 'ready_for_human_review', findings: [] };
+    if (context.orchestration?.instructions === 'Guardian recommends content changes') outputs.guardian = {summary:'Clarify the dealer benefit.',recommendation:'needs_changes',findings:[{category:'audience',severity:'warning',requires_correction:true,finding:'Explain the dealer benefit before approval.'},{category:'channel',severity:'info',requires_correction:false,finding:'Optional wording suggestion.'}]};
     if (context.orchestration?.instructions === 'Exercise constraint failure' || context.prior_human_change_requests?.[0]?.notes === 'Exercise constraint failure' && context.orchestration?.revision_cycles === 1) outputs.creator.content = 'Competitive wholesale firearms. Book your guided demo.';
     outputs.guardian.constraint_evaluations = (context.human_constraints || []).map(c => ({ constraint_id: c.id, status: 'satisfied', detail: 'Model believes satisfied.' }));
     return { status: 'completed', output_text: JSON.stringify(outputs[context.request.agent_key]), usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } };

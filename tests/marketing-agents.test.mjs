@@ -25,7 +25,7 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['20260911120000_marketing_command_center.sql', '20260912111609_marketing_campaign_workflow.sql', '20260912161020_marketing_agent_run_layer.sql', '20260912172142_marketing_attention_creator_revision.sql', '20260912185640_marketing_human_resolution_actions.sql', '20260912192217_marketing_task_orchestration.sql', '20260912213640_marketing_human_constraints.sql', '20260913154417_marketing_orchestration_recovery.sql', '20260913194223_marketing_guided_policy.sql', '20260913210952_marketing_guardian_retry.sql']) await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
   for (let n = 1; n <= 4; n++) await db.query('insert into auth.users values($1)', [id(n)]);
   await db.query("insert into marketing.workspaces(id,slug,name) values($1,'other','Other')", [other]);
   await db.query("insert into marketing.workspace_members(workspace_id,user_id,role) values($1,$3,'contributor'),($1,$4,'approver'),($1,$5,'viewer'),($2,$6,'admin')", [workspace, other, id(1), id(2), id(3), id(4)]);
@@ -288,7 +288,8 @@ test('Marketing agent server boundary with PostgreSQL and mocked inference', asy
     await asUser(2); await db.query("select public.write_marketing_asset($1,$2,$3,$4,'approve','{}')", [workspace, campaign, asset.id, asset.revision]);
     data = (await db.query('select public.read_marketing_attention_workspace($1) data', [workspace])).rows[0].data;
     assert.ok(!deriveMarketingAttention(data).some(i => i.asset_id === asset.id));
-    assert.deepEqual((await db.query('select public.read_marketing_agent_run($1,$2) data', [workspace, run.id])).rows[0].data, run);
+    const { guardian_evidence, ...unchangedRun } = (await db.query('select public.read_marketing_agent_run($1,$2) data', [workspace, run.id])).rows[0].data;
+    assert.deepEqual(unchangedRun, run); assert.equal(guardian_evidence.asset_revision, run.input_metadata.asset.revision);
     const history = (await db.query('select action,actor_type from marketing.workflow_history where asset_id=$1 order by id', [asset.id])).rows;
     assert.deepEqual(history, [{ action: 'asset_saved', actor_type: 'agent' }, { action: 'submitted', actor_type: 'human' }, { action: 'approved', actor_type: 'human' }]);
     for (const action of ['save', 'submit']) {

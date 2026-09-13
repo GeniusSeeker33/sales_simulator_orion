@@ -5,12 +5,26 @@ import { inferMarketing } from './_lib/marketing-inference.js';
 
 export const config = { maxDuration: 120 };
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+// Only these fixed database messages may cross the public error boundary.
+const retryMessages = new Set([
+  "You need workspace write permission to retry Guardian.",
+  "This work has no completed technical Guardian failure to retry.",
+  "The review cannot be linked safely to this work. Inspect the technical history.",
+  "The task changed. Refresh and review its scope before continuing.",
+  "The campaign changed. Refresh and review its brief before continuing.",
+  "The asset changed. Refresh and review the current content before continuing.",
+  "Marketing Policy changed. Refresh and review the current rules before continuing.",
+  "Current content has a Marketing Policy issue. Review it before continuing.",
+  "A stage is still active or uncertain. Inspect it before retrying.",
+  "Another workflow owns this work. Inspect it before continuing.",
+  "Review context changed. Refresh before retrying."
+]);
 export function validCommand(body) {
   const keys = ['workspace_id', 'id', 'action', 'campaign_id', 'task_id', 'task_revision', 'campaign_revision', 'workflow', 'asset_type', 'expected_revision', 'instructions', 'asset_revision', 'constraint_set_ids', 'decision', 'notes', 'review_constraints'];
   return body && !Array.isArray(body) && Object.keys(body).every(k => keys.includes(k)) && uuid(body.workspace_id) && uuid(body.id)
-    && ['start', 'accept', 'revise', 'submit', 'inspect', 'stop', 'complete_task', 'review'].includes(body.action)
+    && ['start', 'accept', 'revise', 'submit', 'inspect', 'stop', 'complete_task', 'review', 'retry_guardian'].includes(body.action)
     && (body.instructions === undefined || typeof body.instructions === 'string' && body.instructions.length <= 4000)
-    && (!['revise', 'review'].includes(body.action) || Number.isSafeInteger(body.asset_revision) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision) && Array.isArray(body.constraint_set_ids) && body.constraint_set_ids.length <= 30 && body.constraint_set_ids.every(uuid))
+    && (!['revise', 'review', 'retry_guardian'].includes(body.action) || Number.isSafeInteger(body.asset_revision) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision) && Array.isArray(body.constraint_set_ids) && body.constraint_set_ids.length <= 30 && body.constraint_set_ids.every(uuid))
     && (body.action !== 'review' || ['approve', 'request_changes'].includes(body.decision) && typeof body.notes === 'string' && body.notes.length <= 4000 && (body.review_constraints === undefined || Array.isArray(body.review_constraints) && body.review_constraints.length <= 30))
     && (body.action === 'start' ? uuid(body.campaign_id) && uuid(body.task_id) && Number.isSafeInteger(body.task_revision) && Number.isSafeInteger(body.campaign_revision)
       && ['strategist', 'creator_guardian', 'strategist_creator_guardian'].includes(body.workflow)
@@ -36,7 +50,7 @@ export function createHandler({ makeClient = createClient, makeModel = () => new
     const rpc = async (name, args) => { const { data, error } = await server.rpc(name, args); if (error) throw error; return data; };
     let next;
     try { next = await rpc('command_marketing_orchestration', { p_human: human, p_request: req.body }); }
-    catch (error) { return res.status(error.code === '42501' ? 403 : 409).json({ error: 'Assignment or action unavailable. Refresh and inspect task context before retrying.' }); }
+    catch (error) { return res.status(error.code === '42501' ? 403 : 409).json({ error: req.body.action === 'retry_guardian' && retryMessages.has(error.message) ? error.message : 'Assignment or action unavailable. Refresh and inspect task context before retrying.' }); }
     // At most Creator + Guardian; Strategist always stops at its human gate.
     for (let stage = 0; next.run && stage < 2; stage++) {
       const { id, context } = next.run;

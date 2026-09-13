@@ -1539,3 +1539,5 @@ button:hover {
 .marketing-stage-pipeline .stage-pending, .marketing-stage-pipeline .stage-working { background: #1e293b; color: #e2e8f0; }
 .marketing-history-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
 .marketing-constraint-failures { color: #fecaca; }
+
+.marketing-stage-pipeline .stage-technical { background: #5d202a; color: #fecaca; }
