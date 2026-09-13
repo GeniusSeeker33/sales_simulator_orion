@@ -7,14 +7,15 @@ const toggles = [
   ['no_unverified_outcome_claim', 'No unverified business-outcome claims'],
 ];
 export function ConstraintEditor({ value, onChange }) {
-  const phrases = value.map((rule, index) => ({ rule, index })).filter(({ rule }) => rule.constraint_type === 'prohibited_phrase');
+  const phrases = value.map((rule, index) => ({ rule, index })).filter(({ rule }) => !toggles.some(([type]) => type === rule.constraint_type));
   return <fieldset className="marketing-fieldset"><legend>Structured constraints</legend>
     <p>These mandatory human rules apply to this asset and its future revision path. Freeform notes remain separate.</p>
     {phrases.map(({ rule, index }, number) => <div key={index}>
-      <label className="form-field"><span>Prohibited phrase {number + 1}</span><input required maxLength="240" value={rule.value} onChange={e => onChange(value.map((v, i) => i === index ? { ...v, value: e.target.value } : v))} /></label>
+      <label className="form-field"><span>{rule.constraint_type === 'prohibited_phrase' ? 'Prohibited phrase' : rule.constraint_type.replaceAll('_', ' ')} {number + 1}</span><input required maxLength="240" value={rule.value} onChange={e => onChange(value.map((v, i) => i === index ? { ...v, value: e.target.value } : v))} /></label>
       <button type="button" className="btn-secondary" onClick={() => onChange(value.filter((_, i) => i !== index))}>Remove phrase {number + 1}</button>
     </div>)}
     <button type="button" className="btn-secondary" disabled={value.length >= 30} onClick={() => onChange([...value, { constraint_type: 'prohibited_phrase', value: '' }])}>Add prohibited phrase</button>
+    <label className="form-field"><span>Add a rule for this work</span><select value="" disabled={value.length >= 30} onChange={e => { if (e.target.value) onChange([...value, { constraint_type: e.target.value, value: '' }]); }}><option value="">Choose rule type</option>{['human_instruction', 'prohibited_claim', 'required_phrase_or_concept', 'required_destination', 'approved_destination'].map(type => <option key={type} value={type}>{type.replaceAll('_', ' ')}</option>)}</select></label>
     {toggles.map(([type, text]) => <label key={type}><input type="checkbox" checked={value.some(v => v.constraint_type === type)} onChange={e => onChange(e.target.checked ? [...value, { constraint_type: type }] : value.filter(v => v.constraint_type !== type))} /> {text}</label>)}
   </fieldset>;
 }
@@ -29,12 +30,17 @@ export function ConstraintChecks({ checks = [] }) {
 }
 
 export function ActiveConstraints({ data, assetId, orchestrationId }) {
-  const sets = (data.human_constraint_sets || []).filter(s => !s.superseded && (s.asset_id === assetId || orchestrationId && s.orchestration_id === orchestrationId));
-  return <section><h4>Active structured human constraints</h4>
-    {!sets.some(s => s.constraints.length) && <p>No active structured constraints.</p>}
-    {sets.filter(s => s.constraints.length).map(s => <div key={s.id}><p>Recorded by {s.created_by} · Asset revision {s.source_revision} · {new Date(s.created_at).toLocaleString()}</p>
+  const campaignId = data.assets?.find(a => a.id === assetId)?.campaign_id || data.orchestrations?.find(o => o.id === orchestrationId)?.campaign_id;
+  const sets = [
+    ...(data.policy_versions || []).filter(s => !s.superseded && (!s.campaign_id || s.campaign_id === campaignId)).map(s => ({ ...s, scope: s.campaign_id ? 'Campaign policy' : 'Workspace policy' })),
+    ...(data.human_constraint_sets || []).filter(s => !s.superseded && (s.asset_id === assetId || orchestrationId && s.orchestration_id === orchestrationId)).map(s => ({ ...s, scope: 'This review' })),
+  ];
+  return <section><h4>Effective Marketing Policy</h4>
+    <p>{['Workspace policy', 'Campaign policy', 'This review'].map(scope => `${scope}: ${sets.filter(s => s.scope === scope).reduce((n, s) => n + s.constraints.length, 0)} rules`).join(' · ')}</p>
+    <details><summary>View effective policy</summary>{!sets.some(s => s.constraints.length) && <p>No active structured constraints.</p>}
+    {sets.map(s => <div key={s.id}><p>{s.scope} · Version {s.id} · Recorded by {s.created_by} · {new Date(s.created_at).toLocaleString()}</p>
       <ul>{s.constraints.map(c => <li key={c.id}>{c.constraint_type.replaceAll('_', ' ')}{c.value ? `: ${c.value}` : ''}{c.rationale ? ` — ${c.rationale}` : ''}</li>)}</ul>
-    </div>)}
+    </div>)}</details>
   </section>;
 }
 

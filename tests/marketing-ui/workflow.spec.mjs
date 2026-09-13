@@ -40,7 +40,7 @@ test('campaign brief through human approval with real local SQL RPCs', async ({ 
   await expect(summary()).toContainText('changes requested');
   await go(1, '/marketing/content');
   await summary().click();
-  await page.getByText('Edit draft', { exact: true }).click();
+  await summary().locator('..').getByText('Edit draft', { exact: true }).click();
   await summary().locator('..').getByRole('textbox', { name: 'Draft content', exact: true }).fill('Book your guided demo.');
   await summary().locator('..').getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(summary()).toContainText('draft');

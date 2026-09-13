@@ -1,0 +1,39 @@
+[
+  {
+    "constraint_type": "no_fabricated_testimonial"
+  },
+  {
+    "constraint_type": "no_unverified_comparative_claim"
+  },
+  {
+    "constraint_type": "no_unverified_outcome_claim"
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented pricing, discounts, incentives, rewards or financial terms."
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented inventory or product-availability claims."
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented manufacturer relationships."
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented shipping or service-level claims."
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented URLs."
+  },
+  {
+    "constraint_type": "human_instruction",
+    "value": "No invented program terms or eligibility requirements."
+  },
+  {
+    "constraint_type": "approved_destination",
+    "value": "Join-Orion.com"
+  }
+]

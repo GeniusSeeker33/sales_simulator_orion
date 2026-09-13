@@ -1,3 +1,5 @@
+import AgentWorkCard from './AgentWorkCard';
+import { deriveAgentWork } from '../../lib/marketingAgentWork';
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ASSET_TYPES, TASK_STATUSES, readMarketingAssetHistory, saveMarketingBrief, saveMarketingTask, splitList, writeMarketingAsset } from "../../lib/marketing";
@@ -107,7 +109,13 @@ export function AssetLibrary({ data, campaign, reviewOnly = false, onRefresh }) 
   </section>;
 }
 
-function AssetDetail({ data, asset, onRefresh }) {
+function AssetDetail(props) {
+  const [advanced, setAdvanced] = useState(false);
+  const work = deriveAgentWork(props.data).all.find(w => w.orchestration && w.asset?.id === props.asset.id);
+  if (work && props.data.guided_work?.some(c => c.orchestration_id === work.id)) return <><AgentWorkCard {...props} work={work} /><details onToggle={e => setAdvanced(e.currentTarget.open)}><summary>Advanced asset controls and history</summary>{advanced && <StandaloneAssetDetail {...props} />}</details></>;
+  return <StandaloneAssetDetail {...props} />;
+}
+function StandaloneAssetDetail({ data, asset, onRefresh }) {
   const campaign = data.campaigns.find(c => c.id === asset.campaign_id);
   const canApprove = ["approver", "admin"].includes(data.role);
   const canWrite = data.role !== "viewer" && asset.publication_state === "unpublished";
