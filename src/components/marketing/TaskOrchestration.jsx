@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ASSET_TYPES, commandMarketingOrchestration } from '../../lib/marketing';
-import { AttentionIndicator } from './MarketingAttention';
-import { ActiveConstraints, ConstraintChecks } from './HumanConstraints';
+import { deriveAgentWork } from '../../lib/marketingAgentWork';
+import AgentWorkCard from './AgentWorkCard';
 const label = value => value.replaceAll('_', ' ');
 const terminal = o => ['completed', 'blocked', 'failed', 'cancelled'].includes(o.state);
 
@@ -24,24 +23,7 @@ export default function TaskOrchestration({ data, campaign, task, onRefresh }) {
   }
   return <details className="marketing-record"><summary>Agent execution</summary>
     <p>Human owner: {task.owner_user_id || 'Unassigned'} · Task {label(task.status)} · Due {task.due_on || 'not set'}</p>
-    {executions.map(o => <section key={o.id}>
-      <h4>{label(o.workflow)} · {label(o.state)}</h4>
-      <AttentionIndicator items={data.attention.filter(i => i.orchestration_id === o.id || i.asset_id === o.asset_id)} />
-      <p>Assigned by {o.initiated_by} · Revision cycles {o.revision_cycles}/3</p>
-      {o.reason && <p>{o.reason}</p>}
-      <ActiveConstraints data={data} assetId={o.asset_id} orchestrationId={o.id} />
-      <ConstraintChecks checks={data.asset_constraint_checks?.find(a => a.asset_id === o.asset_id)?.checks || o.constraint_preflight} />
-      {o.active_run_id && <p>Current / last agent: <Link to={`/marketing/agents?run=${o.active_run_id}`}>{data.attention_runs.find(r => r.id === o.active_run_id)?.agent_key || 'Inspect run'}</Link></p>}
-      {o.asset_id && <Link to={`/marketing/campaigns/${campaign.id}?asset=${o.asset_id}`}>Review manually · asset revision {o.asset_revision}</Link>}
-      <ol>{(data.orchestration_history || []).filter(h => h.orchestration_id === o.id).map(h => <li key={h.id}>{label(h.snapshot.state)} · {new Date(h.occurred_at).toLocaleString()} · {h.actor_user_id ? `Human ${h.actor_user_id}` : 'Server transition'} {h.snapshot.active_run_id && <Link to={`/marketing/agents?run=${h.snapshot.active_run_id}`}>Inspect stage run</Link>}{h.snapshot.constraint_preflight?.length > 0 && <details><summary>Recorded constraint preflight</summary><ConstraintChecks checks={h.snapshot.constraint_preflight} /></details>}</li>)}</ol>
-      {canWrite && <fieldset className="marketing-fieldset" disabled={busy}>
-        {o.state === 'awaiting_plan' && <button type="button" className="btn-primary" onClick={() => command('accept', o)}>Accept and continue</button>}
-        {o.state === 'awaiting_review' && <><p>Ready for your review</p><button type="button" className="btn-primary" onClick={() => command('submit', o)}>Send to Approval</button></>}
-        {o.state === 'changes_needed' && <button type="button" className="btn-primary" onClick={() => command('revise', o)}>{o.reason === 'Human constraint failed' ? 'Send constraint failures back to Creator' : 'Send changes to Creator'}</button>}
-        {!terminal(o) && <><button type="button" className="btn-secondary" onClick={() => command('inspect', o)}>Inspect / refresh execution</button><button type="button" className="btn-secondary" onClick={() => command('stop', o)}>Stop orchestration</button></>}
-        {o.state === 'completed' && task.status !== 'done' && <button type="button" className="btn-primary" onClick={() => command('complete_task', o)}>Mark task complete</button>}
-      </fieldset>}
-    </section>)}
+    {deriveAgentWork(data).all.filter(work => work.orchestration?.task_id === task.id).map(work => <AgentWorkCard key={work.id} data={data} work={work} onRefresh={onRefresh} expanded instructions={instructions} />)}
     {canWrite && <fieldset className="marketing-fieldset" disabled={busy}>
       <label className="form-field"><span>Agent team instructions / revision notes</span><textarea maxLength="4000" value={instructions} onChange={e => setInstructions(e.target.value)} /></label>
       {!active && ['todo', 'in_progress'].includes(task.status) && <>

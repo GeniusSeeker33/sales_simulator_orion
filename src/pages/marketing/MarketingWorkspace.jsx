@@ -7,6 +7,7 @@ import CampaignWorkflow, { AssetLibrary } from "../../components/marketing/Campa
 import { useAuth } from "../../context/AuthContext";
 import { readMarketingWorkspace, saveMarketingCampaign } from "../../lib/marketing";
 
+import { deriveAgentWork } from '../../lib/marketingAgentWork';
 import MarketingAgents from "../../components/marketing/MarketingAgents";
 import MarketingAttention, { AttentionIndicator } from "../../components/marketing/MarketingAttention";
 const FUTURE = {
@@ -37,7 +38,7 @@ export default function MarketingWorkspace() {
   if (!section || !["overview", "campaigns", "content", "approvals", "agents", ...Object.keys(FUTURE)].includes(section)) return <Navigate to="/marketing/overview" replace />;
   return <Layout title="Marketing Command Center">
     <div className="marketing-heading"><div><span className="marketing-eyebrow">{data?.workspace?.name || "Workspace"}</span><p>Plan accountable, attributable campaigns with a human approval boundary.</p></div>{data && <span className="status-pill status-neutral">{label(data.role)}</span>}</div>
-    <MarketingNav items={data?.attention || []} />
+    <MarketingNav items={data?.attention || []} agentWork={data ? deriveAgentWork(data).needsYou : []} />
     {loading && <div className="card">Loading marketing workspace…</div>}
     {error && <div className="card marketing-error"><strong>Workspace unavailable.</strong><p>{error}</p><p>A marketing administrator must provision workspace membership.</p></div>}
     {!loading && data && section === "overview" && <><MarketingAttention items={data.attention} onRefresh={() => load().catch(e => setError(e.message))} /><Overview campaigns={data.campaigns} attention={data.attention} /></>}

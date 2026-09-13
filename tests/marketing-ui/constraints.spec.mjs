@@ -18,7 +18,7 @@ test('human review constraints stop a violating revision before Guardian and per
   await task.getByLabel('Execution workflow').selectOption('creator_guardian');
   await task.getByRole('button', { name: 'Assign to Agent Team', exact: true }).click();
   await expect(task.getByText('Ready for your review', { exact: true })).toBeVisible();
-  const assetPath = await task.getByRole('link', { name: /Review manually/ }).getAttribute('href');
+  const assetPath = await task.getByRole('link', { name: /Review asset manually/ }).getAttribute('href');
   const campaignPath = assetPath.split('?')[0];
   await task.getByRole('button', { name: 'Send to Approval', exact: true }).click();
   await page.goto(`/tests/marketing-ui/index.html?user=2&path=${encodeURIComponent(assetPath)}`);
@@ -34,12 +34,12 @@ test('human review constraints stop a violating revision before Guardian and per
   await expect(task.getByText('prohibited phrase: competitive wholesale firearms', { exact: true })).toBeVisible();
   await task.getByLabel('Agent team instructions / revision notes').fill('Exercise constraint failure');
   await task.getByRole('button', { name: 'Send changes to Creator', exact: true }).click();
-  await expect(task.getByRole('button', { name: 'Send constraint failures back to Creator', exact: true })).toBeVisible();
+  await expect(task.getByRole('button', { name: 'Send failures to Creator', exact: true })).toBeVisible();
   await expect(task.getByText('Human constraint failed', { exact: true }).first()).toBeVisible();
   await expect(task.getByText(/Normalized text position/).first()).toBeVisible();
   await expect(page.locator('summary').filter({ hasText: 'guardian · succeeded' })).toHaveCount(1);
   await task.getByLabel('Agent team instructions / revision notes').fill('Use neutral factual wording.');
-  await task.getByRole('button', { name: 'Send constraint failures back to Creator', exact: true }).click();
+  await task.getByRole('button', { name: 'Send failures to Creator', exact: true }).click();
   await expect(task.getByText('Ready for your review', { exact: true })).toBeVisible();
   await expect(page.locator('summary').filter({ hasText: 'guardian · succeeded' })).toHaveCount(2);
   await task.getByRole('button', { name: 'Send to Approval', exact: true }).click();
@@ -47,7 +47,7 @@ test('human review constraints stop a violating revision before Guardian and per
   await page.getByRole('button', { name: 'Record human decision', exact: true }).click();
   await page.goto(`/tests/marketing-ui/index.html?user=1&path=${encodeURIComponent(campaignPath)}`);
   await summary.click(); await task.getByText('Agent execution', { exact: true }).click();
-  await task.getByRole('button', { name: 'Mark task complete', exact: true }).click();
+  await task.getByRole('button', { name: 'Mark Task Complete', exact: true }).click();
   await expect(page.locator('summary').filter({ hasText: 'Constrained dealer copy · done' })).toBeVisible();
   expect(errors).toEqual([]);
 });
