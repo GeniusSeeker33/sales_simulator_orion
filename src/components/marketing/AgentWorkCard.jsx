@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { orchestrationRevisionRequest } from '../../lib/marketingRecovery';
 import { commandMarketingOrchestration, readMarketingAgentRun } from '../../lib/marketing';
 import { assetRevisionLink, constraintFailureLabel, WORKFLOW_LABELS } from '../../lib/marketingAgentWork';
 import { AttentionIndicator } from './MarketingAttention';
@@ -24,7 +25,7 @@ export default function AgentWorkCard({ data, work, onRefresh, expanded = false,
   const approval = o?.state === 'awaiting_approval' && asset?.approval_state === 'in_review' && !work.stale;
   async function command(action) {
     setBusy(true); setError('');
-    try { await commandMarketingOrchestration({ workspace_id: data.workspace.id, id: o.id, expected_revision: o.revision, action, instructions }); }
+    try { await commandMarketingOrchestration(action === 'revise' ? orchestrationRevisionRequest(data, o, instructions) : { workspace_id: data.workspace.id, id: o.id, expected_revision: o.revision, action, instructions }); }
     catch (e) { setError(e.message); }
     finally { try { await onRefresh(); } catch { setError('Refresh failed. Inspect current work before trying again.'); } setBusy(false); }
   }
@@ -41,6 +42,8 @@ export default function AgentWorkCard({ data, work, onRefresh, expanded = false,
     {o && <details open={open} onToggle={e => setOpen(e.currentTarget.open)}><summary>Workflow details & actions</summary>
       {asset && <><Link to={assetHref}>Review asset manually · revision {asset.revision}</Link><pre className="marketing-asset-content">{asset.content}</pre></>}
       {work.stale && <p role="alert">The task, campaign or asset changed. Inspect the workflow before advancing it.</p>}
+      {work.recovery?.human_change_request && <p className="marketing-preserve">Latest human requested changes: {work.recovery.human_change_request.notes}</p>}
+      {['failed', 'blocked', 'changes_needed'].includes(o.state) && work.recovery && !work.recovery.eligible && <p>{work.recovery.reason}</p>}
       <ActiveConstraints data={data} assetId={o.asset_id} orchestrationId={o.id} />
       <ConstraintChecks checks={work.checks} />
       {open && o.active_run_id && <RunEvidence workspaceId={data.workspace.id} runId={o.active_run_id} />}
@@ -48,7 +51,7 @@ export default function AgentWorkCard({ data, work, onRefresh, expanded = false,
         {suppliedInstructions == null && <label className="form-field"><span>Agent team instructions / revision notes</span><textarea maxLength="4000" value={instructions} onChange={e => (onInstructionsChange || setNotes)(e.target.value)} /></label>}
         {canAdvance && o.state === 'awaiting_plan' && <button type="button" className="btn-primary" onClick={() => command('accept')}>Accept and continue</button>}
         {canAdvance && o.state === 'awaiting_review' && <button type="button" className="btn-primary" onClick={() => command('submit')}>Send to Approval</button>}
-        {canAdvance && o.state === 'changes_needed' && o.revision_cycles < 3 && <button type="button" className="btn-primary" onClick={() => command('revise')}>{work.failures.length ? 'Send failures to Creator' : 'Send changes to Creator'}</button>}
+        {work.recovery?.eligible && <button type="button" className="btn-primary" onClick={() => command('revise')}>{work.failures.length ? 'Send failures to Creator' : 'Send changes to Creator'}</button>}
         {!['completed', 'blocked', 'failed', 'cancelled'].includes(o.state) && <><button type="button" className="btn-secondary" onClick={() => command('inspect')}>Inspect / refresh execution</button><button type="button" className="btn-secondary" onClick={() => command('stop')}>Stop workflow</button></>}
         {busy && <p role="status">Executing the authorized workflow…</p>}
       </fieldset>}

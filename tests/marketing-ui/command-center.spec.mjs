@@ -11,6 +11,7 @@ function dataFixture() {
 
 test('command center matches badge, groups current work, explains constraint failures and preserves filtered history', async ({ page }) => {
   const d = dataFixture();
+  d.orchestration_recovery = [{ orchestration_id: 'Constrained copy', eligible: true, asset_revision: 2, task_revision: 1, campaign_revision: 1, constraint_set_ids: [] }];
   await page.route('**/__marketing_rpc', async route => {
     const { name, args } = route.request().postDataJSON();
     const result = name === 'read_marketing_attention_workspace' ? d : name === 'read_marketing_agent_runs' ? d.attention_runs : name === 'read_marketing_agent_run' ? d.attention_runs.find(r => r.id === args.p_run) : null;

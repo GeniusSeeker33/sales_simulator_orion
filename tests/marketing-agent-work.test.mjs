@@ -89,3 +89,12 @@ test('uncertain active execution leads to inspection instead of a normal progres
   assert.equal(work.action, 'Inspect Failure');
   assert.equal(work.state, 'Workflow needs inspection');
 });
+
+
+test('failed workflow owns newer human approval revisions by lineage, never a duplicate standalone card', () => {
+  const d = fixture('failed'); d.assets[0].revision = 4; d.assets[0].approval_state = 'in_review';
+  let work = project(d); assert.equal(work.needsYou.length, 1); assert.equal(work.needsYou[0].orchestration.id, 'o');
+  d.assets[0].approval_state = 'changes_requested';
+  d.orchestration_recovery = [{ orchestration_id: 'o', eligible: true }];
+  work = project(d); assert.equal(work.needsYou.length, 1); assert.equal(work.needsYou[0].state, 'Recoverable Guardian failure');
+});
