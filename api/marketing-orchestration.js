@@ -9,6 +9,9 @@ const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-
 const retryMessages = new Set([
   "You need workspace write permission to retry Guardian.",
   "This work has no completed technical Guardian failure to retry.",
+  "This work has no completed Guardian review eligible for retry.",
+  "Completed Creator evidence is required before Guardian re-review.",
+  "Confirmed deterministic checks are required before Guardian re-review.",
   "The review cannot be linked safely to this work. Inspect the technical history.",
   "The task changed. Refresh and review its scope before continuing.",
   "The campaign changed. Refresh and review its brief before continuing.",

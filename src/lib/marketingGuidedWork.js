@@ -1,14 +1,15 @@
 // CHECK represents deterministic evaluation; REVIEW represents Guardian and human readiness.
-export function guidedPipeline(work, context = {}) {
+export function guidedPipeline(work, context = {}, { pendingGuardianRetry = false } = {}) {
   const o = work.orchestration, guardian = context.guardian;
   const status = label => work.pipeline.find(s => s.label === label)?.status || 'pending';
   const combine = values => ['failed','unknown','working','action'].find(s => values.includes(s)) || (values.every(s => s === 'done') ? 'done' : 'pending');
   const check = status('Constraint Check');
-  const inconsistent = guardian?.technical_reason === 'guardian_semantic_structured_mismatch';
-  const technical = guardian?.status === 'failed' || ['failed','blocked'].includes(o.state) && ['failed','unknown'].includes(status('Guardian'));
-  const semantic = guardian?.status === 'succeeded' && guardian.recommendation === 'needs_changes' || o.state === 'changes_needed' && status('Guardian') === 'failed' && check !== 'failed';
-  const reviewRunning = o.state === 'guardian_running';
-  const kind = check === 'failed' ? 'policy_issue' : inconsistent ? 'guardian_inconsistent' : technical ? 'guardian_technical' : semantic ? 'guardian_changes' : reviewRunning ? 'review_running' : ['awaiting_review','awaiting_approval'].includes(o.state) ? 'ready' : 'other';
+  const reviewRunning = o.state === 'guardian_running' || pendingGuardianRetry;
+  const reviewAgain = reviewRunning && (pendingGuardianRetry || Boolean(guardian?.retry_authorization));
+  const inconsistent = !reviewRunning && guardian?.technical_reason === 'guardian_semantic_structured_mismatch';
+  const technical = !reviewRunning && (guardian?.status === 'failed' || ['failed','blocked'].includes(o.state) && ['failed','unknown'].includes(status('Guardian')));
+  const semantic = !reviewRunning && (guardian?.status === 'succeeded' && guardian.recommendation === 'needs_changes' || o.state === 'changes_needed' && status('Guardian') === 'failed' && check !== 'failed');
+  const kind = check === 'failed' ? 'policy_issue' : inconsistent ? 'guardian_inconsistent' : technical ? 'guardian_technical' : semantic ? 'guardian_changes' : reviewAgain ? 'review_again' : reviewRunning ? 'review_running' : ['awaiting_review','awaiting_approval'].includes(o.state) ? 'ready' : 'other';
   const review = status('Approval') === 'done' ? 'done' : inconsistent ? 'inconsistent' : technical ? 'technical' : reviewRunning ? 'working' : semantic || ['awaiting_review','awaiting_approval'].includes(o.state) ? 'action' : 'pending';
   const stages = [];
   if (o.workflow.includes('strategist')) stages.push({ label:'PLAN',status:combine([status('Strategist'),status('Human plan decision')]) });

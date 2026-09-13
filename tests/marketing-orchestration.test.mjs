@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHandler } from '../api/marketing-orchestration.js';
+import { deterministicQA } from '../api/_lib/marketing-agents.js';
+import { guidedPipeline } from '../src/lib/marketingGuidedWork.js';
 import { deriveAgentWork } from '../src/lib/marketingAgentWork.js';
 import { deriveMarketingAttention } from '../src/lib/marketingAttention.js';
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -531,12 +533,112 @@ test('governed task orchestration across actual PostgreSQL boundaries', async t 
     mode='ready';
   });
 
-  await t.test('a matching semantic violation still authorizes human requested changes, not retry',async()=>{
+  await t.test('a matching semantic violation offers human changes and optional Guardian re-review',async()=>{
     mode='consistent_violation';const o=(await invoke(await assignment())).body.orchestration;assert.equal(o.state,'changes_needed');
     const data=await snapshot();const ctx=data.guided_work.find(g=>g.orchestration_id===o.id);
     assert.equal(ctx.guardian.status,'succeeded');assert.equal(ctx.guardian.recommendation,'needs_changes');assert.deepEqual(ctx.guardian.inconsistencies,[]);
     await asUser(2);const manager=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
-    assert.deepEqual(manager.guided_work.find(g=>g.orchestration_id===o.id).actions,['request_changes']);mode='ready';
+    assert.deepEqual(manager.guided_work.find(g=>g.orchestration_id===o.id).actions,['request_changes','retry_guardian']);mode='ready';
+  });
+
+  await t.test('human re-review at cycle 1 keeps exact content/context, idempotency, attribution and all result paths',async()=>{
+    for(const outcome of ['ready','changes','inconsistent','guardian_failure']) {
+      mode='changes';let original=(await invoke(await assignment())).body.orchestration;
+      original=(await action(original,'revise')).body.orchestration;assert.equal(original.revision_cycles,1);
+      const request=await retryCommand(original);let data=await snapshot();const ctx=data.guided_work.find(g=>g.orchestration_id===original.id);
+      assert.equal(ctx.guardian_retry.kind,'rereview');assert.ok(ctx.actions.includes('retry_guardian'));
+      const asset=data.assets.find(a=>a.id===original.asset_id);
+      await db.exec('reset role');const prior=(await db.query('select * from marketing.agent_runs where id=$1',[original.active_run_id])).rows[0];
+      const history=(await db.query('select * from marketing.workflow_history where asset_id=$1 order by id',[asset.id])).rows;
+      calls=[];mode=outcome;
+      beforeModel=async(context)=>{
+        assert.equal(context.asset.revision,asset.revision);assert.equal(context.orchestration.revision_cycles,1);
+        assert.equal(context.task.revision,original.task_revision);assert.equal(context.campaign.revision,original.campaign_revision);
+        assert.deepEqual(context.human_constraint_sets,prior.input_metadata.human_constraint_sets);
+        const active=await snapshot();const running=active.orchestrations.find(o=>o.id===original.id);const runningContext=active.guided_work.find(g=>g.orchestration_id===original.id);
+        assert.equal(running.state,'guardian_running');assert.equal(runningContext.guardian_retry.eligible,false);
+        assert.ok(!runningContext.actions.some(a=>['retry_guardian','request_changes','revise'].includes(a)));
+        const groups=deriveAgentWork({...active,attention:deriveMarketingAttention(active)});const work=groups.all.find(x=>x.id===original.id);
+        assert.equal(groups.all.filter(x=>x.orchestration?.id===original.id||!x.orchestration&&x.asset?.id===asset.id).length,1);
+        assert.equal(work.state,'Guardian reviewing again');assert.equal(guidedPipeline(work,runningContext).kind,'review_again');
+        assert.equal((await invoke(request,2)).body.orchestration.active_run_id,running.active_run_id);
+        assert.equal((await invoke({...request,expected_revision:running.revision},2)).statusCode,409);
+      };
+      const response=await invoke(request,2);assert.equal(response.statusCode,200);const next=response.body.orchestration;
+      assert.equal(next.id,original.id);assert.equal(next.asset_revision,asset.revision);assert.equal(next.revision_cycles,1);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+      assert.equal(next.state,outcome==='ready'?'awaiting_review':outcome==='changes'?'changes_needed':'failed');
+      data=await snapshot();assert.deepEqual(data.assets.find(a=>a.id===asset.id),asset);
+      const evidence=data.guided_work.find(g=>g.orchestration_id===original.id).guardian;
+      assert.equal(evidence.retry_authorization.event,'guardian_rereview_requested');assert.equal(evidence.retry_authorization.actor_user_id,id(2));
+      assert.equal(evidence.retry_authorization.asset_revision,asset.revision);assert.equal(evidence.retry_authorization.revision_cycles,1);
+      assert.equal(evidence.retry_of,prior.id);assert.equal(evidence.retry_authorization.new_run_id,next.active_run_id);
+      assert.deepEqual(evidence.retry_authorization.policy_versions,request.constraint_set_ids);
+      await asUser(2);const manager=(await db.query('select public.read_marketing_attention_workspace($1) data',[w])).rows[0].data;
+      const actions=manager.guided_work.find(g=>g.orchestration_id===original.id).actions;
+      if(outcome==='ready')assert.ok(actions.includes('approve'));
+      else if(outcome==='changes')assert.deepEqual(actions,['request_changes','retry_guardian']);
+      else assert.deepEqual(actions,['retry_guardian']);
+      if(outcome==='inconsistent')assert.equal(evidence.technical_reason,'guardian_semantic_structured_mismatch');
+      if(outcome==='guardian_failure')assert.equal(evidence.technical_reason,'guardian_model_failed');
+      assert.equal((await invoke(request,2)).body.orchestration.run_ids.length,next.run_ids.length);assert.equal(calls.length,1);
+      await db.exec('reset role');assert.deepEqual((await db.query('select * from marketing.agent_runs where id=$1',[prior.id])).rows[0],prior);
+      assert.deepEqual((await db.query('select * from marketing.workflow_history where asset_id=$1 order by id',[asset.id])).rows,history);
+      await assert.rejects(db.query('delete from marketing.guardian_retry_authorizations where prior_run_id=$1',[prior.id]),/append-only/);
+    }
+    mode='ready';
+  });
+  await t.test('successful-review re-review denies stale asset/task/campaign/policy and unauthorized or foreign callers',async()=>{
+    for(const changed of ['asset','task','campaign','policy']) {
+      mode='changes';const o=(await invoke(await assignment())).body.orchestration;const req=await retryCommand(o);mode='ready';calls=[];
+      for(const human of [3,4,'invalid'])assert.ok((await invoke(req,human)).statusCode>=400);
+      assert.equal((await invoke({...req,workspace_id:other},2)).statusCode,403);
+      assert.equal((await invoke({...req,actor_type:'agent'},2)).statusCode,400);
+      await asUser(2);
+      if(changed==='asset')await db.query("select public.write_marketing_asset($1,$2,$3,$4,'save',$5)",[w,c,o.asset_id,o.asset_revision,{name:'Edited',asset_type:'social_copy',content:'Book your current demo.'}]);
+      if(changed==='task')await db.query('select public.save_marketing_task($1,$2,$3,$4,$5)',[w,c,o.task_id,o.task_revision,{title:'Edited scope',status:'todo'}]);
+      if(changed==='campaign')await db.query('select public.save_marketing_brief($1,$2,$3,$4)',[w,c,o.campaign_revision,{primary_cta:'Book a demo',target_audiences:['Dealers'],channels:['social']}]);
+      if(changed==='policy') { const active=(await snapshot()).policy_versions.find(p=>!p.superseded&&!p.campaign_id);await asUser(2);await db.query('select public.save_marketing_policy($1,null,$2,$3)',[w,active.id,[{constraint_type:'human_instruction',value:'Use current substantiated details.'}]]); }
+      assert.equal((await invoke(req,2)).statusCode,409);assert.equal(calls.length,0);
+      const data=await snapshot();assert.ok(!data.guided_work.find(g=>g.orchestration_id===o.id).actions.includes('retry_guardian'));
+    }
+  });
+  await t.test('legacy persisted contradiction gets re-reviewed without rewriting its original evidence',async()=>{
+    const legacy=async context=>{
+      if(context.request.agent_key==='creator'){beforeModel=legacy;return;}
+      const output={summary:'All constraints are satisfied.',recommendation:'needs_changes',findings:[],constraint_evaluations:context.human_constraints.map(c=>({constraint_id:c.id,status:'violated',detail:'The email copy no longer contains unverified comparative claims.'}))};
+      // Reproduce pre-#36 persistence through the real trusted SQL completion, before JS consistency validation existed.
+      const result=await rpc('finish_marketing_orchestration_stage',{p_id:context.orchestration.id,p_run:context.orchestration.active_run_id,p_output:output,p_qa:[...deterministicQA(context),...context.constraint_preflight],p_usage:{},p_error:null});
+      assert.equal(result.data.orchestration.state,'changes_needed');
+    };
+    mode='ready';beforeModel=legacy;const original=(await invoke(await assignment())).body.orchestration;assert.equal(original.state,'changes_needed');
+    const req=await retryCommand(original);calls=[];const next=(await invoke(req,2)).body.orchestration;assert.equal(next.state,'awaiting_review');assert.equal(next.asset_revision,original.asset_revision);assert.equal(next.revision_cycles,original.revision_cycles);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    await asUser(2);const prior=(await db.query('select public.read_marketing_agent_run($1,$2) data',[w,original.active_run_id])).rows[0].data;
+    assert.equal(prior.status,'succeeded');assert.equal(prior.output_metadata.result.recommendation,'needs_changes');assert.equal(prior.output_metadata.result.summary,'All constraints are satisfied.');
+  });
+  await t.test('re-review remains available at the Creator cycle limit but never for failed deterministic checks or readiness',async()=>{
+    mode='changes';let o=(await invoke(await assignment())).body.orchestration;
+    for(let cycle=1;cycle<=3;cycle++)o=(await action(o,'revise')).body.orchestration;
+    assert.equal(o.state,'blocked');assert.equal(o.revision_cycles,3);mode='ready';calls=[];
+    const next=(await invoke(await retryCommand(o),2)).body.orchestration;assert.equal(next.state,'awaiting_review');assert.equal(next.revision_cycles,3);assert.deepEqual(calls.map(c=>c.agent),['guardian']);
+    const readyContext=(await snapshot()).guided_work.find(g=>g.orchestration_id===next.id);assert.equal(readyContext.guardian_retry.eligible,false);assert.ok(!readyContext.actions.includes('retry_guardian'));
+    mode='changes';creatorContent='Book your demo. {{INSERT OFFER}}';o=(await invoke(await assignment())).body.orchestration;creatorContent='Book your demo.';mode='ready';
+    const data=await snapshot();assert.equal(data.guided_work.find(g=>g.orchestration_id===o.id).guardian_retry.eligible,false);
+    calls=[];assert.equal((await invoke(await retryCommand(o),2)).statusCode,409);assert.equal(calls.length,0);
+  });
+
+  await t.test('missing or malformed legacy deterministic evidence cannot authorize re-review',async()=>{
+    for(const shape of ['missing','string_boolean']) {
+      const legacy=async context=>{
+        if(context.request.agent_key==='creator'){beforeModel=legacy;return;}
+        const output={summary:'Clarify the audience.',recommendation:'needs_changes',findings:[{category:'audience',severity:'warning',requires_correction:true,finding:'Explain the audience.'}],constraint_evaluations:context.human_constraints.map(c=>({constraint_id:c.id,status:'semantic_review',detail:'Human review recommended.'}))};
+        const qa=shape==='missing'?[]:deterministicQA(context).map((q,i)=>i? q:{...q,passed:'true'});
+        const result=await rpc('finish_marketing_orchestration_stage',{p_id:context.orchestration.id,p_run:context.orchestration.active_run_id,p_output:output,p_qa:qa,p_usage:{},p_error:null});
+        assert.equal(result.data.orchestration.state,'changes_needed');
+      };
+      mode='ready';beforeModel=legacy;const o=(await invoke(await assignment())).body.orchestration;
+      const data=await snapshot();const ctx=data.guided_work.find(g=>g.orchestration_id===o.id);assert.equal(ctx.guardian_retry.eligible,false);assert.ok(!ctx.actions.includes('retry_guardian'));
+      calls=[];assert.equal((await invoke(await retryCommand(o),2)).statusCode,409);assert.equal(calls.length,0);
+    }
   });
 
 });
