@@ -4,11 +4,12 @@ export function guidedPipeline(work, context = {}) {
   const status = label => work.pipeline.find(s => s.label === label)?.status || 'pending';
   const combine = values => ['failed','unknown','working','action'].find(s => values.includes(s)) || (values.every(s => s === 'done') ? 'done' : 'pending');
   const check = status('Constraint Check');
+  const inconsistent = guardian?.technical_reason === 'guardian_semantic_structured_mismatch';
   const technical = guardian?.status === 'failed' || ['failed','blocked'].includes(o.state) && ['failed','unknown'].includes(status('Guardian'));
   const semantic = guardian?.status === 'succeeded' && guardian.recommendation === 'needs_changes' || o.state === 'changes_needed' && status('Guardian') === 'failed' && check !== 'failed';
   const reviewRunning = o.state === 'guardian_running';
-  const kind = check === 'failed' ? 'policy_issue' : technical ? 'guardian_technical' : semantic ? 'guardian_changes' : reviewRunning ? 'review_running' : ['awaiting_review','awaiting_approval'].includes(o.state) ? 'ready' : 'other';
-  const review = status('Approval') === 'done' ? 'done' : technical ? 'technical' : reviewRunning ? 'working' : semantic || ['awaiting_review','awaiting_approval'].includes(o.state) ? 'action' : 'pending';
+  const kind = check === 'failed' ? 'policy_issue' : inconsistent ? 'guardian_inconsistent' : technical ? 'guardian_technical' : semantic ? 'guardian_changes' : reviewRunning ? 'review_running' : ['awaiting_review','awaiting_approval'].includes(o.state) ? 'ready' : 'other';
+  const review = status('Approval') === 'done' ? 'done' : inconsistent ? 'inconsistent' : technical ? 'technical' : reviewRunning ? 'working' : semantic || ['awaiting_review','awaiting_approval'].includes(o.state) ? 'action' : 'pending';
   const stages = [];
   if (o.workflow.includes('strategist')) stages.push({ label:'PLAN',status:combine([status('Strategist'),status('Human plan decision')]) });
   if (o.workflow !== 'strategist') stages.push({ label:'CREATE',status:status('Creator') },{ label:'CHECK',status:check },{ label:'REVIEW',status:review });

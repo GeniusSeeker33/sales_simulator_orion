@@ -57,9 +57,9 @@ export function createHandler({ makeClient = createClient, makeModel = () => new
       let usage = {}, phase = 'model_failed';
       const args = { p_id: next.orchestration.id, p_run: id };
       try {
-        const { output, qa } = await inferMarketing({ model: makeModel(), request: context.request, context, onUsage: v => { usage = v; }, onPhase: v => { phase = v; } });
+        const { output, qa, error: reviewError } = await inferMarketing({ model: makeModel(), request: context.request, context, onUsage: v => { usage = v; }, onPhase: v => { phase = v; } });
         phase = 'persistence_failed';
-        next = await rpc('finish_marketing_orchestration_stage', { ...args, p_output: output, p_qa: qa, p_usage: usage, p_error: null });
+        next = await rpc('finish_marketing_orchestration_stage', { ...args, p_output: output, p_qa: qa, p_usage: usage, p_error: reviewError || null });
       } catch {
         try { next = await rpc('finish_marketing_orchestration_stage', { ...args, p_output: null, p_qa: [], p_usage: usage, p_error: phase }); }
         catch { return res.status(503).json({ error: 'Stage outcome uncertain. Inspect the task execution before restarting.', orchestration_id: args.p_id }); }

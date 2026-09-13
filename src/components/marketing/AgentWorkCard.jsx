@@ -8,8 +8,8 @@ import { AttentionIndicator } from './MarketingAttention';
 import { ActiveConstraints, ConstraintChecks } from './HumanConstraints';
 import { Outcome } from './MarketingRunHistory';
 
-const icons = { done: '✓', failed: '✕', action: '!', working: '◌', pending: '—', unknown: '?' };
-const labels = { done: 'Completed', failed: 'Needs changes', action: 'Human decision needed', working: 'In progress', pending: 'Not reached', unknown: 'Evidence is stale' };
+const icons = { inconsistent: '⚠', done: '✓', failed: '✕', action: '!', working: '◌', pending: '—', unknown: '?' };
+const labels = { inconsistent: 'Guardian review inconsistent', done: 'Completed', failed: 'Needs changes', action: 'Human decision needed', working: 'In progress', pending: 'Not reached', unknown: 'Evidence is stale' };
 export function StagePipeline({ stages }) {
   return <ol className="marketing-stage-pipeline" aria-label="Workflow pipeline">{stages.map(stage => <li key={stage.label} className={`stage-${stage.status}`}><span aria-hidden="true">{icons[stage.status]}</span> <span>{stage.label}</span><small>{labels[stage.status]}</small></li>)}</ol>;
 }

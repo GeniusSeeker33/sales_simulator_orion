@@ -25,7 +25,10 @@ export function deriveAgentWork(data) {
     const asset = assets.get(o.asset_id), task = tasks.get(o.task_id);
     const items = signals.filter(i => i.orchestration_id === o.id || (!i.orchestration_id && i.asset_id && assetOwners.get(i.asset_id) === o.id));
     items.forEach(i => consumed.add(i.id));
-    const recovery = data.orchestration_recovery?.find(c => c.orchestration_id === o.id);
+    const guided = data.guided_work?.find(c => c.orchestration_id === o.id);
+    const inconsistent = guided?.guardian?.technical_reason === 'guardian_semantic_structured_mismatch';
+    const recoveryContext = data.orchestration_recovery?.find(c => c.orchestration_id === o.id);
+    const recovery = inconsistent ? { ...recoveryContext, eligible: false, reason: 'Guardian review must be retried before a content revision.' } : recoveryContext;
     const current = !asset || asset.revision === o.asset_revision;
     const assessment = data.asset_constraint_checks?.find(a => a.asset_id === asset?.id && a.revision === asset?.revision);
     const checks = assessment?.checks || (current ? o.constraint_preflight || [] : []);
@@ -33,8 +36,8 @@ export function deriveAgentWork(data) {
     const stale = !terminal(o.state) && (task.revision !== o.task_revision || campaigns.get(o.campaign_id).revision !== o.campaign_revision || !current);
     const uncertain = o.state.endsWith('_running') && items.some(i => i.orchestration_id === o.id && i.severity === 'critical');
     const inspect = (stale || uncertain) && !recovery?.eligible;
-    const state = recovery?.eligible && o.state === 'failed' ? 'Recoverable Guardian failure' : inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
-    const action = recovery?.eligible && o.state === 'failed' ? 'Review recovery' : inspect ? 'Inspect Failure' : failures.length ? 'Review Constraint Failure' : ({ awaiting_plan: 'Review Plan', awaiting_review: 'Review Asset', awaiting_approval: 'Approve / Request Changes', changes_needed: 'Send Revision to Creator', failed: 'Inspect Failure', blocked: 'Inspect Failure', completed: task.status !== 'done' ? 'Mark Task Complete' : 'View history', cancelled: 'View history' }[o.state] || 'View progress');
+    const state = inconsistent ? 'Guardian review inconsistent' : recovery?.eligible && o.state === 'failed' ? 'Recoverable Guardian failure' : inspect ? 'Workflow needs inspection' : failures.length ? 'Human constraint failed' : STAGE_LABELS[o.state] || 'Workflow needs inspection';
+    const action = inconsistent ? (guided.guardian_retry?.eligible ? 'Retry Guardian' : 'Inspect Guardian') : recovery?.eligible && o.state === 'failed' ? 'Review recovery' : inspect ? 'Inspect Failure' : failures.length ? 'Review Constraint Failure' : ({ awaiting_plan: 'Review Plan', awaiting_review: 'Review Asset', awaiting_approval: 'Approve / Request Changes', changes_needed: 'Send Revision to Creator', failed: 'Inspect Failure', blocked: 'Inspect Failure', completed: task.status !== 'done' ? 'Mark Task Complete' : 'View history', cancelled: 'View history' }[o.state] || 'View progress');
     const pipeline = derivePipeline(data, o, runs, asset, checks, stale || !current);
     work.push({ id: o.id, orchestration: o, campaign: campaigns.get(o.campaign_id), task, asset, items, failures, checks, stale, recovery,
       state, action, severity: attentionLevel(items), timestamp: o.updated_at,
@@ -69,7 +72,7 @@ export function derivePipeline(data, o, runs, asset, checks, stale = false) {
   const latest = key => linked.findLast(r => r.agent_key === key);
   const creator = latest('creator'), strategist = latest('strategist');
   const guardian = linked.slice(creator ? linked.indexOf(creator) + 1 : 0).findLast(r => r.agent_key === 'guardian');
-  const status = run => !run ? 'pending' : run.status === 'succeeded' ? 'done' : run.status === 'started' ? 'working' : 'failed';
+  const status = run => !run ? 'pending' : run.review_issue ? 'inconsistent' : run.status === 'succeeded' ? 'done' : run.status === 'started' ? 'working' : 'failed';
   const stages = [];
   if (o.workflow.includes('strategist')) {
     stages.push({ label: 'Strategist', status: status(strategist) });
