@@ -11,6 +11,7 @@ export const REP_NAV = [
   { to: "/training-leaderboard", label: "Prize Leaderboard" },
   { to: "/levels", label: "Level Progress" },
   { to: "/rep-metrics", label: "Rep Metrics" },
+  { to: "/talent/candidates", label: "Talent / People", divider: true },
 ];
 
 export const MANAGER_NAV = [

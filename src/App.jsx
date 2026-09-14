@@ -25,6 +25,7 @@ import ProductMix from "./pages/ProductMix";
 import Newsletter from "./pages/Newsletter.jsx";
 import NewsletterAdmin from "./pages/NewsletterAdmin.jsx";
 import MarketingWorkspace from "./pages/marketing/MarketingWorkspace.jsx";
+import TalentWorkspace from "./pages/talent/TalentWorkspace.jsx";
 
 function RootRedirect() {
   const { session, loading } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="/newsletter" element={<Newsletter />} />
       <Route path="/newsletter-admin" element={<ProtectedRoute roles={["manager", "admin"]}><NewsletterAdmin /></ProtectedRoute>} />
       <Route path="/marketing/:section?/:campaignId?" element={<ProtectedRoute roles={["manager", "admin"]}><MarketingWorkspace /></ProtectedRoute>} />
+      <Route path="/talent/candidates/:personId?" element={<ProtectedRoute><TalentWorkspace /></ProtectedRoute>} />
 
       <Route path="/pace-report" element={<ProtectedRoute roles={["manager", "admin"]}><PaceReport /></ProtectedRoute>} />
       <Route path="/commission-report" element={<ProtectedRoute roles={["manager", "admin"]}><CommissionReport /></ProtectedRoute>} />
