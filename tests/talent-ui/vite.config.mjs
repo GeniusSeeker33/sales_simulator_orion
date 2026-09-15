@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { talentFixture, id, now } from '../fixtures/talent.mjs';
 import { createHandler } from '../../api/talent.js';
+import { TalentFailure } from '../../api/_lib/talent-diagnostics.js';
 const fixture = await talentFixture();
 Object.assign(process.env, { LEARNER_SUPABASE_URL: 'https://synthetic.invalid', LEARNER_SUPABASE_PUBLISHABLE_KEY: 'synthetic-public' });
-const handler = createHandler({ now: () => now, withDatabase: fixture.withDatabase,
-  makeClient: () => ({ auth: { getUser: async token => ({ data: { user: ['1', '2', '3'].includes(token) ? { id: id(Number(token)) } : null } }) } }) });
+const handler = createHandler({ now: () => now, withDatabase: (user, read) => {
+  if (user === id(4)) throw new TalentFailure('crm_connection_failed', 'transaction_begin', { code: 'SELF_SIGNED_CERT_IN_CHAIN' });
+  return fixture.withDatabase(user, read);
+}, makeClient: () => ({ auth: { getUser: async token => ({ data: { user: token === 'database-error' ? { id: id(4) } : ['1', '2', '3'].includes(token) ? { id: id(Number(token)) } : null } }) } }) });
 let pending = Promise.resolve();
 export default defineConfig({
   plugins: [react(), { name: 'local-talent-fixture', configureServer(server) {

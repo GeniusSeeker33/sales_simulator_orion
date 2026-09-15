@@ -55,6 +55,14 @@ The connection has a small pool, connection/idle timeouts, and each SQL statemen
 has a 10-second timeout. Credential errors and schema/configuration failures
 produce a generic unavailable state, never a misleading empty pipeline.
 
+For a certificate chain not trusted by Node's default CA store, set server-only
+`CRM_DATABASE_CA_CERT` to the appropriate CA PEM obtained from Supabase's SSL
+settings, with actual newlines. The client retains certificate and hostname
+verification; it never retries with `rejectUnauthorized: false` or unverified
+`ssl: 'require'`. A CA is not a database password. Do not reset credentials to
+resolve a certificate-trust failure. See [availability diagnostics](talent-crm-availability.md)
+for error categories, role/pooler compatibility, and bootstrap prerequisites.
+
 The release operator must provision this server secret and verify same-project
 configuration before releasing the API. This PR does not perform that operation.
 See the [Supabase Postgres.js guide](https://supabase.com/docs/guides/database/postgres-js)
