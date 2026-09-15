@@ -18,6 +18,19 @@ const connectionCodes = new Set([
 ]);
 const codes = new Set([...connectionCodes, '42501', '42P01', '3F000', '42883', '42703',
   '22023', '22P02', '25006', '0P000', '57014', '40001', '40P01']);
+const configurationReasons = new Map([
+  ['CRM_DATABASE_URL', new Set(['invalid_url', 'unsupported_protocol', 'missing_hostname',
+    'missing_username', 'missing_password', 'missing_database', 'unexpected_fragment',
+    'surrounding_whitespace', 'invalid_username_encoding', 'invalid_password_encoding'])],
+  ['CRM_DATABASE_CA_CERT', new Set(['invalid_pem', 'malformed_certificate'])],
+  ['CRM_DATABASE_POOL', new Set(['initialization_failed'])],
+]);
+
+export function configurationFailure(field, reason) {
+  const failure = new TalentFailure('crm_configuration_invalid', 'configuration');
+  if (configurationReasons.get(field)?.has(reason)) Object.assign(failure, { field, reason });
+  return failure;
+}
 
 export class TalentFailure extends Error {
   constructor(category, stage, error) {
@@ -40,6 +53,11 @@ export function logTalentDiagnostic(log, error) {
     stage: stages.has(failure.stage) ? failure.stage : 'candidate_read',
   };
   if (codes.has(failure.code)) event.code = failure.code;
+  if (event.category === 'crm_configuration_invalid' && event.stage === 'configuration'
+    && configurationReasons.get(failure.field)?.has(failure.reason)) {
+    event.field = failure.field;
+    event.reason = failure.reason;
+  }
   // Logging failure must not alter authorization or the HTTP response.
   try { log(event); } catch { /* no unsafe fallback serialization */ }
 }

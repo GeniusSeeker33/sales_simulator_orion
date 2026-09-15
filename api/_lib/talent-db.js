@@ -1,19 +1,40 @@
 /* global process */
 import postgres from 'postgres';
-import { TalentFailure, databaseFailure } from './talent-diagnostics.js';
+import { X509Certificate } from 'node:crypto';
+import { TalentFailure, databaseFailure, configurationFailure } from './talent-diagnostics.js';
 
 export function validateCrmUrl(value) {
   if (!value) throw new TalentFailure('crm_not_configured', 'configuration');
-  try {
-    const url = new URL(value);
-    if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || !url.username
-      || !url.password || url.pathname.length < 2 || url.hash || value !== value.trim()) throw new Error();
-    // The driver also decodes credentials. Reject malformed escapes before it can
-    // produce a URI error containing the original connection string.
-    decodeURIComponent(url.username);
-    decodeURIComponent(url.password);
-    return value;
-  } catch { throw new TalentFailure('crm_configuration_invalid', 'configuration'); }
+  const fail = reason => { throw configurationFailure('CRM_DATABASE_URL', reason); };
+  if (typeof value !== 'string') fail('invalid_url');
+  if (value !== value.trim()) fail('surrounding_whitespace');
+  let url;
+  try { url = new URL(value); } catch { fail('invalid_url'); }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) fail('unsupported_protocol');
+  if (!url.hostname) fail('missing_hostname');
+  if (!url.username) fail('missing_username');
+  if (!url.password) fail('missing_password');
+  if (url.pathname.length < 2) fail('missing_database');
+  if (url.hash) fail('unexpected_fragment');
+  // Validate once without rewriting credentials; the driver performs its own decode.
+  try { decodeURIComponent(url.username); } catch { fail('invalid_username_encoding'); }
+  try { decodeURIComponent(url.password); } catch { fail('invalid_password_encoding'); }
+  return value;
+}
+
+export function parseCrmCa(value) {
+  if (value === undefined || value === '') return undefined;
+  const fail = reason => { throw configurationFailure('CRM_DATABASE_CA_CERT', reason); };
+  if (typeof value !== 'string') fail('invalid_pem');
+  // Environment strings may contain actual newlines or escaped newline characters.
+  const pem = value.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
+  const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  if (!blocks || pem.replace(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g, '').trim()) fail('invalid_pem');
+  for (const block of blocks) {
+    if (!/^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\s]+\n-----END CERTIFICATE-----$/.test(block)) fail('invalid_pem');
+    try { new X509Certificate(block); } catch { fail('malformed_certificate'); }
+  }
+  return blocks.join('\n');
 }
 
 export function createTalentDatabase({ makePool = postgres, environment = () => process.env } = {}) {
@@ -22,13 +43,18 @@ export function createTalentDatabase({ makePool = postgres, environment = () => 
     const env = environment();
     const url = validateCrmUrl(env.CRM_DATABASE_URL);
     if (!pool) {
+      const ca = parseCrmCa(env.CRM_DATABASE_CA_CERT);
       try {
         pool = makePool(url, {
-          ssl: { rejectUnauthorized: true, ...(env.CRM_DATABASE_CA_CERT ? { ca: env.CRM_DATABASE_CA_CERT } : {}) },
+          ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) },
           prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10,
           onnotice: () => {}, // Driver notices are not a safe diagnostic channel.
         });
-      } catch (error) { throw databaseFailure(error, 'crm_configuration_invalid', 'configuration'); }
+      } catch (error) {
+        const failure = databaseFailure(error, 'crm_configuration_invalid', 'configuration');
+        throw failure.category === 'crm_configuration_invalid'
+          ? configurationFailure('CRM_DATABASE_POOL', 'initialization_failed') : failure;
+      }
     }
     let stage = 'transaction_begin';
     try {
