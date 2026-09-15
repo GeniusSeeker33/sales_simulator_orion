@@ -77,3 +77,17 @@ test('candidate without applications and mobile section navigation are safe', as
   await expect(page.getByRole('heading', { name: 'No verified learner or employment linkage' })).toBeVisible();
   await page.screenshot({ path: 'test-results/talent-mobile.png', fullPage: true });
 });
+test('authenticated database outage remains 503 with a safe unavailable view, not an empty CRM or leaked diagnostics', async ({ page }) => {
+  const pending = page.waitForResponse(response => response.url().includes('/api/talent?'));
+  await visit(page, `/talent/candidates?workspace_id=${id(10)}`, 'database-error');
+  const response = await pending;
+  expect(response.status()).toBe(503);
+  expect(response.headers()['cache-control']).toBe('no-store');
+  const body = await response.json();
+  expect(Object.keys(body)).toEqual(['error']);
+  expect(JSON.stringify(body)).not.toContain('SELF_SIGNED');
+  expect(JSON.stringify(body)).not.toContain('crm_connection_failed');
+  await expect(page.getByRole('alert')).toContainText('Talent workspace unavailable');
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByText('No candidate records have been imported into the unified CRM yet.')).toHaveCount(0);
+});

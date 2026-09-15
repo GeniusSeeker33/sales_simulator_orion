@@ -117,5 +117,6 @@ test('database failures are generic and read transaction cannot write', async ()
   const res = await request({}, '1', 'GET', failing);
   assert.equal(res.code, 503);
   assert.ok(!JSON.stringify(res.body).includes('SECRET'));
-  await assert.rejects(fixture.withDatabase(id(1), query => query('delete from crm.people')), /read.only|permission denied/i);
+  await assert.rejects(fixture.withDatabase(id(1), query => query('delete from crm.people')),
+    error => error.category === 'crm_query_failed' && ['25006', '42501'].includes(error.code));
 });

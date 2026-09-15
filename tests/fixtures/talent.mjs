@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
+import { createTalentDatabase } from '../../api/_lib/talent-db.js';
 export const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 export const now = Date.parse('2026-09-14T12:00:00Z');
 export async function talentFixture() {
@@ -67,10 +68,12 @@ export async function talentFixture() {
   await db.exec(`create table public.learner_bindings (auth_user_id uuid, person_id uuid, verified_at timestamptz);
     revoke all on public.learner_bindings from authenticated;`);
   await db.query('insert into public.learner_bindings values ($1,$2,now())', [id(1), id(102)]);
-  const withDatabase = (user, read) => db.transaction(async tx => {
-    await tx.exec('set transaction isolation level repeatable read read only; set local role authenticated;');
-    await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [user]);
-    return read(async (text, values = []) => (await tx.query(text, values)).rows);
-  });
-  return { db, withDatabase };
+  // Use the production role/context wrapper, replacing only the wire driver.
+  const makePool = () => ({ begin: (_mode, read) => db.transaction(async tx => {
+    await tx.exec('set transaction isolation level repeatable read read only');
+    return read({ unsafe: async (text, values = []) => (await tx.query(text, values)).rows });
+  }) });
+  const withDatabase = createTalentDatabase({ makePool,
+    environment: () => ({ CRM_DATABASE_URL: 'postgresql://postgres:synthetic@localhost/test' }) });
+  return { db, withDatabase, makePool };
 }

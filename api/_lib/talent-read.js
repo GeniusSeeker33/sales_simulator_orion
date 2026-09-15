@@ -64,9 +64,11 @@ export function attentionFor(row, now) {
 
 export async function readTalent(query, human, options, now = Date.now()) {
   const workspaces = await query(`select w.id, w.name, m.role from crm.workspaces w
-    join crm.workspace_members m on m.workspace_id = w.id where m.user_id = $1 order by w.name, w.id`, [human]);
+    join crm.workspace_members m on m.workspace_id = w.id where m.user_id = $1 order by w.name, w.id`, [human], 'workspace_lookup');
   const workspace = options.workspace_id ? workspaces.find(w => w.id === options.workspace_id) : workspaces[0];
-  if (!workspace) return { status: 403, body: { error: 'CRM workspace membership required.' } };
+  // "Missing" means not visible to this user, never a privileged existence probe.
+  if (!workspace) return { status: 403, body: { error: 'CRM workspace membership required.' },
+    diagnostic: workspaces.length ? 'crm_workspace_missing' : 'crm_membership_missing' };
   const workspaceId = workspace.id;
   if (options.person_id) {
     const [person] = await query(`select ${personFields} from crm.people p
