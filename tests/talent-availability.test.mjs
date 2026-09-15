@@ -1,8 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import postgres from 'postgres';
-import { createTalentDatabase, validateCrmUrl } from '../api/_lib/talent-db.js';
-import { TalentFailure, logTalentDiagnostic } from '../api/_lib/talent-diagnostics.js';
+import { rootCertificates, createSecureContext } from 'node:tls';
+import { createTalentDatabase, validateCrmUrl, parseCrmCa } from '../api/_lib/talent-db.js';
+import { TalentFailure, logTalentDiagnostic, configurationFailure } from '../api/_lib/talent-diagnostics.js';
 import { createHandler } from '../api/talent.js';
 import { talentFixture, id } from './fixtures/talent.mjs';
 
@@ -71,7 +72,7 @@ test('missing/malformed database configuration is categorized without exposing i
   assert.equal(validateCrmUrl(uri), uri);
 });
 test('driver keeps verified TLS, optional PEM CA, and transaction-pooler-safe options', async () => {
-  for (const ca of [undefined, 'SYNTHETIC-PEM']) {
+  for (const ca of [undefined, rootCertificates[0].trim()]) {
     const pool = fakePool();
     const database = createTalentDatabase({ makePool: pool.makePool, environment: () => ({ CRM_DATABASE_URL: uri, CRM_DATABASE_CA_CERT: ca }) });
     await database(id(1), async () => 'ok');
@@ -118,7 +119,7 @@ test('every connection/role/context/query/commit failure logs only an allowliste
     assert.equal(response.events[0].stage, stage);
     assert.ok(!JSON.stringify(response).includes(secret));
     assert.ok(!JSON.stringify(response).includes(uri));
-    assert.deepEqual(Object.keys(response.events[0]).sort(), code === 'unknown' ? ['category', 'event', 'stage'] : ['category', 'code', 'event', 'stage']);
+    assert.deepEqual(Object.keys(response.events[0]).sort(), code === 'unknown' ? ['category', 'event', 'field', 'reason', 'stage'] : ['category', 'code', 'event', 'stage']);
   }
 });
 test('incorrect database role, null/wrong Auth UID, or writable context fails closed before CRM reads', async () => {
@@ -211,4 +212,79 @@ test('diagnostic serialization rejects arbitrary error fields/codes and logger f
   logTalentDiagnostic(event => events.push(event), new TalentFailure(secret, secret, rawError(secret)));
   assert.ok(!JSON.stringify(events).includes(secret));
   assert.doesNotThrow(() => logTalentDiagnostic(() => { throw rawError(secret); }, rawError(secret)));
+});
+
+test('configuration reasons identify URL failures without logging any input', async () => {
+  const cases = [
+    [secret, 'invalid_url'], [42, 'invalid_url'],
+    ['https://user:pass@host/db', 'unsupported_protocol'],
+    ['postgresql:///postgres', 'missing_hostname'],
+    ['postgresql://host/postgres', 'missing_username'],
+    ['postgresql://user@host/postgres', 'missing_password'],
+    ['postgresql://user:pass@host/', 'missing_database'],
+    [`${uri}#fragment`, 'unexpected_fragment'], [`${uri}\n`, 'surrounding_whitespace'],
+    ['postgresql://u%ZZ:pass@host/db', 'invalid_username_encoding'],
+    ['postgresql://user:p%ZZ@host/db', 'invalid_password_encoding'],
+    ['postgresql://user:p%FF@host/db', 'invalid_password_encoding'],
+    ['postgresql://user:pass@host:invalid/db', 'invalid_url'],
+  ];
+  for (const [value, reason] of cases) {
+    const pool = fakePool();
+    const response = await invoke(createTalentDatabase({ makePool: pool.makePool, environment: () => ({ CRM_DATABASE_URL: value }) }));
+    assert.equal(response.code, 503);
+    assert.deepEqual(response.events, [{ event: 'talent_availability', category: 'crm_configuration_invalid',
+      stage: 'configuration', field: 'CRM_DATABASE_URL', reason }]);
+    assert.equal(pool.creations, 0);
+    assert.ok(!JSON.stringify(response.body).includes(reason));
+  }
+});
+
+test('percent-encoded credentials pass unchanged and are decoded exactly once by the installed driver', async () => {
+  for (const password of ['p@ss:/?#% word', 'café密碼', 'literal%40', '[YOUR-PASSWORD]']) {
+    const value = `postgresql://postgres.project:${encodeURIComponent(password)}@pooler.example.test:6543/postgres`;
+    assert.equal(validateCrmUrl(value), value);
+    const driver = postgres(value, { ssl: { rejectUnauthorized: true }, prepare: false });
+    assert.equal(driver.options.pass, password);
+    await driver.end();
+  }
+  // URL validation cannot determine whether syntactically valid credentials are correct.
+});
+
+test('CA parser supports actual/escaped newlines and bundles, rejects malformed input before pool creation', async () => {
+  const ca = rootCertificates[0].trim(); // Public Node trust-store certificate; no private fixture material.
+  for (const value of [ca, `${ca}\n`, ca.replace(/\n/g, '\r\n'), ca.replace(/\n/g, '\\n'), ca.replace(/\n/g, '\\r\\n'), `${ca}\n${ca}`]) {
+    const expected = value === `${ca}\n${ca}` ? `${ca}\n${ca}` : ca;
+    assert.equal(parseCrmCa(value), expected);
+    assert.doesNotThrow(() => createSecureContext({ ca: parseCrmCa(value) }));
+    const pool = fakePool();
+    await createTalentDatabase({ makePool: pool.makePool, environment: () => ({ CRM_DATABASE_URL: uri, CRM_DATABASE_CA_CERT: value }) })(id(1), async () => 'ok');
+    assert.deepEqual(pool.options.ssl, { rejectUnauthorized: true, ca: expected });
+  }
+  for (const [value, reason] of [[secret, 'invalid_pem'], [' ', 'invalid_pem'],
+    [`"${ca}"`, 'invalid_pem'], [`${ca}\n${secret}`, 'invalid_pem'],
+    ['-----BEGIN CERTIFICATE-----\nYWJj\n-----END CERTIFICATE-----', 'malformed_certificate']]) {
+    const pool = fakePool();
+    const response = await invoke(createTalentDatabase({ makePool: pool.makePool, environment: () => ({ CRM_DATABASE_URL: uri, CRM_DATABASE_CA_CERT: value }) }));
+    assert.equal(response.code, 503);
+    assert.deepEqual(response.events, [{ event: 'talent_availability', category: 'crm_configuration_invalid',
+      stage: 'configuration', field: 'CRM_DATABASE_CA_CERT', reason }]);
+    assert.equal(pool.creations, 0);
+    assert.ok(!JSON.stringify(response).includes(secret));
+    assert.ok(!JSON.stringify(response).includes('BEGIN CERTIFICATE'));
+  }
+});
+
+test('pool initialization has an honest fallback reason and field/reason pairs are re-allowlisted', async () => {
+  const response = await invoke(createTalentDatabase({ environment: () => ({ CRM_DATABASE_URL: `${uri}?target_session_attrs=invalid` }) }));
+  assert.deepEqual(response.events, [{ event: 'talent_availability', category: 'crm_configuration_invalid',
+    stage: 'configuration', field: 'CRM_DATABASE_POOL', reason: 'initialization_failed' }]);
+  const events = [];
+  for (const pair of [{ field: secret, reason: 'invalid_url' }, { field: 'CRM_DATABASE_URL', reason: secret },
+    { field: 'CRM_DATABASE_URL', reason: 'invalid_pem' }]) {
+    const error = configurationFailure('CRM_DATABASE_URL', 'invalid_url');
+    Object.assign(error, pair, { value: secret, host: secret, certificate: secret });
+    logTalentDiagnostic(event => events.push(event), error);
+  }
+  assert.ok(events.every(event => !('field' in event) && !('reason' in event)));
+  assert.ok(!JSON.stringify(events).includes(secret));
 });
