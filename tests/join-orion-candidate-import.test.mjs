@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatReconciliationReport, reconcileJoinOrionCandidates } from '../scripts/lib/join-orion-candidate-import.mjs';
+import { JoinOrionSourceAdapter } from '../scripts/lib/join-orion-source-adapter.mjs';
 
 const workspace = '00000000-0000-4000-8000-000000000010';
 const foreign = '00000000-0000-4000-8000-000000000020';
@@ -66,6 +67,40 @@ test('multiple applications for one authoritative identity remain separate and p
   assert.equal(target.state.people.size, 1); assert.equal(target.state.applications.size, 2);
   assert.equal(target.state.applications.get('a-app-1').source_created_at, '2026-01-01T11:00:00.000Z');
   assert.equal(target.state.applications.get('a-app-2').submitted_at, '2026-02-01T12:00:00.000Z');
+});
+
+test('application-scoped identity creates one person per application even when contact signals match', async () => {
+  const scoped = sourceId => application({ source_id: sourceId, source_identity_id: undefined, identity_scope: 'application' });
+  const data = fixture({ applications: [scoped('app-1'), scoped('app-2')], activities: [] });
+  const target = memoryTarget(); const report = await run(data, target, { mode: 'apply', operator: 'ticket-46' });
+  assert.equal(target.state.people.size, 2); assert.equal(target.state.applications.size, 2);
+  assert.equal(report.inspected.identity_scope, 'application'); assert.equal(report.potential_duplicates.length, 2);
+});
+
+test('database source adapter maps verified fields, application activity, private resume metadata, and no consent', async () => {
+  const statements = [];
+  const adapter = new JoinOrionSourceAdapter(async sql => {
+    statements.push(sql);
+    if (sql.includes('candidate_applications')) return [{ id: 'app-db', first_name: 'A', last_name: 'B', email: 'a@b.test',
+      phone: '555-1000', position_id: 'job-9', position_title: 'Sales Guide', status: 'pending',
+      created_at: '2026-01-01T00:00:00Z', source: 'website', recruiter: 'Recruiter A', resume_path: 'private/app-db.pdf' }];
+    return [{ id: 'act-db', candidate_id: 'app-db', activity_type: 'note_added', activity_note: 'Reviewed',
+      created_by: 'Recruiter A', created_at: '2026-01-02T00:00:00Z' }];
+  });
+  const snapshot = await adapter.read();
+  assert.equal(snapshot.applications[0].identity_scope, 'application');
+  assert.equal(snapshot.applications[0].job_ref, 'job-9');
+  assert.equal(snapshot.applications[0].payload.position_title, 'Sales Guide');
+  assert.equal(snapshot.applications[0].status, 'submitted');
+  assert.deepEqual(snapshot.source_vocabulary, { application_statuses: ['pending'], activity_types: ['note_added'] });
+  assert.equal(snapshot.activities[0].application_source_id, 'app-db'); assert.equal(snapshot.activities[0].type, 'note');
+  assert.equal(snapshot.documents[0].storage_path, 'private/app-db.pdf'); assert.deepEqual(snapshot.consents, []);
+  assert.ok(statements.every(sql => !/dealer/i.test(sql)));
+  const target = memoryTarget(); const report = await run(snapshot, target);
+  assert.deepEqual(report.proposed, { people: 1, applications: 1, activities: 1, documents: 1, consents: 0 });
+  assert.equal(report.writes_performed, 0); assert.equal(target.state.writes, 0);
+  assert.deepEqual(report.inspected.source_vocabulary, snapshot.source_vocabulary);
+  assert.equal(JSON.stringify(report).includes('private/app-db.pdf'), false);
 });
 
 test('distinct source identities sharing email enter human review and do not merge', async () => {
