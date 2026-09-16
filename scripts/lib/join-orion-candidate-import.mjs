@@ -20,8 +20,13 @@ const timestamp = value => {
   return Number.isNaN(date.valueOf()) ? null : date.toISOString();
 };
 const normalizedEmail = value => nonEmpty(value)?.toLowerCase() ?? null;
+const normalizedPhone = value => nonEmpty(value)?.replace(/\D/g, '') || null;
+const normalizedName = person => nonEmpty([person.first_name, person.last_name].filter(nonEmpty).join(' '))?.toLowerCase().replace(/\s+/g, ' ') ?? null;
 const provenanceKey = (entity, id) => `${SOURCE_SYSTEM}\u0000${entity}\u0000${id}`;
 const sorted = values => [...values].sort((a, b) => a.localeCompare(b));
+const applicationIdentity = raw => raw.identity_scope === 'application' ? nonEmpty(raw.source_id) : nonEmpty(raw.source_identity_id);
+const relatedIdentity = (raw, applicationIdentities) => raw.identity_scope === 'application'
+  ? applicationIdentities.get(nonEmpty(raw.application_source_id)) ?? null : nonEmpty(raw.source_identity_id);
 
 function issue(kind, recordType, sourceId, reason, extra = {}) {
   return { kind, record_type: recordType, source_id: sourceId ?? null, reason, ...extra };
@@ -54,13 +59,13 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
   if (state.workspace_id !== workspaceId) throw new Error('Target adapter returned foreign-workspace state');
 
   const invalid = [], skipped = [], conflicts = [], duplicateQueue = [];
-  const identities = new Map(), applications = [], activities = [], documents = [], consents = [];
+  const identities = new Map(), applicationIdentities = new Map(), applications = [], activities = [], documents = [], consents = [];
   const seen = { applications: new Set(), activities: new Set(), documents: new Set(), consents: new Set() };
 
   for (const raw of snapshot.applications) {
-    const sourceId = nonEmpty(raw.source_id), identityId = nonEmpty(raw.source_identity_id);
+    const sourceId = nonEmpty(raw.source_id), identityId = applicationIdentity(raw);
     if (!sourceId || !identityId || (!nonEmpty(raw.first_name) && !nonEmpty(raw.last_name)) || !timestamp(raw.submitted_at)) {
-      invalid.push(issue('invalid', 'application', sourceId, 'missing authoritative ID, source identity, candidate name, or valid submitted_at'));
+      invalid.push(issue('invalid', 'application', sourceId, 'missing authoritative application/identity reference, candidate name, or valid submitted_at'));
       continue;
     }
     if (seen.applications.has(sourceId)) {
@@ -80,6 +85,7 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
       skipped.push(issue('skipped', 'application', sourceId, 'source identity has conflicting fields')); continue;
     }
     identities.set(identityId, prior ?? person);
+    applicationIdentities.set(sourceId, identityId);
     applications.push({ source_id: sourceId, source_identity_id: identityId, status, job_ref: nonEmpty(raw.job_ref),
       submitted_at: timestamp(raw.submitted_at), assigned_source_ref: nonEmpty(raw.owner_ref),
       source_created_at: timestamp(raw.source_created_at), source_updated_at: timestamp(raw.source_updated_at),
@@ -88,13 +94,21 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
 
   const usableIdentityIds = new Set(applications.map(row => row.source_identity_id));
   for (const identityId of [...identities.keys()]) if (!usableIdentityIds.has(identityId)) identities.delete(identityId);
-  const emails = new Map();
-  for (const person of identities.values()) if (normalizedEmail(person.email)) {
-    const email = normalizedEmail(person.email), list = emails.get(email) ?? []; list.push(person.source_id); emails.set(email, list);
+  const signals = [{ category: 'email', get: person => normalizedEmail(person.email) },
+    { category: 'phone', get: person => normalizedPhone(person.phone) }, { category: 'name', get: normalizedName }];
+  const duplicateEvidence = new Map();
+  for (const signal of signals) {
+    const groups = new Map();
+    for (const person of identities.values()) if (signal.get(person)) {
+      const normalized = signal.get(person), list = groups.get(normalized) ?? []; list.push(person.source_id); groups.set(normalized, list);
+    }
+    for (const ids of groups.values()) if (ids.length > 1) for (const identityId of ids) {
+      const evidence = duplicateEvidence.get(identityId) ?? new Set(); evidence.add(signal.category); duplicateEvidence.set(identityId, evidence);
+    }
   }
-  for (const [email, ids] of emails) if (ids.length > 1) for (const identityId of sorted(ids)) duplicateQueue.push({
-    source_identity: identityId, conflicting_crm_person_refs: [], reason: 'distinct source identities share an email',
-    evidence_categories: ['email'], recommended_action: 'review identity', email,
+  for (const [identityId, evidence] of duplicateEvidence) duplicateQueue.push({
+    source_identity: identityId, conflicting_crm_person_refs: [], reason: 'distinct application-scoped identities share normalized candidate signals',
+    evidence_categories: sorted(evidence), recommended_action: 'review identity',
   });
   for (const person of identities.values()) {
     const exact = state.people_by_provenance[provenanceKey(APPLICATION_ENTITY, person.source_id)];
@@ -105,7 +119,7 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
 
   const validApplications = new Set(applications.map(row => row.source_id));
   for (const raw of snapshot.activities) {
-    const sourceId = nonEmpty(raw.source_id), identityId = nonEmpty(raw.source_identity_id), type = ACTIVITY_TYPE_MAP[nonEmpty(raw.type)];
+    const sourceId = nonEmpty(raw.source_id), identityId = relatedIdentity(raw, applicationIdentities), type = ACTIVITY_TYPE_MAP[nonEmpty(raw.type)];
     if (!sourceId || !identityId || !nonEmpty(raw.summary) || !timestamp(raw.occurred_at)) {
       invalid.push(issue('invalid', 'activity', sourceId, 'missing authoritative ID, source identity, summary, or valid occurred_at')); continue;
     }
@@ -123,7 +137,7 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
   }
 
   for (const raw of snapshot.documents) {
-    const sourceId = nonEmpty(raw.source_id), identityId = nonEmpty(raw.source_identity_id), storagePath = nonEmpty(raw.storage_path);
+    const sourceId = nonEmpty(raw.source_id), identityId = relatedIdentity(raw, applicationIdentities), storagePath = nonEmpty(raw.storage_path);
     if (!sourceId || !identityId || !nonEmpty(raw.document_type) || !storagePath || storagePath.includes('://')) {
       invalid.push(issue('invalid', 'document', sourceId, 'requires authoritative IDs, type, and an opaque non-URL storage_path')); continue;
     }
@@ -136,7 +150,7 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
   }
 
   for (const raw of snapshot.consents) {
-    const sourceId = nonEmpty(raw.source_id), identityId = nonEmpty(raw.source_identity_id), capturedAt = timestamp(raw.captured_at);
+    const sourceId = nonEmpty(raw.source_id), identityId = relatedIdentity(raw, applicationIdentities), capturedAt = timestamp(raw.captured_at);
     if (!sourceId || !identityId || !['email','phone','sms','postal','other'].includes(raw.channel) ||
         !['unknown','opted_in','opted_out'].includes(raw.status) || !nonEmpty(raw.purpose) || !capturedAt ||
         !raw.evidence || typeof raw.evidence !== 'object' || Array.isArray(raw.evidence) || !Object.keys(raw.evidence).length) {
@@ -169,7 +183,9 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
   const report = { report_version: 1, run_id: `join-orion-${digest}-${mode}`, source_system: SOURCE_SYSTEM,
     target_workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name }, mode, operator: operator ?? null,
     inspected: { source_applications: snapshot.applications.length, source_activities: snapshot.activities.length,
-      source_documents: snapshot.documents.length, source_consents: snapshot.consents.length, unique_source_identities: new Set(snapshot.applications.map(r => nonEmpty(r.source_identity_id)).filter(Boolean)).size },
+      source_documents: snapshot.documents.length, source_consents: snapshot.consents.length, unique_source_identities: new Set(snapshot.applications.map(applicationIdentity).filter(Boolean)).size,
+      identity_scope: snapshot.applications.every(row => row.identity_scope === 'application') ? 'application' : 'authoritative_source_identity',
+      source_vocabulary: snapshot.source_vocabulary ?? null },
     proposed: { people: plan.people.length, applications: plan.applications.length, activities: plan.activities.length,
       documents: plan.documents.length, consents: plan.consents.length }, already_imported: already.length,
     already_imported_records: already, updates: 0,
