@@ -15,6 +15,8 @@
     "test:crm": "node --test tests/crm-foundation.test.mjs tests/crm-provisioning.test.mjs",
     "test:crm-provision": "node --test tests/crm-provisioning.test.mjs",
     "test:candidate-import": "node --test tests/join-orion-candidate-import.test.mjs",
+    "test:join-orion-source": "node --test tests/join-orion-source-inspection.test.mjs",
+    "inspect:join-orion-source": "node scripts/inspect-join-orion-source.mjs",
     "import:join-orion-candidates": "node scripts/import-join-orion-candidates.mjs",
     "provision:crm": "node scripts/provision-crm-workspace.mjs",
     "test:marketing": "node --test tests/marketing-domain.test.mjs tests/marketing-migration.test.mjs tests/marketing-workflow.test.mjs tests/marketing-agents.test.mjs tests/marketing-agent-api.test.mjs tests/marketing-attention.test.mjs tests/marketing-guardian-qa.test.mjs tests/marketing-guardian-consistency.test.mjs tests/marketing-orchestration.test.mjs tests/marketing-agent-work.test.mjs tests/marketing-guided-work.test.mjs",

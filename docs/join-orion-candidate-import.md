@@ -13,7 +13,8 @@ or verified column names. It verifies only the legacy entity names
 `candidate_applications` and `candidate_activity`. The migration map names
 `job_postings` only as a source for `job_ref`. Candidate document and consent
 entities remain unverified. Consequently, this PR deliberately supplies a
-canonical adapter contract and file adapter, not a speculative hosted reader.
+canonical adapter contract, file adapter, and safe database inspector—not a
+speculative hosted reader.
 No hosted data was accessed.
 
 Before a production export adapter is approved, document its connection/project,
@@ -22,6 +23,64 @@ status/activity vocabularies, timestamps/time zones, recruiter references,
 document storage authorization, and consent evidence semantics. The legacy source
 may still be cross-project; the target is the canonical Genius Seeker Supabase
 project selected by the server-only `CRM_DATABASE_URL`.
+
+## Repository source discovery (2026-09-16)
+
+### Verified source facts
+
+* Repository history through merged PR #44 contains no source DDL, generated
+  database types, source API response, candidate fixture copied from production,
+  or server-side Join-Orion source client.
+* `candidate_applications` and `candidate_activity` are legacy **entity names**
+  used by the CRM provenance model. They do not verify columns in a live source.
+  `job_postings` is documented only as a possible origin for `job_ref`.
+* The browser Supabase client contains the historical project reference
+  `shwdkkiinqhacwerukch` as a fallback. The same client supports newsletter and
+  dealer-inquiry code, so repository evidence does not establish that this is
+  the current candidate source or that candidate tables remain there.
+* No authoritative candidate/person identity field, activity vocabulary,
+  application status vocabulary, recruiter field, document field, storage
+  bucket, or consent-evidence field is verified by repository evidence.
+* The canonical CRM is configured separately with server-only
+  `CRM_DATABASE_URL`. Browser variables are not an acceptable source connection.
+
+### Not available / unresolved
+
+The source schemas, current tables/views, exact columns/types/constraints,
+authoritative application and identity semantics, and every source-to-canonical
+field mapping remain unresolved. In particular, an application ID must not be
+treated as a person identity and email must not be promoted to
+`source_identity_id`. Until an operator reviews an inspection report and commits
+an approved mapping, the direct database adapter is intentionally not enabled.
+The protected JSON adapter remains the only import input.
+
+## Privacy-preserving source inspection
+
+Set the two distinct database connections in a trusted operator shell:
+
+```sh
+export JOIN_ORION_DATABASE_URL='postgresql://...'
+export JOIN_ORION_DATABASE_CA_CERT='-----BEGIN CERTIFICATE-----...'
+export CRM_DATABASE_URL='postgresql://...'
+export CRM_DATABASE_CA_CERT='-----BEGIN CERTIFICATE-----...'
+npm run inspect:join-orion-source > join-orion-source-metadata.json
+```
+
+`JOIN_ORION_DATABASE_CA_CERT` is optional when the platform certificate chain is
+already trusted. The command reads PostgreSQL catalogues only. It reports relevant
+schemas, tables/views, columns, PostgreSQL types, nullability, key constraints,
+estimated row counts, PostgreSQL enum labels, possible categorical fields, and
+the presence (not values) of document/storage and consent/evidence columns. It
+does not query candidate
+rows or emit distinct values, names, emails, phones, addresses, resumes, free
+text, notes, or application content. There is deliberately no sampling flag.
+
+The command compares `pg_control_system().system_identifier` plus database name
+for source and target, rather than guessing from hostnames. It refuses an
+unverifiable identity or a source that resolves to the CRM target. Keep the JSON
+report protected: although it contains no candidate rows, schema metadata may be
+operationally sensitive. Submit a redacted/approved report to define the verified
+adapter mapping in a follow-up change.
 
 ## Canonical source adapter contract
 
@@ -135,10 +194,15 @@ the importer performs no updates or deletes. If future volume requires bounded
 batches, preserve each person's dependent records in the same transaction and
 report every committed/failed batch explicitly.
 
-## Future continuous integration
+## Direct adapter gate and future continuous integration
 
-A future server-side API/queue adapter may implement the same `read()` contract
-after the missing source facts are verified. It must retain explicit apply/replay
+A `JoinOrionSourceAdapter.read()` database mapping cannot be truthfully
+implemented from current repository evidence. Therefore
+`npm run import:join-orion-candidates` continues to require the protected JSON
+file and cannot accidentally interpret unknown source columns. After the operator
+inspection verifies the missing facts, a server-side database/API adapter may
+implement the same `read()` contract and make database-backed dry-run available.
+It must retain explicit apply/replay
 authorization, workspace pinning, stable cursors, immutable provenance, private
 document authorization, reconciliation receipts, and the candidate/learner
 boundary. The separately hosted dealer UI is not part of this Talent-side import.
