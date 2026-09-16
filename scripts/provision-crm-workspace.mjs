@@ -13,6 +13,12 @@ function requireValue(value, label) {
   return normalized;
 }
 
+export function postgresTransactionQuery(transaction) {
+  return async (statement, parameters = []) => ({
+    rows: await transaction.unsafe(statement, parameters),
+  });
+}
+
 export async function provisionOrionWorkspace(query, options) {
   const identifier = requireValue(options?.userIdentifier, 'CRM_PROVISION_USER');
   const performedBy = requireValue(options?.performedBy, 'CRM_PROVISIONED_BY');
@@ -88,7 +94,7 @@ async function main() {
   });
   try {
     const result = await sql.begin((transaction) => provisionOrionWorkspace(
-      (statement, parameters = []) => transaction.unsafe(statement, parameters),
+      postgresTransactionQuery(transaction),
       {
         userIdentifier: process.env.CRM_PROVISION_USER,
         performedBy: process.env.CRM_PROVISIONED_BY,

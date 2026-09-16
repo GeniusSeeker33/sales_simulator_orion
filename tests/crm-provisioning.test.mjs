@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
-import { provisionOrionWorkspace } from '../scripts/provision-crm-workspace.mjs';
+import { postgresTransactionQuery, provisionOrionWorkspace } from '../scripts/provision-crm-workspace.mjs';
 
 const migrationUrl = new URL('../supabase/migrations/20260913145543_unified_crm_foundation.sql', import.meta.url);
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -21,6 +21,12 @@ async function setup() {
   return db;
 }
 
+const postgresTransactionFor = (transaction, beforeQuery) => ({
+  async unsafe(statement, parameters = []) {
+    await beforeQuery?.(statement, parameters);
+    return (await transaction.query(statement, parameters)).rows;
+  },
+});
 const queryFor = (db) => (statement, parameters = []) => db.query(statement, parameters);
 const provision = (db, userIdentifier = 'operator@example.com', options = {}) =>
   provisionOrionWorkspace(queryFor(db), { userIdentifier, performedBy: 'test-change-123', ...options });
@@ -29,10 +35,13 @@ async function addUser(db, userId = id(1), email = 'operator@example.com') {
   await db.query('insert into auth.users(id, email) values ($1, $2)', [userId, email]);
 }
 
-test('creates the canonical Orion workspace on the first run', async () => {
+test('creates the canonical Orion workspace through the postgres array-result adapter', async () => {
   const db = await setup();
   await addUser(db);
-  const result = await provision(db);
+  const result = await provisionOrionWorkspace(
+    postgresTransactionQuery(postgresTransactionFor(db)),
+    { userIdentifier: 'operator@example.com', performedBy: 'test-change-123' },
+  );
   assert.equal(result.workspace.name, 'Orion');
   assert.equal(result.workspace.slug, 'orion');
   assert.equal(result.workspace.created, true);
@@ -102,5 +111,26 @@ test('preserves an existing role rather than silently overwriting it', async () 
   assert.equal(result.membership.requestedRole, 'admin');
   assert.equal(result.membership.existingRolePreserved, true);
   assert.equal((await db.query('select role from crm.workspace_members')).rows[0].role, 'manager');
+  await db.close();
+});
+
+test('rolls back all writes when provisioning fails before completion', async () => {
+  const db = await setup();
+  await addUser(db);
+
+  await assert.rejects(
+    db.transaction((transaction) => provisionOrionWorkspace(
+      postgresTransactionQuery(postgresTransactionFor(transaction, (statement) => {
+        if (statement.startsWith('insert into crm.workspace_members')) {
+          throw new Error('simulated membership failure');
+        }
+      })),
+      { userIdentifier: 'operator@example.com', performedBy: 'test-change-123' },
+    )),
+    /simulated membership failure/,
+  );
+
+  assert.equal((await db.query('select * from crm.workspaces')).rows.length, 0);
+  assert.equal((await db.query('select * from crm.workspace_members')).rows.length, 0);
   await db.close();
 });
