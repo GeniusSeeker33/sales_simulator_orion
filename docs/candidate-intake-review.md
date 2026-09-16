@@ -12,6 +12,24 @@ Only ready and identity-review states appear as queue items. Diagnostic counts d
 
 Migration `20260916120000_join_orion_intake_exclusions.sql` adds `crm.join_orion_source_exclusions`, a durable workspace-scoped store containing only explicit source application UUID, classification/reason, reviewer, and reviewed timestamp. RLS permits reads only to CRM `manager` and `admin` members; writes remain service-role-controlled governance operations.
 
+## Provisioning a reviewed exclusion manifest
+
+Operators can inspect a reviewed manifest without writing by running
+`npm run provision:join-orion-exclusions`. The command requires
+`CRM_DATABASE_URL`, `CRM_WORKSPACE_ID`, `JOIN_ORION_DATABASE_URL`,
+`JOIN_ORION_EXCLUSION_FILE`, `JOIN_ORION_EXCLUSION_OPERATOR`, and
+`JOIN_ORION_EXCLUSION_FINGERPRINT`; each database also accepts its corresponding
+optional `*_DATABASE_CA_CERT`. The fingerprint must come from the completed
+review rather than being calculated ad hoc during provisioning.
+
+The default is a dry run. After checking its plan, an operator may explicitly
+run `npm run provision:join-orion-exclusions -- --apply`. Apply only inserts
+missing exclusion governance rows, runs atomically, rejects changed or extra
+hosted governance instead of replacing/deleting it, and succeeds only when the
+hosted canonical fingerprint equals the reviewed fingerprint. It never imports
+or updates candidate data. Command output contains counts and identifiers only;
+database credentials and candidate fields are never printed.
+
 The hosted server reconstructs the version 1 manifest from ordered rows and passes it through the existing validator, preserving canonical validation and fingerprint calculation. Existing production exclusions must be loaded through a separately reviewed service-role migration/operation before enabling the hosted queue; production UUIDs must not be placed in the client or an unreviewed repository fixture. Changes produce a different fingerprint rather than weakening PR #49 protections.
 
 ## Security and data minimization

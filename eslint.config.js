@@ -7,6 +7,11 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    files: ['scripts/provision-join-orion-exclusions.mjs', 'scripts/lib/join-orion-exclusion-provisioning.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: { ecmaVersion: 'latest', globals: globals.node },
+  },
+  {
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
