@@ -20,6 +20,10 @@ export async function runCli(args, environment = process.env, connect = postgres
   if (!environment.JOIN_ORION_EXPORT_FILE?.trim() && !environment.JOIN_ORION_DATABASE_URL?.trim()) throw new Error('JOIN_ORION_DATABASE_URL or JOIN_ORION_EXPORT_FILE is required');
   if (!environment.CRM_WORKSPACE_ID?.trim()) throw new Error('CRM_WORKSPACE_ID is required');
   if (options.apply && !environment.CRM_IMPORT_OPERATOR?.trim()) throw new Error('--apply requires CRM_IMPORT_OPERATOR');
+  const exclusionFile = environment.JOIN_ORION_EXCLUSION_FILE?.trim();
+  if (options.apply && exclusionFile && !environment.JOIN_ORION_REVIEWED_EXCLUSION_FINGERPRINT?.trim()) {
+    throw new Error('--apply with exclusions requires JOIN_ORION_REVIEWED_EXCLUSION_FINGERPRINT from the reviewed dry-run');
+  }
   const databaseUrl = validateCrmUrl(environment.CRM_DATABASE_URL);
   const ca = parseCrmCa(environment.CRM_DATABASE_CA_CERT);
   const sql = connect(databaseUrl, { max: 1, prepare: false, ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } });
@@ -31,7 +35,9 @@ export async function runCli(args, environment = process.env, connect = postgres
   try {
     const report = await reconcileJoinOrionCandidates({ source, target: createPostgresImportTarget(sql),
       workspaceId: environment.CRM_WORKSPACE_ID.trim(), mode: options.apply ? 'apply' : 'dry-run',
-      operator: options.apply ? environment.CRM_IMPORT_OPERATOR.trim() : null });
+      operator: options.apply ? environment.CRM_IMPORT_OPERATOR.trim() : null,
+      exclusionManifestLoader: exclusionFile ? async () => JSON.parse(await readFile(exclusionFile, 'utf8')) : null,
+      reviewedExclusionFingerprint: environment.JOIN_ORION_REVIEWED_EXCLUSION_FINGERPRINT?.trim() ?? null });
     return { report, output: options.json ? JSON.stringify(report, null, 2) : formatReconciliationReport(report) };
   } finally { await Promise.all([sql.end(), sourceSql?.end()]); }
 }

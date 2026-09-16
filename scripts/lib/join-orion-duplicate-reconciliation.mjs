@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { applyExclusions, validateExclusionManifest } from './join-orion-exclusions.mjs';
 
 const text = value => typeof value === 'string' && value.trim() ? value.trim() : null;
 const email = value => text(value)?.toLowerCase() ?? null;
@@ -24,8 +25,11 @@ function maskPhone(value) {
 }
 
 /** Builds a deterministic, read-only review artifact from a canonical source snapshot. */
-export function buildDuplicateReconciliation(snapshot, { redacted = false } = {}) {
+export function buildDuplicateReconciliation(snapshot, { redacted = false, exclusionManifest = null } = {}) {
   if (!snapshot || !Array.isArray(snapshot.applications)) throw new Error('A canonical Join-Orion application snapshot is required');
+  const sourceApplications = snapshot.applications.length;
+  const exclusionResult = applyExclusions(snapshot, exclusionManifest ? validateExclusionManifest(exclusionManifest) : null);
+  snapshot = exclusionResult.snapshot;
   const applications = snapshot.applications.map(raw => ({
     source_application_id: text(raw.source_id), first_name: text(raw.first_name), last_name: text(raw.last_name),
     email: text(raw.email), phone: text(raw.phone), position_title: text(raw.payload?.position_title),
@@ -60,7 +64,9 @@ export function buildDuplicateReconciliation(snapshot, { redacted = false } = {}
   const involved = new Set(cases.flatMap(item => item.applications.map(row => row.source_application_id)));
   return {
     report_version: 1, source_system: 'join-orion', redacted,
-    summary: { source_applications: applications.length, reconciliation_cases: cases.length,
+    exclusion_manifest: exclusionResult.metadata, excluded: exclusionResult.excluded,
+    summary: { source_applications: sourceApplications, applications_excluded: exclusionResult.excluded.applications,
+      applications_eligible: applications.length, reconciliation_cases: cases.length,
       applications_in_cases: involved.size, applications_without_duplicate_signals: applications.length - involved.size, writes_performed: 0 },
     cases,
     worksheet: cases.map(item => ({ case_id: item.case_id,
@@ -72,8 +78,15 @@ export function buildDuplicateReconciliation(snapshot, { redacted = false } = {}
 export function formatDuplicateReconciliation(report) {
   const lines = ['Join-Orion Duplicate Reconciliation (READ ONLY)',
     `Applications: ${report.summary.source_applications}`,
+    `Applications excluded: ${report.summary.applications_excluded}`,
+    `Applications eligible: ${report.summary.applications_eligible}`,
     `Cases: ${report.summary.reconciliation_cases}`,
     `Applications without duplicate signals: ${report.summary.applications_without_duplicate_signals}`,
+    ...(report.exclusion_manifest ? [`Exclusion manifest: v${report.exclusion_manifest.manifest_version} ${report.exclusion_manifest.fingerprint}`,
+      `Manifest entries: ${report.exclusion_manifest.manifest_entries}`,
+      `Source records found: ${report.exclusion_manifest.source_records_found}`,
+      `Unmatched manifest IDs: ${report.exclusion_manifest.unmatched_manifest_ids.length}`,
+      `Reviewers: ${report.exclusion_manifest.reviewers.join(', ')}`] : []),
     `Contact details: ${report.redacted ? 'REDACTED (names retained for identity review)' : 'UNREDACTED — trusted operator terminal only'}`, ''];
   for (const item of report.cases) {
     lines.push(`Case ${item.case_id}`, `Applications: ${item.applications.length}`);

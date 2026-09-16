@@ -42,10 +42,66 @@ TLS certificate validation. No `VITE_` variable is accepted. A protected canonic
 JSON export remains supported by setting `JOIN_ORION_EXPORT_FILE`; when it is set,
 it takes precedence over the database input.
 
+## Governed historical-test exclusion boundary
+
+Human-reviewed pre-production applications may be kept out of Candidate 360 with
+an operator-controlled manifest referenced by `JOIN_ORION_EXCLUSION_FILE`. The
+manifest is an import boundary, not a deletion: neither the generator, dry run,
+reconciliation command, nor importer mutates Join-Orion. Only an authoritative
+`candidate_applications.id` UUID can be listed. Names, contact values, domains,
+positions, statuses, recruiters, sources, dates, resumes, activities, similarity,
+and AI output are never exclusion criteria. **The exclusion manifest is not a
+spam filter, candidate classifier, or identity system.**
+
+Version 1 supports only `historical_test_data`. Each record requires the source
+application UUID, a human-readable reason, reviewer/operator attribution, and a
+timezone-qualified review timestamp; see
+[`docs/join-orion-exclusions.example.json`](join-orion-exclusions.example.json).
+Malformed manifests, duplicate entries, unsupported classifications, incomplete
+review data, and UUIDs absent from the current source fail closed. Verification
+reports counts and IDs only, never candidate PII.
+
+The real manifest is protected operational material and is ignored by Git. Do
+not commit it. A read-only, PII-free draft can be generated without overwriting
+an existing file:
+
+```sh
+npm run generate:join-orion-exclusions -- --output /protected/path/join-orion-exclusions.json
+# --force is an explicit replacement action; complete every blank field by human review.
+export JOIN_ORION_EXCLUSION_FILE=/protected/path/join-orion-exclusions.json
+npm run import:join-orion-candidates -- --json
+npm run reconcile:join-orion-candidates -- --json
+```
+
+Excluding an application also excludes activity whose `candidate_id` points to
+it, its `resume_path`-derived document metadata, and application-linked consent
+evidence. Dependents need no separate entries. Reports keep those counts under
+`excluded`, separate from invalid/skipped records, and omit them from proposed
+writes, duplicate cases, and identity conflicts. Reports also include manifest
+version, full SHA-256 fingerprint, entry/source-match counts, reviewer summary,
+and unmatched IDs (normally empty because unmatched IDs stop the run).
+
+Dry run and human reconciliation use the same manifest. Apply rereads and
+revalidates both source state and the manifest. Copy the reviewed dry-run
+fingerprint into `JOIN_ORION_REVIEWED_EXCLUSION_FINGERPRINT` before applying; a
+missing or changed fingerprint stops before writes and requires a new dry run and
+review. The fingerprint is retained in the apply receipt/report. Never run hosted
+apply merely to verify this feature.
+
+Future applications are eligible by default because there is no heuristic or
+automatic inheritance: only explicitly listed UUIDs are excluded. Exclusions do
+not expire automatically. To reverse one, a human must review the source record,
+record the reason/reviewer in the external change/audit system (until manifest
+history is implemented), explicitly remove the entry, and rerun and review the
+dry run. The application and its dependents then become eligible. Protect the
+manifest, review evidence, dry-run output, fingerprint, change ticket, and apply
+receipt according to the organization's operational audit and retention policy.
+
 Apply is a separate, attributable operator action:
 
 ```sh
 export CRM_IMPORT_OPERATOR='change-1234/alice'
+export JOIN_ORION_REVIEWED_EXCLUSION_FINGERPRINT='<fingerprint from reviewed dry-run>'
 npm run import:join-orion-candidates -- --apply --json
 ```
 

@@ -20,6 +20,7 @@
     "inspect:join-orion-source": "node scripts/inspect-join-orion-source.mjs",
     "import:join-orion-candidates": "node scripts/import-join-orion-candidates.mjs",
     "reconcile:join-orion-candidates": "node scripts/reconcile-join-orion-candidates.mjs",
+    "generate:join-orion-exclusions": "node scripts/generate-join-orion-exclusions.mjs",
     "provision:crm": "node scripts/provision-crm-workspace.mjs",
     "test:marketing": "node --test tests/marketing-domain.test.mjs tests/marketing-migration.test.mjs tests/marketing-workflow.test.mjs tests/marketing-agents.test.mjs tests/marketing-agent-api.test.mjs tests/marketing-attention.test.mjs tests/marketing-guardian-qa.test.mjs tests/marketing-guardian-consistency.test.mjs tests/marketing-orchestration.test.mjs tests/marketing-agent-work.test.mjs tests/marketing-guided-work.test.mjs",
     "test:marketing-ui": "playwright test --config tests/marketing-ui/playwright.config.mjs",
