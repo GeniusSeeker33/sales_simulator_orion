@@ -26,6 +26,8 @@ dist-ssr
 
 # Orion source data exports — real customer/revenue; never commit
 *.xlsx
+# Canonical candidate exports can contain personal data; fixtures belong under tests/fixtures only.
+join-orion-candidate-export*.json
 
 # Local browser verification artifacts
 test-results/
