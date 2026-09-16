@@ -97,6 +97,43 @@ The protected JSON adapter still accepts the version 1 contract introduced in PR
 identity source. It may instead use `identity_scope: "application"` and relate
 activities/documents with `application_source_id`.
 
+### Human duplicate reconciliation report
+
+An authorized operator can turn the same read-only source snapshot into connected
+review cases. This command has no apply mode, does not connect to CRM, does not
+fetch resume binaries, and cannot write either database:
+
+```sh
+npm run reconcile:join-orion-candidates
+npm run reconcile:join-orion-candidates -- --json
+npm run reconcile:join-orion-candidates -- --redacted
+```
+
+Use only a trusted local/operator terminal for the default output; it contains the
+minimum contact fields needed for identity review. `--redacted` masks email and
+phone values for safer sharing. Names remain visible because they are themselves
+one of the review signals; operators must still handle the output as candidate
+data. This is server-side tooling only and has no HTTP or Candidate 360 route.
+
+Applications are connected when any normalized email, phone, or full-name signal
+matches. Transitive links stay in one case, while each pair shows exactly which
+signals match. Unconnected applications are counted but omitted from cases. Case
+IDs are deterministic from the sorted source application UUIDs. Hashes and
+normalized values support comparison only and never become identity keys.
+
+**Matching contact information is evidence for human review, not authoritative
+identity proof.** The report supplies no probability, score, recommendation, or
+automatic decision. Its JSON output includes a worksheet template with `case_id`,
+`source_application_ids`, `decision`, `reviewed_by`, `reviewed_at`, and `reason`.
+The decision begins unset and may be recorded as `same_person`, `keep_separate`,
+or `needs_more_review` outside this read-only command.
+
+A future, separately governed import/identity-crosswalk process may accept a
+reviewed worksheet. That process must preserve every historical application,
+allow several applications to belong to one CRM person, preserve source
+provenance, record the human reviewer, decision, and time, and remain reversible
+and auditable where feasible. This report does not implement that mutation.
+
 ## Status and activity vocabulary
 
 The safe categorical inspection observed/approved the following application
