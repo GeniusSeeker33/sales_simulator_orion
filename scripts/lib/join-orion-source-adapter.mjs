@@ -9,6 +9,9 @@ export const JOIN_ORION_STATUS_VOCABULARY = Object.freeze({
   hired: 'hired',
   rejected: 'rejected',
   withdrawn: 'withdrawn',
+  new: 'submitted',
+  screened: 'in_review',
+  interviewing: 'in_review',
 });
 
 export const JOIN_ORION_ACTIVITY_VOCABULARY = Object.freeze({
@@ -24,7 +27,23 @@ export const JOIN_ORION_ACTIVITY_VOCABULARY = Object.freeze({
   interview_scheduled: 'interview',
   task: 'task',
   document: 'document',
+  phone_call: 'call',
+  notes_updated: 'note',
+  status_updated: 'status_change',
+  referral_submission: 'form_submission',
+  advanced: 'status_change',
 });
+
+export const JOIN_ORION_ACTIVITY_LABELS = Object.freeze({
+  interview: 'Interview',
+  phone_call: 'Phone call',
+  notes_updated: 'Notes updated',
+  status_updated: 'Status updated',
+  referral_submission: 'Referral submission',
+  advanced: 'Advanced',
+});
+
+export const resumeProvenanceKey = applicationId => `candidate_applications/${applicationId}/resume_path`;
 
 const rows = result => Array.isArray(result) ? result : result?.rows ?? [];
 const value = input => input == null ? null : String(input);
@@ -61,11 +80,14 @@ export class JoinOrionSourceAdapter {
         source_id: value(row.id), identity_scope: 'application', application_source_id: value(row.candidate_id),
         type: JOIN_ORION_ACTIVITY_VOCABULARY[row.activity_type] ?? row.activity_type,
         source_type: row.activity_type, direction: 'internal',
-        summary: row.activity_note || row.activity_type, occurred_at: row.created_at,
+        summary: typeof row.activity_note === 'string' && row.activity_note.trim()
+          ? row.activity_note.trim()
+          : JOIN_ORION_ACTIVITY_LABELS[row.activity_type] ?? String(row.activity_type).replaceAll('_', ' ').replace(/^./, char => char.toUpperCase()),
+        occurred_at: row.created_at,
         metadata: { created_by: row.created_by, source_activity_type: row.activity_type },
       })),
       documents: applications.filter(row => row.resume_path).map(row => ({
-        source_id: value(row.id), identity_scope: 'application', application_source_id: value(row.id),
+        source_id: resumeProvenanceKey(value(row.id)), identity_scope: 'application', application_source_id: value(row.id),
         source_entity: 'candidate_application_resumes', document_type: 'resume',
         storage_path: row.resume_path, original_filename: null,
         metadata: { source_field: 'candidate_applications.resume_path' },
