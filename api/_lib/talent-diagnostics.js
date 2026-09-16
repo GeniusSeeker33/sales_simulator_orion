@@ -3,10 +3,12 @@ const categories = new Set([
   'auth_not_configured', 'auth_verification_failed', 'crm_not_configured',
   'crm_configuration_invalid', 'crm_connection_failed', 'crm_role_assumption_failed',
   'crm_auth_context_failed', 'crm_workspace_missing', 'crm_membership_missing', 'crm_query_failed',
+  'join_orion_not_configured', 'join_orion_source_unavailable',
 ]);
 const stages = new Set([
   'auth_configuration', 'auth_verification', 'configuration', 'transaction_begin',
   'role_assumption', 'auth_context', 'workspace_lookup', 'candidate_read', 'transaction_commit',
+  'source_configuration', 'source_read', 'intake_authorization', 'exclusion_configuration', 'intake_crm_reconciliation',
 ]);
 const connectionCodes = new Set([
   'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',

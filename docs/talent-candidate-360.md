@@ -1,5 +1,7 @@
 # Candidate 360 Talent CRM
 
+The manager/admin-only, read-only queue that precedes governed import is documented in [Candidate intake review](candidate-intake-review.md).
+
 Adds `/talent/candidates` and `/talent/candidates/:personId` as a top-level
 Talent / People workspace, separate from Marketing. This is a read-only
 relationship workspace, not an ATS, HR master, or learner evidence editor.

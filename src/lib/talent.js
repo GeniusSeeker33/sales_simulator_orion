@@ -8,3 +8,13 @@ export async function readTalent(params, signal) {
   if (!response.ok) throw new Error(result.error || 'Talent workspace unavailable.');
   return result;
 }
+
+export async function readTalentIntake(workspaceId, signal) {
+  const timeout = AbortSignal.timeout(45000);
+  const response = await learnerFetch(`/api/talent-intake?${new URLSearchParams({ workspace_id: workspaceId })}`, {
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Candidate intake review unavailable.');
+  return result;
+}

@@ -91,3 +91,20 @@ test('authenticated database outage remains 503 with a safe unavailable view, no
   await expect(page.getByRole('table')).toHaveCount(0);
   await expect(page.getByText('No candidate records have been imported into the unified CRM yet.')).toHaveCount(0);
 });
+test('intake review is compact, secret-safe, manually refreshable, and has a truthful empty state', async ({ page }) => {
+  await visit(page, `/talent/intake?workspace_id=${id(10)}`);
+  await expect(page.getByRole('heading', { name: 'New candidate applications awaiting review' })).toBeVisible();
+  await expect(page.getByText('Future Applicant', { exact: true })).toBeVisible();
+  await expect(page.getByText('Present', { exact: true })).toBeVisible();
+  await expect(page.getByText('ready for review', { exact: true })).toBeVisible();
+  await page.getByText('Review details', { exact: true }).click();
+  await expect(page.getByText('Learner linkage', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not verified', { exact: true })).toHaveCount(2);
+  const response = page.waitForResponse(r => r.url().includes('/api/talent-intake?'));
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await response;
+  await page.screenshot({ path: 'test-results/talent-intake.png', fullPage: true });
+  await visit(page, `/talent/intake?workspace_id=${id(30)}`);
+  await expect(page.getByRole('heading', { name: 'No candidate applications are awaiting import review.' })).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toContain('private/');
+});

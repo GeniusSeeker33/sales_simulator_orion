@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
-import { readTalent } from '../../lib/talent';
+import { readTalent, readTalentIntake } from '../../lib/talent';
 import '../../styles/talent.css';
 
 const stages = ['lead', 'applicant', 'candidate', 'learner', 'employee', 'alumni', 'inactive'];
@@ -19,6 +19,11 @@ function Attention({ reasons }) {
 }
 
 export default function TalentWorkspace() {
+  const location = useLocation();
+  return location.pathname === '/talent/intake' ? <IntakeReview /> : <CandidatesWorkspace />;
+}
+
+function CandidatesWorkspace() {
   const { personId } = useParams();
   const [search, setSearch] = useSearchParams();
   const [revision, setRevision] = useState(0);
@@ -49,6 +54,7 @@ export default function TalentWorkspace() {
   }
   return <Layout title="Talent Command Center"><div className="talent-workspace">
     <div className="talent-heading"><p>Candidates, applications and relationship history across your workspace.</p><span className="talent-badge">Read only</span></div>
+    <nav className="talent-subnav" aria-label="Talent workspace"><Link aria-current="page" to={`/talent/candidates?${search}`}>Candidates</Link><IntakeLink workspaceId={search.get('workspace_id') || data?.workspace.id || ''} /></nav>
     <div className="talent-toolbar"><h2>{personId ? 'Candidate 360' : 'Candidates'}</h2><button className="btn-secondary" onClick={() => setRevision(v => v + 1)}>Refresh</button></div>
     {loading && <p role="status">Loading candidate records…</p>}
     {!loading && state.error && <section className="card" role="alert"><h3>Talent workspace unavailable</h3><p>{state.error}</p><p>Your administrator can confirm CRM workspace membership and server configuration.</p>{personId && <Link to={`/talent/candidates?${new URLSearchParams({ workspace_id: search.get('workspace_id') || '' })}`}>Back to candidates</Link>}</section>}
@@ -74,6 +80,49 @@ export default function TalentWorkspace() {
           <div className="talent-pagination"><button className="btn-secondary" disabled={data.page <= 1} onClick={() => filter('page', String(data.page - 1))}>Previous</button><span>Page {data.page} of {Math.max(1, Math.ceil(data.total / data.page_size))}</span><button className="btn-secondary" disabled={data.page * data.page_size >= data.total} onClick={() => filter('page', String(data.page + 1))}>Next</button></div>
         </section>
       </>}
+    </>}
+  </div></Layout>;
+}
+
+function IntakeLink({ workspaceId }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    const controller = new AbortController();
+    readTalentIntake(workspaceId, controller.signal).then(data => !controller.signal.aborted && setCount(data.actionable_count)).catch(() => {});
+    return () => controller.abort();
+  }, [workspaceId]);
+  return <Link to={`/talent/intake?workspace_id=${workspaceId}`}>Intake Review{count > 0 && <span className="talent-count" aria-label={`${count} applications awaiting review`}>{count}</span>}</Link>;
+}
+
+function IntakeReview() {
+  const [search] = useSearchParams();
+  const workspaceId = search.get('workspace_id') || '';
+  const [revision, setRevision] = useState(0);
+  const [state, setState] = useState({ key: '', data: null, error: '' });
+  const key = `${workspaceId}:${revision}`;
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    const controller = new AbortController();
+    readTalentIntake(workspaceId, controller.signal).then(data => !controller.signal.aborted && setState({ key, data, error: '' }))
+      .catch(error => !controller.signal.aborted && setState({ key, data: null, error: error.message }));
+    return () => controller.abort();
+  }, [key, workspaceId]);
+  const loading = Boolean(workspaceId) && state.key !== key;
+  const data = loading ? null : state.data;
+  const error = workspaceId ? state.error : 'Choose a workspace from Candidates before opening Intake Review.';
+  return <Layout title="Talent Command Center"><div className="talent-workspace">
+    <div className="talent-heading"><p>Human-governed review of new Join-Orion applications before CRM import.</p><span className="talent-badge">Read only</span></div>
+    <nav className="talent-subnav" aria-label="Talent workspace"><Link to={`/talent/candidates?workspace_id=${workspaceId}`}>Candidates</Link><Link aria-current="page" to={`/talent/intake?workspace_id=${workspaceId}`}>Intake Review{data?.actionable_count ? <span className="talent-count">{data.actionable_count}</span> : ''}</Link></nav>
+    <div className="talent-toolbar"><div><h2>New candidate applications awaiting review</h2>{data && <p>{data.actionable_count} eligible application{data.actionable_count === 1 ? '' : 's'} · refreshed {date(data.refreshed_at)}</p>}</div><button className="btn-secondary" onClick={() => setRevision(value => value + 1)}>Refresh</button></div>
+    {loading && <p role="status">Refreshing candidate intake…</p>}
+    {!loading && error && <section className="card" role="alert"><h3>Candidate intake unavailable</h3><p>{error}</p><p>This is not an empty queue. Retry or ask an administrator to check the named service configuration.</p></section>}
+    {data && <>
+      {(data.diagnostics.invalid_count > 0 || data.diagnostics.source_mapping_attention_count > 0) && <section className="card talent-attention" role="status"><h3>Source records need configuration attention</h3><p>{data.diagnostics.invalid_count} invalid · {data.diagnostics.source_mapping_attention_count} mapping attention. These records are not presented as import-ready.</p></section>}
+      {data.items.length ? <section className="card talent-list"><div className="talent-table-scroll"><table className="talent-table"><caption className="talent-sr-only">Join-Orion candidate intake review queue</caption><thead><tr><th>Candidate</th><th>Applied</th><th>Position</th><th>Source / recruiter</th><th>Resume</th><th>Review state</th></tr></thead><tbody>{data.items.map(item => <tr key={item.source_application_id}>
+        <td><strong>{item.candidate_name}</strong><small>Application {item.source_application_id}</small></td><td>{date(item.application_date)}</td><td>{item.position_title || item.position_reference || 'Not recorded'}<small>Source status: {label(item.source_status)}</small></td><td>{item.application_source || 'Not recorded'}<small>{item.recruiter || 'Recruiter not recorded'}</small></td><td>{item.resume_metadata_exists ? 'Present' : 'Not recorded'}</td><td><Badge value={item.state} /><small>{item.reason}</small><details><summary>Review details</summary><dl className="talent-facts"><dt>Proposed mapping</dt><dd>Applicant · Candidate · {label(item.proposed_crm_mapping.application_status)}</dd><dt>Duplicate evidence</dt><dd>{item.duplicate_evidence ? `${item.duplicate_evidence.categories.join(', ')} — ${item.duplicate_evidence.explanation}` : 'None detected'}</dd><dt>Provenance</dt><dd>{item.provenance.source_system} / {item.provenance.source_entity} / {item.provenance.source_id}</dd><dt>Learner linkage</dt><dd>Not verified</dd><dt>Employment linkage</dt><dd>Not verified</dd></dl></details></td>
+      </tr>)}</tbody></table></div></section> : <section className="card talent-empty"><h3>No candidate applications are awaiting import review.</h3><p>Future genuine applications appear automatically unless explicitly excluded or already represented by CRM provenance.</p></section>}
+      <p className="talent-footnote">Manual refresh only. Review does not import, merge, rank, or make a hiring recommendation. Exclusion fingerprint: {data.exclusion_manifest?.fingerprint || 'not available'}.</p>
     </>}
   </div></Layout>;
 }
