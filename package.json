@@ -16,6 +16,7 @@
     "test:crm-provision": "node --test tests/crm-provisioning.test.mjs",
     "test:candidate-import": "node --test tests/join-orion-candidate-import.test.mjs",
     "test:candidate-reconciliation": "node --test tests/join-orion-duplicate-reconciliation.test.mjs",
+    "test:candidate-intake": "node --test tests/candidate-intake-review.test.mjs tests/candidate-intake-api.test.mjs",
     "test:join-orion-source": "node --test tests/join-orion-source-inspection.test.mjs",
     "inspect:join-orion-source": "node scripts/inspect-join-orion-source.mjs",
     "import:join-orion-candidates": "node scripts/import-join-orion-candidates.mjs",

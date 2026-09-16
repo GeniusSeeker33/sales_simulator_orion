@@ -58,6 +58,7 @@ export default function App() {
       <Route path="/newsletter-admin" element={<ProtectedRoute roles={["manager", "admin"]}><NewsletterAdmin /></ProtectedRoute>} />
       <Route path="/marketing/:section?/:campaignId?" element={<ProtectedRoute roles={["manager", "admin"]}><MarketingWorkspace /></ProtectedRoute>} />
       <Route path="/talent/candidates/:personId?" element={<ProtectedRoute><TalentWorkspace /></ProtectedRoute>} />
+      <Route path="/talent/intake" element={<ProtectedRoute roles={["manager", "admin"]}><TalentWorkspace /></ProtectedRoute>} />
 
       <Route path="/pace-report" element={<ProtectedRoute roles={["manager", "admin"]}><PaceReport /></ProtectedRoute>} />
       <Route path="/commission-report" element={<ProtectedRoute roles={["manager", "admin"]}><CommissionReport /></ProtectedRoute>} />
