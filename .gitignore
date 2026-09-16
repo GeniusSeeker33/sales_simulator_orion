@@ -28,6 +28,10 @@ dist-ssr
 *.xlsx
 # Canonical candidate exports can contain personal data; fixtures belong under tests/fixtures only.
 join-orion-candidate-export*.json
+# Operator-controlled source-ID exclusion manifests; commit examples only.
+join-orion-exclusions*.json
+!docs/join-orion-exclusions.example.json
+!tests/fixtures/join-orion-exclusions*.json
 
 # Local browser verification artifacts
 test-results/

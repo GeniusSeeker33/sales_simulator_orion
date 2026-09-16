@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { applyExclusions, validateExclusionManifest } from './join-orion-exclusions.mjs';
 
 export const SOURCE_SYSTEM = 'join-orion';
 export const APPLICATION_ENTITY = 'candidate_applications';
@@ -43,18 +44,27 @@ export function validateCanonicalExport(input) {
 }
 
 /** Reconcile a verified, canonical adapter export. The function itself never writes. */
-export async function reconcileJoinOrionCandidates({ source, target, workspaceId, mode = 'dry-run', operator = null }) {
+export async function reconcileJoinOrionCandidates({ source, target, workspaceId, mode = 'dry-run', operator = null,
+  exclusionManifest = null, exclusionManifestLoader = null, reviewedExclusionFingerprint = null }) {
   if (!nonEmpty(workspaceId)) throw new Error('A target workspace is required');
   if (mode !== 'dry-run' && mode !== 'apply') throw new Error('Mode must be dry-run or apply');
   if (mode === 'apply' && !nonEmpty(operator)) throw new Error('Apply mode requires an attributable operator');
 
-  const snapshot = validateCanonicalExport(await source.read());
+  const loadManifest = async () => exclusionManifestLoader ? validateExclusionManifest(await exclusionManifestLoader())
+    : exclusionManifest ? validateExclusionManifest(exclusionManifest) : null;
+  const initialManifest = await loadManifest();
+  const unfilteredSnapshot = validateCanonicalExport(await source.read());
   if (mode === 'apply') {
     const revalidated = validateCanonicalExport(await source.read());
-    if (JSON.stringify(revalidated) !== JSON.stringify(snapshot)) {
+    if (JSON.stringify(revalidated) !== JSON.stringify(unfilteredSnapshot)) {
       throw new Error('Source changed between validation reads; no writes were attempted');
     }
+    const applyManifest = await loadManifest();
+    if (initialManifest?.fingerprint !== applyManifest?.fingerprint) throw new Error('Exclusion manifest changed during apply; rerun and review dry-run');
+    if (initialManifest && reviewedExclusionFingerprint !== initialManifest.fingerprint) throw new Error('Apply requires the reviewed exclusion manifest fingerprint from dry-run');
   }
+  const exclusionResult = applyExclusions(unfilteredSnapshot, initialManifest);
+  const snapshot = exclusionResult.snapshot;
   const workspace = await target.getWorkspace(workspaceId);
   if (!workspace || workspace.id !== workspaceId) throw new Error('Target workspace does not exist or does not match the requested workspace');
   const state = await target.inspect(workspaceId, SOURCE_SYSTEM);
@@ -184,10 +194,11 @@ export async function reconcileJoinOrionCandidates({ source, target, workspaceId
   const digest = createHash('sha256').update(JSON.stringify({ workspaceId, snapshot })).digest('hex').slice(0, 20);
   const report = { report_version: 1, run_id: `join-orion-${digest}-${mode}`, source_system: SOURCE_SYSTEM,
     target_workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name }, mode, operator: operator ?? null,
-    inspected: { source_applications: snapshot.applications.length, source_activities: snapshot.activities.length,
-      source_documents: snapshot.documents.length, source_consents: snapshot.consents.length, unique_source_identities: new Set(snapshot.applications.map(applicationIdentity).filter(Boolean)).size,
+    inspected: { source_applications: unfilteredSnapshot.applications.length, source_activities: unfilteredSnapshot.activities.length,
+      source_documents: unfilteredSnapshot.documents.length, source_consents: unfilteredSnapshot.consents.length, unique_source_identities: new Set(snapshot.applications.map(applicationIdentity).filter(Boolean)).size,
       identity_scope: snapshot.applications.every(row => row.identity_scope === 'application') ? 'application' : 'authoritative_source_identity',
       source_vocabulary: snapshot.source_vocabulary ?? null },
+    exclusion_manifest: exclusionResult.metadata, excluded: exclusionResult.excluded,
     proposed: { people: plan.people.length, applications: plan.applications.length, activities: plan.activities.length,
       documents: plan.documents.length, consents: plan.consents.length }, already_imported: already.length,
     already_imported_records: already, updates: 0,
@@ -205,6 +216,13 @@ export function formatReconciliationReport(report) {
   const line = (label, value) => `${label.padEnd(28)} ${String(value).padStart(6)}`;
   return ['Join-Orion Candidate Reconciliation', '', line('Source applications:', report.inspected.source_applications),
     line('Source activities:', report.inspected.source_activities), line('Unique source identities:', report.inspected.unique_source_identities), '',
+    line('Excluded applications:', report.excluded.applications), line('Excluded activities:', report.excluded.activities),
+    line('Excluded documents:', report.excluded.documents), line('Excluded consents:', report.excluded.consents),
+    ...(report.exclusion_manifest ? [`Manifest: v${report.exclusion_manifest.manifest_version} ${report.exclusion_manifest.fingerprint}`,
+      `Manifest entries: ${report.exclusion_manifest.manifest_entries}`,
+      `Source records found: ${report.exclusion_manifest.source_records_found}`,
+      `Unmatched manifest IDs: ${report.exclusion_manifest.unmatched_manifest_ids.length}`,
+      `Reviewers: ${report.exclusion_manifest.reviewers.join(', ')}`, ''] : []),
     line('Proposed people:', report.proposed.people), line('Proposed applications:', report.proposed.applications),
     line('Proposed activities:', report.proposed.activities), line('Proposed documents:', report.proposed.documents),
     line('Proposed consents:', report.proposed.consents), '', line('Already imported:', report.already_imported),

@@ -23,7 +23,9 @@ export async function runCli(args, environment = process.env, connect = postgres
   try {
     const source = sql ? createJoinOrionSourceAdapter(createPostgresQuery(sql))
       : { read: async () => JSON.parse(await readFile(environment.JOIN_ORION_EXPORT_FILE, 'utf8')) };
-    const report = buildDuplicateReconciliation(await source.read(), options);
+    const exclusionFile = environment.JOIN_ORION_EXCLUSION_FILE?.trim();
+    const exclusionManifest = exclusionFile ? JSON.parse(await readFile(exclusionFile, 'utf8')) : null;
+    const report = buildDuplicateReconciliation(await source.read(), { ...options, exclusionManifest });
     return { report, output: options.json ? JSON.stringify(report, null, 2) : formatDuplicateReconciliation(report) };
   } finally { await sql?.end(); }
 }
