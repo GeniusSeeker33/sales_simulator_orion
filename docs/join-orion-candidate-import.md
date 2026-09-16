@@ -73,10 +73,14 @@ idempotent. The import never updates or deletes existing CRM history.
 | `created_by` | protected activity metadata | Source actor text, not an Auth identity |
 | `candidate_activity.created_at` | `occurred_at` | Preserved with timezone |
 
-Document provenance is `join-orion / candidate_application_resumes / <application
-id>`. Candidate 360 projects document type and filename but never storage path or
-metadata. The source produces an empty `consents` array: submitting an application
-is not marketing consent.
+Document provenance is `join-orion / candidate_application_resumes /
+candidate_applications/<application id>/resume_path`. The final component is a
+stable importer provenance key derived from the authoritative application UUID
+and verified field name; it is **not** represented as a document ID supplied by
+Join-Orion. Candidate 360 projects document type and filename but never storage
+path or metadata. The path stays opaque, HTTP/HTTPS values are rejected, and the
+importer never fetches a binary. The source produces an empty `consents` array:
+submitting an application is not marketing consent.
 
 ## Identity and reconciliation
 
@@ -100,6 +104,10 @@ vocabulary and mappings:
 
 | Source | CRM |
 | --- | --- |
+| `new` | `submitted` |
+| `screened` | `in_review` |
+| `interviewing` | `in_review` |
+| `hired` | `hired` |
 | `pending` | `submitted` |
 | `reviewing` | `in_review` |
 | `draft`, `submitted`, `in_review`, `qualified`, `approved`, `rejected`, `withdrawn`, `hired` | same semantic value |
@@ -108,6 +116,12 @@ The observed/approved activity mapping is:
 
 | Source | CRM |
 | --- | --- |
+| `interview` | `interview` |
+| `phone_call` | `call` |
+| `notes_updated` | `note` |
+| `status_updated` | `status_change` |
+| `referral_submission` | `form_submission` |
+| `advanced` | `status_change` |
 | `note_added` | `note` |
 | `email_sent` | `email` |
 | `interview_scheduled` | `interview` |
@@ -117,6 +131,27 @@ The adapter retains the original categorical value alongside its mapped value.
 Any value not in these explicit maps flows unchanged into reconciliation, where it
 is skipped and reported as `source_status` or `source_type`; it is never coerced.
 The report contains counts and categorical ambiguity, not candidate row samples.
+
+For activity summaries, a non-empty `activity_note` is used verbatim after outer
+whitespace is removed. If it is absent, the adapter emits only a deterministic,
+neutral label for the verified type (for example, `Status updated`). It does not
+invent an event narrative. The original type remains in protected activity
+metadata regardless of which summary path is used.
+
+## First hosted dry-run diagnosis
+
+The initial hosted dry run inspected 15 applications, 9 activities, and 5 resume
+references but rejected all 29 canonical records. PostgreSQL `timestamptz` values
+arrive from postgres.js as JavaScript `Date` objects, while canonical timestamp
+validation accepted only strings. Consequently every application lacked a
+validator-recognized `submitted_at`, and every activity lacked a recognized
+`occurred_at`. Because application validation populates the application-to-person
+correlation map, those 15 timestamp failures then left all five derived resume
+records without a resolvable application-scoped identity. The resume fields
+themselves were present; their failures were downstream identity-resolution
+failures. Canonical validation now accepts valid `Date` objects from the database
+adapter as well as ISO strings from the JSON adapter, without relaxing any ID,
+name, summary, timestamp, type, relationship, or path requirement.
 
 ## Privacy and domain boundaries
 

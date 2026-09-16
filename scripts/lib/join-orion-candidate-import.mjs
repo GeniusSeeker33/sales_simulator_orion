@@ -15,8 +15,10 @@ export const ACTIVITY_TYPE_MAP = Object.freeze({
 
 const nonEmpty = value => typeof value === 'string' && value.trim() ? value.trim() : null;
 const timestamp = value => {
-  if (!nonEmpty(value)) return null;
-  const date = new Date(value);
+  // postgres.js returns timestamptz columns as Date objects, while the JSON
+  // adapter necessarily supplies ISO strings. Both are canonical inputs.
+  if (!(value instanceof Date) && !nonEmpty(value)) return null;
+  const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.valueOf()) ? null : date.toISOString();
 };
 const normalizedEmail = value => nonEmpty(value)?.toLowerCase() ?? null;

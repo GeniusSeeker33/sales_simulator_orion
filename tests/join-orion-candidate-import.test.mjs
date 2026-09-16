@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatReconciliationReport, reconcileJoinOrionCandidates } from '../scripts/lib/join-orion-candidate-import.mjs';
-import { JoinOrionSourceAdapter } from '../scripts/lib/join-orion-source-adapter.mjs';
+import { JoinOrionSourceAdapter, resumeProvenanceKey } from '../scripts/lib/join-orion-source-adapter.mjs';
+import { joinOrionDatabaseRows } from './fixtures/join-orion-database.mjs';
 
 const workspace = '00000000-0000-4000-8000-000000000010';
 const foreign = '00000000-0000-4000-8000-000000000020';
@@ -101,6 +102,54 @@ test('database source adapter maps verified fields, application activity, privat
   assert.equal(report.writes_performed, 0); assert.equal(target.state.writes, 0);
   assert.deepEqual(report.inspected.source_vocabulary, snapshot.source_vocabulary);
   assert.equal(JSON.stringify(report).includes('private/app-db.pdf'), false);
+});
+
+test('verified database-shaped dry run maps all observed vocabulary without weakening canonical validation', async () => {
+  const sourceRows = joinOrionDatabaseRows();
+  const adapter = new JoinOrionSourceAdapter(async sql => sql.includes('candidate_applications')
+    ? sourceRows.applications : sourceRows.activities);
+  const snapshot = await adapter.read();
+  const report = await run(snapshot, memoryTarget());
+
+  assert.deepEqual(snapshot.source_vocabulary, {
+    application_statuses: ['hired', 'interviewing', 'new', 'screened'],
+    activity_types: ['advanced', 'interview', 'notes_updated', 'phone_call', 'referral_submission', 'status_updated'],
+  });
+  assert.deepEqual([...new Set(snapshot.applications.map(row => row.status))].sort(), ['hired', 'in_review', 'submitted']);
+  assert.deepEqual([...new Set(snapshot.activities.map(row => row.type))].sort(), ['call', 'form_submission', 'interview', 'note', 'status_change']);
+  assert.equal(snapshot.applications[0].submitted_at, sourceRows.applications[0].created_at);
+  assert.equal(snapshot.applications[0].source_created_at, sourceRows.applications[0].created_at);
+  assert.equal(snapshot.activities[0].summary, 'Candidate advanced after review.');
+  assert.equal(snapshot.activities.find(row => row.source_type === 'status_updated').summary, 'Status updated');
+  assert.equal(snapshot.documents.length, 5);
+  assert.equal(snapshot.documents[0].source_id, resumeProvenanceKey(sourceRows.applications[0].id));
+  assert.equal(snapshot.documents[0].metadata.source_field, 'candidate_applications.resume_path');
+  assert.deepEqual(snapshot.consents, []);
+  assert.deepEqual(report.proposed, { people: 15, applications: 15, activities: 9, documents: 5, consents: 0 });
+  assert.equal(report.invalid_records.length, 0); assert.equal(report.skipped_records.length, 0);
+  assert.equal(report.writes_performed, 0);
+  assert.equal(report.potential_duplicates.length, 2);
+  assert.ok(report.potential_duplicates.every(row =>
+    row.evidence_categories.includes('email') && row.evidence_categories.includes('phone') && row.evidence_categories.includes('name')));
+
+  const applyTarget = memoryTarget();
+  const firstApply = await run(snapshot, applyTarget, { mode: 'apply', operator: 'ticket-47' });
+  const secondApply = await run(snapshot, applyTarget, { mode: 'apply', operator: 'ticket-47' });
+  assert.equal(firstApply.writes_performed, 44);
+  assert.equal(secondApply.writes_performed, 0);
+});
+
+test('database adapter preserves unknown vocabulary for reporting and rejects HTTP resume paths', async () => {
+  const sourceRows = joinOrionDatabaseRows();
+  sourceRows.applications[0].status = 'future_status';
+  sourceRows.applications[1].resume_path = 'HTTPS://storage.example.test/resume.pdf';
+  sourceRows.activities[2].activity_type = 'future_activity';
+  const snapshot = await new JoinOrionSourceAdapter(async sql => sql.includes('candidate_applications')
+    ? sourceRows.applications : sourceRows.activities).read();
+  const report = await run(snapshot, memoryTarget());
+  assert.ok(report.skipped_records.some(row => row.source_status === 'future_status'));
+  assert.ok(report.skipped_records.some(row => row.source_type === 'future_activity'));
+  assert.ok(report.invalid_records.some(row => row.record_type === 'document'));
 });
 
 test('distinct source identities sharing email enter human review and do not merge', async () => {
