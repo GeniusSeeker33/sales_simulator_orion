@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import OrionCjfPortfolioReview from "../components/orion/OrionCjfPortfolioReview";
-import { loadCjfPortfolio } from "../lib/orionPortfolioClient";
+import { loadCjfPortfolio, signInOrionDev, signOutOrionDev } from "../lib/orionPortfolioClient";
 import {
   FFL_LICENSE_TYPES,
   US_STATES,
@@ -59,6 +59,9 @@ export default function FFLProspects() {
   }, [accountsSnapshot]);
   const [toast, setToast] = useState(null);
   const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const [devPassword, setDevPassword] = useState("");
+  const [devMessage, setDevMessage] = useState("");
+  const [portfolioRevision, setPortfolioRevision] = useState(0);
   const [portfolioRows, setPortfolioRows] = useState([]);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState(null);
@@ -74,7 +77,7 @@ export default function FFLProspects() {
       setPortfolioLoading(false);
     });
     return () => { cancelled = true; };
-  }, [portfolioOpen]);
+  }, [portfolioOpen, portfolioRevision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,7 +226,34 @@ export default function FFLProspects() {
           <button className="btn-secondary" onClick={() => setPortfolioOpen((value) => !value)}>
             {portfolioOpen ? "Hide" : "Review"} CJF imported account portfolio
           </button>
-          {portfolioOpen && <OrionCjfPortfolioReview rows={portfolioRows} loading={portfolioLoading} error={portfolioError} />}
+          {portfolioOpen && (
+            <>
+              <form className="card" onSubmit={async (event) => {
+                event.preventDefault();
+                const { error } = await signInOrionDev("desiree@orionwholesaleonline.com", devPassword);
+                setDevPassword("");
+                setDevMessage(error || "Development sign-in successful.");
+                if (!error) setPortfolioRevision((n) => n + 1);
+              }}>
+                <h3>Orion development administrator sign-in</h3>
+                <p className="section-subtext">Separate development account, not Microsoft 365 or live GeniusSeeker.</p>
+                <input type="email" value="desiree@orionwholesaleonline.com" readOnly aria-label="Development administrator email" />
+                <input type="password" value={devPassword} onChange={(event) => setDevPassword(event.target.value)} placeholder="Development Supabase password" aria-label="Development password" autoComplete="current-password" required />
+                <div className="button-row">
+                  <button type="submit" className="btn-primary">Sign in to development</button>
+                  <button type="button" className="btn-secondary" onClick={async () => {
+                    await signOutOrionDev();
+                    setPortfolioRows([]);
+                    setDevMessage("Signed out of development.");
+                    setPortfolioRevision((n) => n + 1);
+                  }}>Sign out</button>
+                  <button type="button" className="btn-secondary" onClick={() => setPortfolioRevision((n) => n + 1)}>Refresh portfolio</button>
+                </div>
+                {devMessage && <p role="status">{devMessage}</p>}
+              </form>
+              <OrionCjfPortfolioReview rows={portfolioRows} loading={portfolioLoading} error={portfolioError} />
+            </>
+          )}
         </section>
       )}
       <section className="kpi-grid">
