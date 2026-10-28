@@ -19,6 +19,7 @@ import SalesSimulator from "./pages/SalesSimulator";
 import Employees from "./pages/Employees";
 import AdminView from "./pages/AdminView";
 import FFLProspects from "./pages/FFLProspects";
+import OrionDevPortfolio from "./pages/OrionDevPortfolio";
 import PaceReport from "./pages/PaceReport";
 import CommissionReport from "./pages/CommissionReport";
 import ProductMix from "./pages/ProductMix";
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {import.meta.env.VITE_ORION_PORTFOLIO_REVIEW === "true" && <Route path="/orion-dev-portfolio" element={<OrionDevPortfolio />} />}
       <Route path="/" element={<RootRedirect />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
