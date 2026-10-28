@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
+import OrionCjfPortfolioReview from "../components/orion/OrionCjfPortfolioReview";
+import { loadCjfPortfolio } from "../lib/orionPortfolioClient";
 import {
   FFL_LICENSE_TYPES,
   US_STATES,
@@ -56,6 +58,23 @@ export default function FFLProspects() {
     return map;
   }, [accountsSnapshot]);
   const [toast, setToast] = useState(null);
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const [portfolioRows, setPortfolioRows] = useState([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState(null);
+
+  useEffect(() => {
+    if (!portfolioOpen) return;
+    let cancelled = false;
+    setPortfolioLoading(true);
+    loadCjfPortfolio().then(({ rows, error }) => {
+      if (cancelled) return;
+      setPortfolioRows(rows);
+      setPortfolioError(error);
+      setPortfolioLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [portfolioOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,6 +218,14 @@ export default function FFLProspects() {
         </div>
       )}
 
+      {import.meta.env.VITE_ORION_PORTFOLIO_REVIEW === "true" && (
+        <section style={{ marginBottom: 16 }}>
+          <button className="btn-secondary" onClick={() => setPortfolioOpen((value) => !value)}>
+            {portfolioOpen ? "Hide" : "Review"} CJF imported account portfolio
+          </button>
+          {portfolioOpen && <OrionCjfPortfolioReview rows={portfolioRows} loading={portfolioLoading} error={portfolioError} />}
+        </section>
+      )}
       <section className="kpi-grid">
         <div className="card">
           <div className="card-label">National FFL Database</div>
