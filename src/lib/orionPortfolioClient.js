@@ -27,3 +27,17 @@ export async function loadCjfPortfolio() {
   const { data, error } = await orionDevClient.rpc("orion_read_cjf_portfolio");
   return { rows: data || [], error: error?.message || null };
 }
+
+export async function loadCjfReviewQueue() {
+  if (!orionDevClient) return { rows: [], error: "Development connection not configured." };
+  const { data, error } = await orionDevClient.rpc("orion_read_cjf_review_queue");
+  return { rows: data || [], error: error?.message || null };
+}
+
+export async function saveCjfReview(sourceRow, decision, notes) {
+  if (!orionDevClient) return { error: "Development connection not configured." };
+  const { error } = await orionDevClient.rpc("orion_review_cjf_row", {
+    p_source_row: sourceRow, p_decision: decision, p_notes: notes,
+  });
+  return { error: error?.message || null };
+}
