@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import OrionCjfPortfolioReview from "../components/orion/OrionCjfPortfolioReview";
+import OrionCjfReconciliation from "../components/orion/OrionCjfReconciliation";
 import { loadCjfPortfolio, signInOrionDev, signOutOrionDev } from "../lib/orionPortfolioClient";
 
 // Separate read-only route: does not use the legacy learner login or local FFL claim store.
@@ -52,6 +53,7 @@ export default function OrionDevPortfolio() {
         {notice && <p role="status">{notice}</p>}
       </form>
       <OrionCjfPortfolioReview rows={rows} loading={loading} error={error} />
+      {!loading && !error && rows.length > 0 && <OrionCjfReconciliation revision={revision} />}
     </div>
   </main>;
 }
