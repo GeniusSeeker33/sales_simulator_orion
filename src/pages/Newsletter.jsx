@@ -65,7 +65,12 @@ export default function Newsletter() {
 
     setReviews(reviewsData || []);
     setShoutouts(shoutoutData || []);
-    setUpdates(updateData || []);
+    // Supabase .in() does not preserve the input order. The issue snapshot does.
+    const order = new Map(updateIds.map((id, index) => [String(id), index]));
+    setUpdates([...(updateData || [])].sort((a, b) =>
+      (order.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER)
+    ));
     }
 
     loadNewsletterData();
