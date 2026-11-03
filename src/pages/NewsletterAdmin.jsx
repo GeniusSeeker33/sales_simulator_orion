@@ -153,6 +153,9 @@ export default function NewsletterAdmin() {
   const [reviews, setReviews] = useState([]);
   const [shoutouts, setShoutouts] = useState([]);
   const [updates, setUpdates] = useState([]);
+  // The order belongs to the current issue, not the update's publication date.
+  const [updateOrder, setUpdateOrder] = useState(() => readDraft().updateOrder ?? []);
+  const draggedUpdateId = useRef(null);
 
   // Issue setup — seeded from the saved draft (if any) so a refresh doesn't
   // wipe in-progress work.
@@ -194,6 +197,7 @@ export default function NewsletterAdmin() {
       if (cloud) {
         if (typeof cloud.issueName === "string") setIssueName(cloud.issueName);
         if (typeof cloud.issueDate === "string") setIssueDate(cloud.issueDate);
+        if (Array.isArray(cloud.updateOrder)) setUpdateOrder(cloud.updateOrder);
         if (Array.isArray(cloud.newHires)) setNewHires(cloud.newHires);
         if (Array.isArray(cloud.birthdays)) setBirthdays(cloud.birthdays);
         if (Array.isArray(cloud.anniversaries))
@@ -209,7 +213,7 @@ export default function NewsletterAdmin() {
   // Generate. We wait for the cloud load before pushing, so we never clobber a
   // saved draft with empty starting state.
   useEffect(() => {
-    const draft = { issueName, issueDate, newHires, birthdays, anniversaries };
+    const draft = { issueName, issueDate, newHires, birthdays, anniversaries, updateOrder };
     saveDraft(draft);
     if (!draftLoaded) return;
     const t = setTimeout(async () => {
@@ -218,7 +222,7 @@ export default function NewsletterAdmin() {
       setDraftStatus(error ? "Save failed — check connection" : "Saved ✓");
     }, 800);
     return () => clearTimeout(t);
-  }, [issueName, issueDate, newHires, birthdays, anniversaries, draftLoaded]);
+  }, [issueName, issueDate, newHires, birthdays, anniversaries, updateOrder, draftLoaded]);
 
   async function loadJokes() {
     const { data } = await supabase
@@ -291,6 +295,38 @@ export default function NewsletterAdmin() {
     setReviews((r || []).filter((row) => !usedReviewIds.has(row.id)));
     setShoutouts((s || []).filter((row) => !usedShoutoutIds.has(row.id)));
     setUpdates((u || []).filter((row) => !usedUpdateIds.has(row.id)));
+  }
+
+
+  // Keep new articles at the end of the draft while preserving the chosen order.
+  // Missing/deleted/published IDs are ignored, so old drafts still work.
+  const orderedUpdates = useMemo(() => {
+    const byId = new Map(updates.map((item) => [String(item.id), item]));
+    const pinned = (Array.isArray(updateOrder) ? updateOrder : [])
+      .map((id) => String(id))
+      .filter((id, index, ids) => byId.has(id) && ids.indexOf(id) === index);
+    const pinnedSet = new Set(pinned);
+    return [
+      ...pinned.map((id) => byId.get(id)),
+      ...updates.filter((item) => !pinnedSet.has(String(item.id))),
+    ];
+  }, [updates, updateOrder]);
+
+  function moveUpdate(draggedId, targetId) {
+    if (draggedId == null || targetId == null || String(draggedId) === String(targetId)) return;
+    const next = [...orderedUpdates];
+    const from = next.findIndex((item) => String(item.id) === String(draggedId));
+    const to = next.findIndex((item) => String(item.id) === String(targetId));
+    if (from < 0 || to < 0) return;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setUpdateOrder(next.map((item) => item.id));
+  }
+
+  function moveUpdateByDirection(id, offset) {
+    const index = orderedUpdates.findIndex((item) => String(item.id) === String(id));
+    const target = orderedUpdates[index + offset];
+    if (target) moveUpdate(id, target.id);
   }
 
   // Success messages fade after a few seconds; errors stay put until the next
@@ -727,7 +763,7 @@ export default function NewsletterAdmin() {
       anniversaries,
       reviewIds: reviews.map((r) => r.id),
       shoutoutIds: shoutouts.map((s) => s.id),
-      updateIds: updates.map((u) => u.id),
+      updateIds: orderedUpdates.map((u) => u.id),
     });
     const { error } = await supabase.from("newsletter_issues").insert([
       {
@@ -760,6 +796,7 @@ export default function NewsletterAdmin() {
     setNewHires([]);
     setBirthdays([]);
     setAnniversaries([]);
+    setUpdateOrder([]);
     loadPool();
     loadJokes();
   }
@@ -790,7 +827,7 @@ export default function NewsletterAdmin() {
     const html = buildNewsletterEmailHTML({
       issueName,
       joke,
-      updates,
+      updates: orderedUpdates,
       reviews,
       newHires,
       birthdays,
@@ -1489,15 +1526,26 @@ export default function NewsletterAdmin() {
                 <h3 className="text-sm font-bold text-slate-700">
                   Updates in this issue ({updates.length})
                 </h3>
+                {updates.length > 1 && (
+                  <p className="text-xs text-slate-500">Drag the grip to reorder. Changes save automatically and appear in the newsletter preview.</p>
+                )}
                 {updates.length === 0 ? (
                   <p className="text-xs text-slate-400">
                     No updates yet. Add one above and it appears here and in the
                     preview.
                   </p>
                 ) : (
-                  updates.map((u) => (
+                  orderedUpdates.map((u, index) => (
                     <div
                       key={u.id}
+                      onDragOver={(event) => {
+                        if (draggedUpdateId.current != null) event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        moveUpdate(draggedUpdateId.current, u.id);
+                        draggedUpdateId.current = null;
+                      }}
                       className={`rounded-lg border px-3 py-2 ${
                         editingUpdateId === u.id
                           ? "border-amber-400 bg-amber-50"
@@ -1506,6 +1554,26 @@ export default function NewsletterAdmin() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-start gap-2">
+                          <div className="flex shrink-0 flex-col items-center gap-1">
+                            <span
+                              draggable
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Drag to reorder ${u.title}`}
+                              title="Drag to reorder"
+                              onDragStart={(event) => {
+                                draggedUpdateId.current = u.id;
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", String(u.id));
+                              }}
+                              onDragEnd={() => { draggedUpdateId.current = null; }}
+                              className="cursor-grab select-none rounded px-1 text-lg leading-6 text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+                            >
+                              ⠿
+                            </span>
+                            <button type="button" disabled={index === 0} onClick={() => moveUpdateByDirection(u.id, -1)} aria-label={`Move ${u.title} up`} title="Move up" className="text-xs text-slate-500 disabled:opacity-25">▲</button>
+                            <button type="button" disabled={index === orderedUpdates.length - 1} onClick={() => moveUpdateByDirection(u.id, 1)} aria-label={`Move ${u.title} down`} title="Move down" className="text-xs text-slate-500 disabled:opacity-25">▼</button>
+                          </div>
                           {u.image_url && (
                             <img
                               src={u.image_url}
@@ -1884,7 +1952,7 @@ export default function NewsletterAdmin() {
           <NewsletterContent
             issueName={issueName}
             joke={joke}
-            updates={updates}
+            updates={orderedUpdates}
             reviews={reviews}
             newHires={newHires}
             birthdays={birthdays}
