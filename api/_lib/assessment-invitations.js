@@ -1,4 +1,4 @@
-// Server-only invitation helpers. Tokens must never be logged or stored in plaintext.
+// Server-only invitation helpers. Tokens must never be logged or stored in plaintext.\n// One-time use and revocation must be enforced by the invitation database transaction, not these helpers.
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 
 export const DEFAULT_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
