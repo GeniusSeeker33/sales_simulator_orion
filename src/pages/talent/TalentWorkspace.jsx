@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { readTalent, readTalentIntake } from '../../lib/talent';
+import { learnerFetch } from '../../lib/learnerFetch';
 import '../../styles/talent.css';
 
 const stages = ['lead', 'applicant', 'candidate', 'learner', 'employee', 'alumni', 'inactive'];
@@ -136,15 +137,47 @@ function CandidateProfile({ data }) {
   return <>
     <Link to={`/talent/candidates?workspace_id=${data.workspace.id}`}>← Back to candidates</Link>
     <header className="card talent-profile-heading"><div><h2>{name(p)}</h2><p>{p.email || 'Email not recorded'} · {data.workspace.name}</p></div><Badge value={p.lifecycle_stage} /></header>
-    <nav className="talent-tabs" aria-label="Candidate sections">{['Overview', 'Applications', 'Activity', 'Documents', 'Talent Journey'].map(tab => <button key={tab} aria-current={section === tab ? 'page' : undefined} onClick={() => setSection(tab)}>{tab}{tab === 'Applications' ? ` (${data.applications.length})` : ''}</button>)}</nav>
+    <nav className="talent-tabs" aria-label="Candidate sections">{['Overview', 'Applications', 'Assessment', 'Activity', 'Documents', 'Talent Journey'].map(tab => <button key={tab} aria-current={section === tab ? 'page' : undefined} onClick={() => setSection(tab)}>{tab}{tab === 'Applications' ? ` (${data.applications.length})` : ''}</button>)}</nav>
     <section className="card talent-panel" aria-label={section}>
       {section === 'Overview' && <><h3>Contact and relationship</h3><dl className="talent-facts"><dt>Name</dt><dd>{name(p)}</dd><dt>Preferred name</dt><dd>{p.preferred_name || 'Not recorded'}</dd><dt>Email</dt><dd>{p.email || 'Not recorded'}</dd><dt>Phone</dt><dd>{p.phone || 'Not recorded'}</dd><dt>CRM lifecycle stage</dt><dd><Badge value={p.lifecycle_stage} /></dd><dt>Source system</dt><dd>{p.source_system}</dd><dt>Learner linkage</dt><dd>Not verified</dd></dl><Source record={p} />
         <h3>Needs Attention</h3><Attention reasons={data.attention} /><h3>Communication consent</h3>{data.consent.length ? data.consent.map(c => <article className="talent-record" key={c.id}><strong>{label(c.channel)} · {c.purpose}</strong><p><Badge value={c.status} /> · Captured {date(c.captured_at)}</p><Source record={c} /></article>) : <p>No communication consent has been recorded.</p>}
       </>}
       {section === 'Applications' && <><h3>Applications</h3><p>Newest records first. Each application keeps its own status and role.</p>{data.applications.length ? data.applications.map(a => <article className="talent-record" key={a.id}><div className="talent-toolbar"><h4>{a.job_ref || 'Role not recorded'}</h4><Badge value={a.status} /></div><p>{label(a.application_type)} · Submitted {date(a.submitted_at)}</p><p title={a.assigned_to || undefined}>Owner: {owner(a.assigned_to, a.owner_name)}</p><p>Source: {a.source_system}</p><Source record={a} /></article>) : <p>No applications are recorded for this candidate.</p>}</>}
+      {section === 'Assessment' && <CandidateAssessmentHistory workspaceId={data.workspace.id} personId={p.id} />}
       {section === 'Activity' && <><h3>Relationship history</h3>{data.activities.length ? <ol className="talent-timeline">{data.activities.map(a => <li key={a.id}><div className="talent-toolbar"><Badge value={a.activity_type} /><time dateTime={a.occurred_at}>{date(a.occurred_at)}</time></div><p className="talent-activity-summary">{a.summary}</p>{a.application_id && <p>Application: {data.applications.find(app => app.id === a.application_id)?.job_ref || 'Role not recorded'}</p>}{a.task?.due_at && <p>Due {date(a.task.due_at)} · {label(a.task.status)}</p>}<p>Source: {a.source_system}</p><Source record={a} /></li>)}</ol> : <p>No activity has been recorded.</p>}</>}
       {section === 'Documents' && <><h3>Documents</h3><p>Document metadata only. File access requires a separately authorized document service.</p>{data.documents.length ? data.documents.map(d => <article key={d.id} className="talent-record"><h4>{d.original_filename || 'Untitled document'}</h4><p>{label(d.document_type)} · Added {date(d.created_at)}</p><p>Source: {d.source_system}</p><Source record={d} /></article>) : <p>No document metadata has been recorded.</p>}</>}
       {section === 'Talent Journey' && <><h3>Talent Journey</h3><p><Badge value="candidate" /></p><h4>No verified learner or employment linkage</h4><p>Learner linkage: Not verified</p><p>A verified cross-system relationship has not been established. Application status and contact details do not establish learner identity or employment.</p></>}
     </section>
+  </>;
+}
+
+function CandidateAssessmentHistory({workspaceId,personId}) {
+  const [history,setHistory]=useState({loading:true,items:[],error:''});
+  useEffect(()=>{
+    const controller=new AbortController();
+    const query=new URLSearchParams({workspace_id:workspaceId,person_id:personId});
+    learnerFetch('/api/assessment-results?'+query,{signal:controller.signal})
+      .then(async response=>{const body=await response.json();if(!response.ok) throw new Error(body.error||'Unable to load assessments');return body;})
+      .then(body=>{if(!controller.signal.aborted) setHistory({loading:false,items:body.invitations||[],error:''});})
+      .catch(error=>{if(!controller.signal.aborted) setHistory({loading:false,items:[],error:error.message});});
+    return ()=>controller.abort();
+  },[workspaceId,personId]);
+  return <>
+    <h3>GeniusSeeker Sales Executive Assessment</h3>
+    <p>40 sales scenarios and six separate, unscored employment-readiness questions.</p>
+    {history.loading&&<p role="status">Loading assessment history…</p>}
+    {history.error&&<p role="alert">{history.error}</p>}
+    {!history.loading&&!history.error&&!history.items.length&&<p>No assessments recorded for this candidate.</p>}
+    {history.items.map(item=><article className="talent-record" key={item.id}>
+      <div className="talent-toolbar"><strong>Assessment invitation</strong><Badge value={item.status}/></div>
+      <p>Invited {date(item.invited_at)} · Expires {date(item.expires_at)}</p>
+      {item.submitted_at&&<><p>Completed {date(item.submitted_at)}</p>
+        <p><strong>Sales score: {item.score?.overallScore ?? 'Not available'}/100</strong> (provisional, advisory)</p>
+        {item.score?.competencies?.length>0&&<dl className="talent-facts">{item.score.competencies.map(competency=><div key={competency.id}><dt>{label(competency.id)}</dt><dd>{competency.score}/100</dd></div>)}</dl>}
+        <details><summary>Employment readiness (not scored)</summary><dl className="talent-facts">{Object.entries(item.readiness||{}).map(([field,value])=><div key={field}><dt>{label(field)}</dt><dd>{value||'Not provided'}</dd></div>)}</dl></details>
+      </>}
+    </article>)}
+    <button className="btn-secondary" type="button" disabled title="Invitation email delivery is not yet configured">Send Assessment — coming soon</button>
+    <p className="talent-footnote">Scores are advisory. No automatic hiring decision or stage change is made.</p>
   </>;
 }

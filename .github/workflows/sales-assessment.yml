@@ -1,0 +1,27 @@
+name: Sales assessment checks
+on:
+  pull_request:
+    paths:
+      - 'src/assessments/**'
+      - 'src/pages/CandidateAssessment*'
+      - 'api/_lib/assessment-*'
+      - 'tests/*assessment*'
+      - 'tests/orion-*questions*'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/sales-assessment.yml'
+  workflow_dispatch:
+jobs:
+  assessment:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:assessment
+      - run: npm run build
