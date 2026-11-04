@@ -26,6 +26,7 @@ import Newsletter from "./pages/Newsletter.jsx";
 import NewsletterAdmin from "./pages/NewsletterAdmin.jsx";
 import MarketingWorkspace from "./pages/marketing/MarketingWorkspace.jsx";
 import TalentWorkspace from "./pages/talent/TalentWorkspace.jsx";
+import CandidateAssessment from "./pages/CandidateAssessment.jsx";
 
 function RootRedirect() {
   const { session, loading } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/assessment-preview" element={<ProtectedRoute roles={["admin"]}><CandidateAssessment /></ProtectedRoute>} />
       <Route path="/" element={<RootRedirect />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
