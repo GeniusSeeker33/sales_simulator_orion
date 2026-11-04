@@ -41,6 +41,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/assessment/:token" element={<CandidateAssessment />} />
       <Route path="/assessment-preview" element={<ProtectedRoute roles={["admin"]}><CandidateAssessment /></ProtectedRoute>} />
       <Route path="/" element={<RootRedirect />} />
 
