@@ -12,7 +12,8 @@ export async function persistAssessmentInvitation({userId,workspaceId,personId,a
   const sql=makePool(url,{ssl:{rejectUnauthorized:true,...(ca?{ca}:{})},prepare:false,max:1});
   try {
     return await sql.begin(async tx=>{
-      await tx.unsafe('set local role authenticated');
+      // Private assessment tables are intentionally not granted to authenticated.
+      // The trusted server DB role performs writes after explicit membership checks.
       await tx.unsafe("select set_config('request.jwt.claim.sub', $1, true)",[userId]);
       await tx.unsafe("select set_config('request.jwt.claims', $1, true)",[JSON.stringify({sub:userId,role:'authenticated'})]);
       await tx.unsafe("set local statement_timeout = '10s'");
