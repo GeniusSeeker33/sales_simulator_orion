@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { SALES_EXECUTIVE_QUESTIONS } from '../assessments/orionSalesExecutiveQuestions.js';
 import { EMPLOYMENT_READINESS_QUESTIONS } from '../assessments/orionEmploymentReadinessQuestions.js';
@@ -20,6 +20,28 @@ export default function CandidateAssessment() {
   const [answers,setAnswers] = useState({});
   const [page,setPage] = useState(0);
   const [notice,setNotice] = useState('');
+  const [verified,setVerified] = useState(!token);
+  const [submitting,setSubmitting] = useState(false);
+  const [completed,setCompleted] = useState(false);
+  useEffect(()=>{
+    if(!token) return undefined;
+    const controller=new AbortController();
+    fetch('/api/assessment?token='+encodeURIComponent(token),{signal:controller.signal,cache:'no-store'})
+      .then(async response=>{if(!response.ok) throw new Error('This invitation is unavailable or expired.');return response.json();})
+      .then(()=>setVerified(true))
+      .catch(error=>{if(!controller.signal.aborted) setNotice(error.message);});
+    return ()=>controller.abort();
+  },[token]);
+  async function submit() {
+    if(!token||!verified||!isAssessmentComplete(answers)||submitting) return;
+    setSubmitting(true);
+    try {
+      const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,...buildAssessmentPayload(answers)})});
+      if(!response.ok) {const data=await response.json();throw new Error(data.error||'Unable to submit assessment.');}
+      setCompleted(true);
+      setNotice('Your assessment was submitted successfully. Thank you.');
+    } catch(error) {setNotice(error.message);} finally {setSubmitting(false);}
+  }
   const groups = useMemo(()=>[
     ...Array.from(new Set(SALES_EXECUTIVE_QUESTIONS.map(q=>q.section))).map(section=>({title:section,questions:SALES_EXECUTIVE_QUESTIONS.filter(q=>q.section===section)})),
     {title:'Employment Readiness (unscored)',questions:EMPLOYMENT_READINESS_QUESTIONS}
@@ -35,16 +57,19 @@ export default function CandidateAssessment() {
     }
     setNotice('');
     if(page<groups.length-1) setPage(p=>p+1);
-    else setNotice('Your answers are complete. Submission will be enabled when your secure invitation is verified.');
+    else if(token) submit();
+    else setNotice('Preview complete. No answers have been submitted.');
   }
   return <main className="candidate-assessment">
     <header>
       <p className="assessment-eyebrow">Orion Wholesale · Sales Executive</p>
       <h1>Sales Executive Assessment</h1>
       <p>Choose the response that best reflects how you would handle each situation. There are 40 sales scenarios and six separate employment-readiness questions.</p>
-      <p className="assessment-note">Preview only — responses are not submitted or saved to Orion yet.</p>
-      {!token && <p role="alert">A secure invitation link is required to take this assessment.</p>}
+      {!token && <p className="assessment-note">Preview only — responses are not submitted or saved to Orion yet.</p>}
+      {!token && <p className="assessment-note">Administrator preview: a secure invitation is required for submission.</p>}
     </header>
+    {completed ? <p role="status">Your assessment has been received. You may close this page.</p> : <>
+    {token && !verified && <p role="status">Verifying invitation…</p>}
     <div className="assessment-progress" aria-label={count+' of 46 questions answered'}>
       <div style={{width:(count/46*100)+'%'}} />
     </div>
@@ -68,7 +93,8 @@ export default function CandidateAssessment() {
     {notice && <p role="status" className="assessment-note">{notice}</p>}
     <nav className="assessment-nav" aria-label="Assessment sections">
       <button type="button" disabled={page===0} onClick={()=>{setPage(p=>p-1);setNotice('');}}>Previous</button>
-      <button type="button" onClick={next}>{page===groups.length-1?'Review completion':'Next section'}</button>
+      <button type="button" disabled={submitting||Boolean(token&&!verified)} onClick={next}>{page===groups.length-1?(token?(submitting?'Submitting…':'Submit assessment'):'Review completion'):'Next section'}</button>
     </nav>
+    </>}
   </main>;
 }
