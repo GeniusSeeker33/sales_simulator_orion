@@ -28,7 +28,7 @@
     "test:marketing-ui": "playwright test --config tests/marketing-ui/playwright.config.mjs",
     "test:talent": "node --test tests/talent-api.test.mjs tests/talent-availability.test.mjs",
     "test:talent-ui": "playwright test --config tests/talent-ui/playwright.config.mjs",
-    "test:assessment": "node --test tests/orion-sales-executive-assessment.test.mjs tests/assessment-invitations.test.mjs tests/assessment-invitation-state.test.mjs tests/orion-employment-readiness-questions.test.mjs tests/orion-sales-executive-questions.test.mjs"
+    "test:assessment": "node --test tests/orion-sales-executive-assessment.test.mjs tests/assessment-invitations.test.mjs tests/assessment-invitation-state.test.mjs tests/orion-employment-readiness-questions.test.mjs tests/orion-sales-executive-questions.test.mjs tests/assessment-submission.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
